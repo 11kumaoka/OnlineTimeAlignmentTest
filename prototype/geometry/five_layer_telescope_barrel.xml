@@ -1,0 +1,84 @@
+<lccdd xmlns:compact="http://www.lcsim.org/schemas/compact/1.0"
+       xmlns:xs="http://www.w3.org/2001/XMLSchema"
+       xs:noNamespaceSchemaLocation="http://www.lcsim.org/schemas/compact/1.0/compact.xsd">
+
+  <info name="FiveLayerBeamTestTelescopeBarrel"
+        title="Five-layer beam test telescope (barrel-style)"
+        author="OnlineTimeAlignmentTest"
+        status="development"
+        version="0.1"/>
+
+  <includes>
+    <gdmlFile ref="${DD4hepINSTALL}/DDDetectors/compact/elements.xml"/>
+    <gdmlFile ref="${DD4hepINSTALL}/DDDetectors/compact/materials.xml"/>
+  </includes>
+
+  <define>
+    <include ref="${DD4hepINSTALL}/DDDetectors/compact/detector_types.xml"/>
+    <constant name="world_half_x" value="1000*mm"/>
+    <constant name="world_half_y" value="1000*mm"/>
+    <constant name="world_half_z" value="1000*mm"/>
+    <constant name="tracker_zmax" value="300*mm"/>
+    <constant name="r1" value="20*mm"/>
+    <constant name="r2" value="40*mm"/>
+    <constant name="r3" value="60*mm"/>
+    <constant name="r4" value="80*mm"/>
+    <constant name="r5" value="100*mm"/>
+    <constant name="tracker_region_rmax" value="120*mm"/>
+    <constant name="tracker_region_zmax" value="350*mm"/>
+  </define>
+
+  <display>
+    <vis name="TelescopeLayerVis" alpha="1.0" r="0.2" g="0.5" b="1.0" drawingStyle="wireframe" showDaughters="true" visible="true"/>
+    <vis name="TelescopeSensitiveVis" alpha="1.0" r="1.0" g="0.2" b="0.2" drawingStyle="solid" showDaughters="true" visible="true"/>
+  </display>
+
+  <readouts>
+    <readout name="TelescopeHits">
+      <id>system:8,barrel:3,layer:6,module:10,sensor:4</id>
+    </readout>
+  </readouts>
+
+  <world material="Air">
+    <shape type="Box" dx="world_half_x" dy="world_half_y" dz="world_half_z"/>
+  </world>
+
+  <detectors>
+    <detector id="101" name="Telescope" type="DD4hep_SiTrackerBarrel" readout="TelescopeHits" insideTrackingVolume="true">
+      <module name="TelescopeModule" vis="TelescopeLayerVis">
+        <module_envelope width="20*mm" length="2*tracker_zmax" thickness="0.4*mm"/>
+        <module_component width="20*mm" length="2*tracker_zmax" thickness="0.3*mm" material="Silicon" sensitive="true" vis="TelescopeSensitiveVis"/>
+      </module>
+
+      <layer module="TelescopeModule" id="1" vis="TelescopeLayerVis">
+        <barrel_envelope inner_r="r1-1*mm" outer_r="r1+1*mm" z_length="2*tracker_zmax"/>
+        <rphi_layout phi_tilt="0.0*rad" nphi="12" phi0="0.0*rad" rc="r1" dr="0.0*mm"/>
+        <z_layout dr="0.0*mm" z0="0.0*mm" nz="1"/>
+      </layer>
+
+      <layer module="TelescopeModule" id="2" vis="TelescopeLayerVis">
+        <barrel_envelope inner_r="r2-1*mm" outer_r="r2+1*mm" z_length="2*tracker_zmax"/>
+        <rphi_layout phi_tilt="0.0*rad" nphi="18" phi0="0.0*rad" rc="r2" dr="0.0*mm"/>
+        <z_layout dr="0.0*mm" z0="0.0*mm" nz="1"/>
+      </layer>
+
+      <layer module="TelescopeModule" id="3" vis="TelescopeLayerVis">
+        <barrel_envelope inner_r="r3-1*mm" outer_r="r3+1*mm" z_length="2*tracker_zmax"/>
+        <rphi_layout phi_tilt="0.0*rad" nphi="24" phi0="0.0*rad" rc="r3" dr="0.0*mm"/>
+        <z_layout dr="0.0*mm" z0="0.0*mm" nz="1"/>
+      </layer>
+
+      <layer module="TelescopeModule" id="4" vis="TelescopeLayerVis">
+        <barrel_envelope inner_r="r4-1*mm" outer_r="r4+1*mm" z_length="2*tracker_zmax"/>
+        <rphi_layout phi_tilt="0.0*rad" nphi="30" phi0="0.0*rad" rc="r4" dr="0.0*mm"/>
+        <z_layout dr="0.0*mm" z0="0.0*mm" nz="1"/>
+      </layer>
+
+      <layer module="TelescopeModule" id="5" vis="TelescopeLayerVis">
+        <barrel_envelope inner_r="r5-1*mm" outer_r="r5+1*mm" z_length="2*tracker_zmax"/>
+        <rphi_layout phi_tilt="0.0*rad" nphi="36" phi0="0.0*rad" rc="r5" dr="0.0*mm"/>
+        <z_layout dr="0.0*mm" z0="0.0*mm" nz="1"/>
+      </layer>
+    </detector>
+  </detectors>
+</lccdd>

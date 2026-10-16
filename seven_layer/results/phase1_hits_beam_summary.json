@@ -1,0 +1,150 @@
+{
+  "input": "seven_layer/results/sim_seven_layer_beam.edm4hep.root",
+  "collections": {
+    "SiMAPSHits": {
+      "events": 200,
+      "hits_total": 1015,
+      "hits_per_event": {
+        "mean": 5.075,
+        "min": 5,
+        "max": 7
+      },
+      "layers": {
+        "0": {
+          "n_hits": 201,
+          "system_ids": [
+            201
+          ],
+          "module_ids": [
+            1
+          ],
+          "sensor_ids": [
+            1
+          ],
+          "z_mean_mm": 0.01253344186744011,
+          "z_std_mm": 0.0004729394248488627,
+          "x_mean_mm": 0.019813123612672047,
+          "y_mean_mm": 0.017553935875248967
+        },
+        "1": {
+          "n_hits": 205,
+          "system_ids": [
+            201
+          ],
+          "module_ids": [
+            1
+          ],
+          "sensor_ids": [
+            1
+          ],
+          "z_mean_mm": 49.999852117445556,
+          "z_std_mm": 0.0028223668194767137,
+          "x_mean_mm": 0.4678775921609867,
+          "y_mean_mm": 0.38536679757822145
+        },
+        "2": {
+          "n_hits": 205,
+          "system_ids": [
+            201
+          ],
+          "module_ids": [
+            1
+          ],
+          "sensor_ids": [
+            1
+          ],
+          "z_mean_mm": 100.12205407765518,
+          "z_std_mm": 1.7417400303199273,
+          "x_mean_mm": -0.057489967678402906,
+          "y_mean_mm": -0.23135997975862052
+        },
+        "3": {
+          "n_hits": 201,
+          "system_ids": [
+            201
+          ],
+          "module_ids": [
+            1
+          ],
+          "sensor_ids": [
+            1
+          ],
+          "z_mean_mm": 150.00008104580198,
+          "z_std_mm": 0.0011461607232141683,
+          "x_mean_mm": 0.1931253082150645,
+          "y_mean_mm": 0.06954189812041878
+        },
+        "4": {
+          "n_hits": 203,
+          "system_ids": [
+            201
+          ],
+          "module_ids": [
+            1
+          ],
+          "sensor_ids": [
+            1
+          ],
+          "z_mean_mm": 199.99995769411632,
+          "z_std_mm": 0.002026223740279739,
+          "x_mean_mm": 0.12011947698120927,
+          "y_mean_mm": 0.11968050578501603
+        }
+      }
+    },
+    "MPGDHits": {
+      "events": 200,
+      "hits_total": 228,
+      "hits_per_event": {
+        "mean": 1.14,
+        "min": 1,
+        "max": 4
+      },
+      "layers": {
+        "5": {
+          "n_hits": 228,
+          "system_ids": [
+            202
+          ],
+          "module_ids": [
+            1
+          ],
+          "sensor_ids": [
+            1
+          ],
+          "z_mean_mm": 250.0126046827567,
+          "z_std_mm": 0.3470182474760106,
+          "x_mean_mm": 0.2664851205611565,
+          "y_mean_mm": 0.21540160662178143
+        }
+      }
+    },
+    "ACLGADHits": {
+      "events": 200,
+      "hits_total": 210,
+      "hits_per_event": {
+        "mean": 1.05,
+        "min": 1,
+        "max": 3
+      },
+      "layers": {
+        "6": {
+          "n_hits": 210,
+          "system_ids": [
+            203
+          ],
+          "module_ids": [
+            1
+          ],
+          "sensor_ids": [
+            1
+          ],
+          "z_mean_mm": 299.99948946996295,
+          "z_std_mm": 0.024107895133389786,
+          "x_mean_mm": 0.21921676736962478,
+          "y_mean_mm": 0.1192117742684617
+        }
+      }
+    }
+  }
+}

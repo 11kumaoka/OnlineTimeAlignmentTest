@@ -1,0 +1,32 @@
+# Large generated data
+*.root
+*.gdml
+
+# Build files
+build/
+cmake-build-*/
+*.o
+*.so
+
+# Logs and temporary files
+*.log
+__pycache__/
+*.pyc
+.DS_Store
+
+# Local credentials and environment files
+.env
+.env.*
+!.env.example
+
+# Local archives
+*.zip
+
+.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.tif
+

@@ -1,0 +1,71 @@
+<lccdd xmlns:compact="http://www.lcsim.org/schemas/compact/1.0"
+       xmlns:xs="http://www.w3.org/2001/XMLSchema"
+       xs:noNamespaceSchemaLocation="http://www.lcsim.org/schemas/compact/1.0/compact.xsd">
+
+  <info name="FiveLayerBeamTestTelescope"
+        title="Five-layer beam test telescope prototype"
+        author="OnlineTimeAlignmentTest"
+        status="development"
+        version="0.1"/>
+
+  <includes>
+    <gdmlFile ref="${DD4hepINSTALL}/DDDetectors/compact/elements.xml"/>
+    <gdmlFile ref="${DD4hepINSTALL}/DDDetectors/compact/materials.xml"/>
+  </includes>
+
+  <define>
+    <include ref="${DD4hepINSTALL}/DDDetectors/compact/detector_types.xml"/>
+    <constant name="world_half_x" value="1000*mm"/>
+    <constant name="world_half_y" value="1000*mm"/>
+    <constant name="world_half_z" value="1000*mm"/>
+    <constant name="layer_rmin" value="0*mm"/>
+    <constant name="layer_rmax" value="40*mm"/>
+    <constant name="z1" value="-200*mm"/>
+    <constant name="z2" value="-100*mm"/>
+    <constant name="z3" value="0*mm"/>
+    <constant name="z4" value="100*mm"/>
+    <constant name="z5" value="200*mm"/>
+    <constant name="tracker_region_rmax" value="50*mm"/>
+    <constant name="tracker_region_zmax" value="250*mm"/>
+  </define>
+
+  <display>
+    <vis name="TelescopeLayerVis" alpha="1.0" r="0.2" g="0.5" b="1.0" drawingStyle="wireframe" showDaughters="true" visible="true"/>
+    <vis name="TelescopeSensitiveVis" alpha="1.0" r="1.0" g="0.2" b="0.2" drawingStyle="solid" showDaughters="true" visible="true"/>
+  </display>
+
+  <readouts>
+    <readout name="TelescopeHits">
+      <id>system:8,barrel:3,layer:6,wedge:6,module:6,sensor:4</id>
+    </readout>
+  </readouts>
+
+  <world material="Air">
+    <shape type="Box" dx="world_half_x" dy="world_half_y" dz="world_half_z"/>
+  </world>
+
+  <detectors>
+    <detector id="101" name="Telescope" type="DD4hep_SiTrackerEndcap2" readout="TelescopeHits" insideTrackingVolume="true">
+      <module name="TelescopeModule">
+        <trd x1="layer_rmax" x2="layer_rmax" z="(layer_rmax-layer_rmin)/2"/>
+        <module_component thickness="0.300*mm" material="Silicon" sensitive="true" vis="TelescopeSensitiveVis"/>
+      </module>
+
+      <layer id="1" vis="TelescopeLayerVis">
+        <ring r="(layer_rmax + layer_rmin)/2" zstart="z1" nmodules="1" dz="0.0*mm" module="TelescopeModule"/>
+      </layer>
+      <layer id="2" vis="TelescopeLayerVis">
+        <ring r="(layer_rmax + layer_rmin)/2" zstart="z2" nmodules="1" dz="0.0*mm" module="TelescopeModule"/>
+      </layer>
+      <layer id="3" vis="TelescopeLayerVis">
+        <ring r="(layer_rmax + layer_rmin)/2" zstart="z3" nmodules="1" dz="0.0*mm" module="TelescopeModule"/>
+      </layer>
+      <layer id="4" vis="TelescopeLayerVis">
+        <ring r="(layer_rmax + layer_rmin)/2" zstart="z4" nmodules="1" dz="0.0*mm" module="TelescopeModule"/>
+      </layer>
+      <layer id="5" vis="TelescopeLayerVis">
+        <ring r="(layer_rmax + layer_rmin)/2" zstart="z5" nmodules="1" dz="0.0*mm" module="TelescopeModule"/>
+      </layer>
+    </detector>
+  </detectors>
+</lccdd>
