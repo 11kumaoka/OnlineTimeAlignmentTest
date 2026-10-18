@@ -1,0 +1,32 @@
+* Beam-test five-layer straight-line alignment steering template
+* Sign convention in measurement model:
+* x_meas = x0 + tx*(z-zref) + a_x[layer] + noise
+* y_meas = y0 + ty*(z-zref) + a_y[layer] + noise
+* Therefore measurement correction is -a_x, -a_y.
+
+Cfiles
+__MILLE_BINARY__
+
+* Count requirement to activate a global parameter
+entries 20
+
+* Solve method
+method inversion 3 0.001
+
+* Fix reference layers L0 and L4 in both x/y (gauge fixing)
+Parameter
+1000 0.0 -1.0
+2000 0.0 -1.0
+1004 0.0 -1.0
+2004 0.0 -1.0
+
+* Keep intermediate layers variable with loose pre-sigma
+1001 0.0 1.0
+2001 0.0 1.0
+1002 0.0 1.0
+2002 0.0 1.0
+1003 0.0 1.0
+2003 0.0 1.0
+
+printcounts
+end

@@ -30,3 +30,33 @@ __pycache__/
 *.tiff
 *.tif
 
+
+# Generated outputs
+seven_layer/millepede/results/
+seven_layer/results/
+seven_layer/logs/
+
+
+
+# VS Code local settings
+/.vscode/
+
+# External Millepede-II sources and local installation
+/seven_layer/millepede/third_party/
+/seven_layer/millepede/install/
+/seven_layer/millepede/build/
+
+# Generated Millepede-II results
+/seven_layer/millepede/results/
+
+# Generated runtime logs
+/seven_layer/logs/
+
+# Temporary Pede files in repository root
+/millepede.end*
+/millepede.his
+/millepede.log*
+/millepede.res
+/mp2con.txt
+/mp2str.txt
+/mp2tst.bin
