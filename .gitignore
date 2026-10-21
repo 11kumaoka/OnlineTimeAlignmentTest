@@ -1,32 +1,31 @@
-# Large generated data
+# Generated results, builds, and external dependencies
+/results/
+/build/
+/external/
 *.root
 *.gdml
-
-# Build files
-build/
-cmake-build-*/
 *.o
 *.so
-
-# Logs and temporary files
 *.log
+*.dat
+*.bin
+/millepede.*
+/mp2con.txt
+/mp2str.txt
 __pycache__/
 *.pyc
 .DS_Store
 
-# Local credentials and environment files
+# Local settings and credentials
+/.vscode/
 .env
 .env.*
 !.env.example
 
-# Local archives
+# Local archives and editor backups
 *.zip
-
-.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-*.tiff
-*.tif
-
+*.tar
+*.tar.gz
+*.tgz
+*.bak
+*~

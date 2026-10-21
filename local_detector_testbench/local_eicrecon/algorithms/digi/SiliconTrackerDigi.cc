@@ -1,0 +1,121 @@
+// Origin: EICrecon/src/algorithms/digi/SiliconTrackerDigi.cc
+// Source revision: 67a00864dd47c709c98b4afc2c210c3faee100b1
+// Local purpose: seven-layer beam-test reconstruction
+// Adaptation: local namespace/factory integration and runtime execution markers
+
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (C) 2022 Whitney Armstrong, Wouter Deconinck, Sylvester Joosten, Dmitry Romanov
+
+#include <Evaluator/DD4hepUnits.h>
+#include <edm4hep/MCParticleCollection.h>
+#include <edm4hep/Vector3d.h>
+#include <edm4hep/Vector3f.h>
+#include <podio/detail/Link.h>
+#include <podio/detail/LinkCollectionImpl.h>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <iostream>
+#include <memory>
+#include <random>
+#include <tuple>
+#include <unordered_map>
+#include <utility>
+
+#include "SiliconTrackerDigi.h"
+#include "algorithms/digi/SiliconTrackerDigiConfig.h"
+
+namespace local_eicrecon {
+
+void SiliconTrackerDigi::init() {}
+
+void SiliconTrackerDigi::process(const SiliconTrackerDigi::Input& input,
+                                 const SiliconTrackerDigi::Output& output) const {
+
+  static int call_count = 0;
+  ++call_count;
+  if (call_count <= 3) {
+    std::cerr << "[local_eicrecon] SiliconTrackerDigi::process call=" << call_count
+              << " name=" << name()
+              << " (local copied source)" << std::endl;
+  }
+
+  const auto [headers, sim_hits]       = input;
+  auto [raw_hits, links, associations] = output;
+
+  // local random generator
+  auto seed = m_uid.getUniqueID(*headers, name());
+  std::default_random_engine generator(seed);
+  std::normal_distribution<double> gaussian;
+
+  // A map of unique cellIDs with temporary structure RawHit
+  std::unordered_map<std::uint64_t, edm4eic::MutableRawTrackerHit> cell_hit_map;
+
+  for (const auto& sim_hit : *sim_hits) {
+
+    // time smearing
+    double time_smearing = gaussian(generator) * m_cfg.timeResolution;
+    double result_time   = sim_hit.getTime() + time_smearing;
+    auto hit_time_stamp  = (std::int32_t)(result_time * 1e3);
+
+    debug("--------------------");
+    debug("Hit cellID   = {}", sim_hit.getCellID());
+    debug("   position  = ({:.2f}, {:.2f}, {:.2f})", sim_hit.getPosition().x,
+          sim_hit.getPosition().y, sim_hit.getPosition().z);
+    debug("   xy_radius = {:.2f}", std::hypot(sim_hit.getPosition().x, sim_hit.getPosition().y));
+    debug("   momentum  = ({:.2f}, {:.2f}, {:.2f})", sim_hit.getMomentum().x,
+          sim_hit.getMomentum().y, sim_hit.getMomentum().z);
+    debug("   edep = {:.2f}", sim_hit.getEDep());
+    debug("   time = {:.4f}[ns]", sim_hit.getTime());
+    debug("   particle time = {}[ns]", sim_hit.getParticle().getTime());
+    debug("   time smearing: {:.4f}, resulting time = {:.4f} [ns]", time_smearing, result_time);
+    debug("   hit_time_stamp: {} [~ps]", hit_time_stamp);
+
+    if (sim_hit.getEDep() < m_cfg.threshold) {
+      debug("  edep is below threshold of {:.2f} [keV]", m_cfg.threshold / dd4hep::keV);
+      continue;
+    }
+
+    if (!cell_hit_map.contains(sim_hit.getCellID())) {
+      // This cell doesn't have hits
+      cell_hit_map[sim_hit.getCellID()] = {
+          sim_hit.getCellID(), (std::int32_t)std::llround(sim_hit.getEDep() * 1e6),
+          hit_time_stamp // ns->ps
+      };
+    } else {
+      // There is previous values in the cell
+      auto& hit = cell_hit_map[sim_hit.getCellID()];
+      debug("  Hit already exists in cell ID={}, prev. hit time: {}", sim_hit.getCellID(),
+            hit.getTimeStamp());
+
+      // keep earliest time for hit
+      hit.setTimeStamp(std::min(hit_time_stamp, hit.getTimeStamp()));
+
+      // sum deposited energy
+      auto charge = hit.getCharge();
+      hit.setCharge(charge + (std::int32_t)std::llround(sim_hit.getEDep() * 1e6));
+    }
+  }
+
+  for (auto item : cell_hit_map) {
+    raw_hits->push_back(item.second);
+    auto raw_hit = raw_hits->at(raw_hits->size() - 1);
+
+    for (const auto& sim_hit : *sim_hits) {
+      if (item.first == sim_hit.getCellID()) {
+        // create link
+        auto link = links->create();
+        link.setFrom(item.second);
+        link.setTo(sim_hit);
+        link.setWeight(1.0);
+        // set association
+        auto hitassoc = associations->create();
+        hitassoc.setWeight(1.0);
+        hitassoc.setRawHit(raw_hit);
+        hitassoc.setSimHit(sim_hit);
+      }
+    }
+  }
+}
+
+} // namespace local_eicrecon
