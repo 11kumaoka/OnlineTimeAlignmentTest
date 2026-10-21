@@ -1,0 +1,17 @@
+{
+  "python": "3.13.12 (main, Apr 30 2026, 00:40:44) [GCC 14.2.0]",
+  "ROOT": "6.38.00",
+  "uproot": "5.7.1",
+  "awkward": "2.9.0",
+  "numpy": "2.2.6",
+  "packages": {
+    "Acts": "/opt/software/linux-x86_64_v2/acts-45.3.0-wcfupnclzwvgcfq42aasw2vtzox44ind/include/Acts",
+    "EICrecon": "/opt/software/linux-x86_64_v2/eicrecon-git.195966d41899800eaeca6fbafd63cd53735e6543_main-eciaszcuzwnhqwoejwe2kbxe7lk7qzx6/include/EICrecon",
+    "DD4hep": "/opt/software/linux-x86_64_v2/dd4hep-1.36-ikmnyb3bzgqioeb65ztkkvhgknb5bwqe/include/DD4hep",
+    "edm4eic": "/opt/software/linux-x86_64_v2/edm4eic-git.7d7705d9bbd4794b1b875c04258e7d986aea8a47_main-tef6ztuodvrgqngisjswbrcnpc2bjf76/include/edm4eic",
+    "edm4hep": "/opt/software/linux-x86_64_v2/edm4hep-1.0-utyvoyajc5kzaygjz26lycsehnhejae6/include/edm4hep",
+    "podio": "/opt/software/linux-x86_64_v2/podio-1.7-6gmjef43ovsea4evvw5fv4oggo5sljgy/include/podio",
+    "JANA": "/opt/software/linux-x86_64_v2/jana2-2026.02.00-axyjohsya26cjii4flsgdaripjnpbdfa/include/JANA"
+  },
+  "image": "eicweb/eic_xl@sha256:67c914295a92396040c3051360d70786df9c1ee8458264ad0b83cd1a8ccf3d05"
+}

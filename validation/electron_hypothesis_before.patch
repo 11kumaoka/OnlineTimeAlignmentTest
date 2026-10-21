@@ -1,0 +1,19 @@
+diff --git a/seven_layer/local_eicrecon/algorithms/tracking/BeamTestACTSFitter.cc b/seven_layer/local_eicrecon/algorithms/tracking/BeamTestACTSFitter.cc
+index 8a65721..1bb589e 100644
+--- a/seven_layer/local_eicrecon/algorithms/tracking/BeamTestACTSFitter.cc
++++ b/seven_layer/local_eicrecon/algorithms/tracking/BeamTestACTSFitter.cc
+@@ -222,8 +222,12 @@ BeamTestACTSFitter::fitSelected(const std::vector<LayerHit>& selected, bool useG
+ 
+   const double qOverP = m_cfg.seedQOverP / Acts::UnitConstants::GeV;
+   Acts::Vector4 pos4(seedPos.x(), seedPos.y(), seedPos.z(), 0.0);
+-  auto particleHypothesis = m_cfg.useMuonHypothesis ? Acts::ParticleHypothesis::muon()
+-                                                     : Acts::ParticleHypothesis::pion();
++    const auto particleHypothesis =
++        (std::abs(m_cfg.outputTrackPDG) == 11)
++            ? Acts::ParticleHypothesis::electron()
++            : (m_cfg.useMuonHypothesis
++                ? Acts::ParticleHypothesis::muon()
++                : Acts::ParticleHypothesis::pion());
+   auto seed = Acts::BoundTrackParameters::createCurvilinear(
+       pos4, dir, qOverP, seedCov, particleHypothesis);
+ 

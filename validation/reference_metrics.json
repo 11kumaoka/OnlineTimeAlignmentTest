@@ -1,0 +1,9 @@
+{
+  "dataset": "results/reference/physical_alignment_L2_x200um/sim_electron_L2x200um_100.edm4hep.root",
+  "before": {"events": 100, "tracks": 99, "l2_mean_um": -199.57137554842703, "chi2ndf": 45.59223484848485},
+  "after": {"events": 100, "tracks": 99, "l2_mean_um": -0.8213645075978979, "chi2ndf": 1.9810397677951388},
+  "correction_um": 198.75,
+  "tolerance_correction_um": 0.02,
+  "tolerance_residual_um": 0.05,
+  "tolerance_chi2ndf": 0.02
+}
