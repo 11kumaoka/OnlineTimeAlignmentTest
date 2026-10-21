@@ -1,0 +1,23 @@
+{
+  "events": 80,
+  "beam": {
+    "particle": "mu-",
+    "energy_GeV": 5.0,
+    "seed": 2035032807,
+    "theta_min": 0.01,
+    "theta_max": 0.03,
+    "phi_min": 0.0,
+    "phi_max": 6.283185307179586,
+    "position_mm": [
+      0.0,
+      0.0,
+      -500.0
+    ],
+    "vertex_sigma_mm_ns": [
+      0.2,
+      0.2,
+      0.0,
+      0.0
+    ]
+  }
+}

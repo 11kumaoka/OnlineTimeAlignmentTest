@@ -219,5 +219,5 @@
   "results/legacy_data/logs/04_eicrecon_tracking_only.log": "946083d2dbb62a2319b7efd929357fe03832db852b0e403a84657011c059b9ae",
   "results/legacy_data/logs/02_eicrecon_tracking.log": "5555498bc9b9843132a94ea638beeadf924db9e8c51a1faf674ae1e78de3af11",
   "results/legacy_data/logs/00_env.log": "7e809091ac3e6ac39c47cf4a4a397fb6b1646f8ea1dddcf6aa92d3bf73999386",
-  "examples/seven_layer_telescope/geometry/nominal.xml": "8807380ffdb277b747f052a0b2b451c87fbc4cb4ea08a3f6960f4e7b35defee4"
+  "geometry/nominal/seven_layer_telescope.xml": "8807380ffdb277b747f052a0b2b451c87fbc4cb4ea08a3f6960f4e7b35defee4"
 }

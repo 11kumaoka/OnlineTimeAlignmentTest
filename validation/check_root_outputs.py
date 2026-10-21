@@ -4,7 +4,7 @@ import argparse,json
 from pathlib import Path
 import ROOT
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('--result-dir','--run-dir',dest='run_dir',metavar='RESULT_DIR',type=Path,required=True);a=p.parse_args()
-base=a.run_dir/'validation/plots'
+base=a.run_dir/'step7'
 f=ROOT.TFile.Open(str(base/'alignment.root'),'READ')
 assert f and not f.IsZombie()
 keys={k.GetName():k.GetClassName() for k in f.GetListOfKeys()}

@@ -8,6 +8,6 @@ if [[ ! -f $prefix/cmake/MilleConfig.cmake || ! -f $prefix/lib/libMille2.so || !
   echo "Incomplete dependency installation: $prefix. Run environment/setup_dependencies.py; no legacy fallback is used." >&2
   exit 2
 fi
-cmake -S "$repo/local_detector_testbench/local_eicrecon" -B "$build_dir" \
+cmake -S "$repo/localDetEICrecon" -B "$build_dir" \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo -DMILLEPEDE_PREFIX="$prefix" -DMille_DIR="$prefix/cmake"
 cmake --build "$build_dir" -j "${BUILD_JOBS:-2}"

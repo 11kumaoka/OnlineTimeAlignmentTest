@@ -18,8 +18,8 @@ path above. The original source position was z=0 mm. With dependencies installed
 and the Plugin built, run from the repository root:
 
 ```bash
-bash environment/run.sh bash validation/run_regression.sh results/regression_001
-bash environment/run.sh python3 validation/check_root_outputs.py --result-dir results/regression_001
+bash environment/run.sh bash validation/run_regression.sh result/regression_001
+bash environment/run.sh python3 validation/check_root_outputs.py --result-dir result/regression_001
 ```
 
 Expected results are 99 accepted tracks before/after, L2 Geometry Correction
@@ -31,8 +31,8 @@ Expected results are 99 accepted tracks before/after, L2 Geometry Correction
 A fresh checkout can generate new events without the historical dataset:
 
 ```bash
-bash environment/run.sh bash local_detector_testbench/scripts/run_closure.sh \
-  --result-dir results/electron_001
+bash environment/run.sh bash validation/run_closure.sh \
+  --result-dir result/electron_001
 ```
 
 The current electron case uses 1 GeV electrons at mean z=−500 mm. The validated
@@ -68,3 +68,12 @@ python3 validation/check_safety.py
 
 The safety checker creates a new temporary result subdirectory and exercises CLI
 refusal paths. It does not execute reconstruction or overwrite reference data.
+
+
+## Current task architecture
+
+New runs use `result/<name>/step1` through `step7`. Numerical extraction is in
+`validation/metrics.py`; `validate.py` compares provenance and runs the ROOT
+renderer in `visualization/`. Historical `results/` remains untouched. See the
+[Workflow Guide](../docs/WORKFLOW.md) for seven independent commands and the
+[architecture report](../docs/TASK_ARCHITECTURE.md) for migration validation.

@@ -1,5 +1,6 @@
 # Generated results, builds, and external dependencies
 /results/
+/result/
 /build/
 /external/
 *.root

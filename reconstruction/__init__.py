@@ -1,0 +1,1 @@
+"""Independent reconstruction research task."""

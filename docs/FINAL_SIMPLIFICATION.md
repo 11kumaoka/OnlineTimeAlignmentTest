@@ -1,3 +1,7 @@
+> Historical cleanup report. Paths and commands describe the implementation at
+> that time. For the maintained architecture use [WORKFLOW.md](WORKFLOW.md) and
+> [TASK_ARCHITECTURE.md](TASK_ARCHITECTURE.md).
+
 # Final Repository Simplification
 
 Date: 2026-10-21. The working repository now contains only the current local
@@ -63,7 +67,7 @@ with its own checksum inventory, stored there after validation.
 
 The archive-only inventory contains 1,479 file/link paths. The migration records
 2,054 moved file/link paths, including the GUI launcher. The exact per-file lists
-are [archived_paths.json](../results/final_simplification_20261021_01/archived_paths.json)
+are `results/final_simplification_20261021_01/archived_paths.json` (local audit data, not distributed by Git)
 and [path_migration.json](../validation/path_migration.json).
 Directory removals were performed only after every remaining file/link under
 them matched the verified archive. Symlink targets in container installations
