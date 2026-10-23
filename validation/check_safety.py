@@ -35,7 +35,9 @@ print('PASS refusal: result directory must be a child of result/')
 # Invalid scenario definitions fail before creating a Geometry stage or launching tools.
 invalid_scenarios = [
     ({'detector':'SiMAPS','global_x_shifts_mm':{'5':0.1}}, 'Unsupported SiMAPS layer identifier'),
-    ({'detector':'SiMAPS','global_y_shifts_mm':{'2':0.1}}, 'other displacement types are unsupported'),
+    ({'detector':'SiMAPS','global_x_shifts_mm':{},'global_z_shifts_mm':{'4':0.1}}, 'Global Z supports finite L1/L2'),
+    ({'detector':'SiMAPS','global_x_shifts_mm':{},'global_rx_rad':{'4':0.1}}, 'Physical tilt preparation supports'),
+    ({'detector':'SiMAPS','global_x_shifts_mm':{},'global_ry_rad':{'4':0.1}}, 'Physical tilt preparation supports'),
     ({'detector':'MPGD','global_x_shifts_mm':{'2':0.1}}, 'Only a SiMAPS'),
     ({'detector':'SiMAPS','global_x_shifts_mm':{'2':True}}, 'finite number'),
     ({'detector':'SiMAPS','global_x_shifts_mm':{'2':float('nan')}}, 'finite number'),
@@ -56,3 +58,25 @@ assert not (multi/'step5').exists()
 (multi/'step4').mkdir();(multi/'step4/complete.json').write_text(json.dumps({'output_hashes':{}}))
 rejected('correct','--result-dir',multi,contains='Multi-layer Geometry Correction and full Closure are unsupported')
 assert not (multi/'step5').exists()
+
+# The convenience runner must not bypass the Controller Z derivative/information gates.
+z_output=base/'ungated_z'
+p=subprocess.run(['bash',str(scripts/'validation/run_closure.sh'),'--result-dir',str(z_output),'--correction-mode','l1_z'],cwd=repo,text=True,capture_output=True)
+assert p.returncode==2 and 'requires derivative and observability gates' in p.stderr
+assert not z_output.exists()
+print('PASS refusal: ungated convenience-runner Z calibration')
+
+# Tilt calibration must not bypass the derivative/information gates either.
+tilt_output=base/'ungated_rx'
+p=subprocess.run(['bash',str(scripts/'validation/run_closure.sh'),'--result-dir',str(tilt_output),'--correction-mode','l1_rx'],cwd=repo,text=True,capture_output=True)
+assert p.returncode==2 and 'requires derivative and observability gates' in p.stderr
+assert not tilt_output.exists()
+print('PASS refusal: ungated convenience-runner Rx calibration')
+
+# New three-layer and L3-only convenience paths cannot bypass evidence gates.
+for mode in ('l3_six_dof','l1_l2_l3_six_dof'):
+    output=base/('ungated_'+mode)
+    p=subprocess.run(['bash',str(scripts/'validation/run_closure.sh'),'--result-dir',str(output),'--correction-mode',mode],cwd=repo,text=True,capture_output=True)
+    assert p.returncode==2 and 'requires derivative and observability gates' in p.stderr
+    assert not output.exists()
+    print('PASS refusal: ungated '+mode)

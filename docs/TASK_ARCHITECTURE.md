@@ -1,3 +1,6 @@
+> Historical baseline before the RawHit execution split. Current commands and
+> architecture are in [WORKFLOW.md](WORKFLOW.md) and [RAWHIT_BOUNDARY.md](RAWHIT_BOUNDARY.md).
+
 # Top-Level Research Task Architecture
 
 Migration report, 2026-10-21. Commit/push statements below describe that
@@ -340,3 +343,7 @@ Generated build/results are excluded from this source table and remain ignored.
 | created | — | `validation/__init__.py` |
 | created | — | `visualization/__init__.py` |
 | created | — | `docs/TASK_ARCHITECTURE.md` |
+
+## Current Geometry and survey extension
+
+The maintained controller now supports explicit SiMAPS L1/L2 X/Y in addition to legacy X modes. `geometry/transforms.py` is the six-DOF mathematical foundation; `geometry/prepare.py` and the focused DD4hep factory serialize only validated translations. `SurfacePlacements.h` maps selected DD4hep sensitive contexts into the existing ACTS fitter. RawHit v2 separates readout/topology from optional simulation-truth provenance. Survey G0 and selected reconstruction versions belong to the registry/configuration, not to assumed physical truth. See [conventions](GEOMETRY_CONVENTIONS.md) and [executed XY validation](XY_FOUNDATION_VALIDATION.md). Earlier scope statements in historical reports describe their original validation phase.

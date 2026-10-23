@@ -43,7 +43,7 @@ def geometry(path):
         name = det.get("name")
         if name not in ("SiMAPS", "MPGDPlane", "ACLGADPlane"):
             continue
-        if det.get("type") != "DD4hep_SiTrackerEndcap2":
+        if det.get("type") not in ("DD4hep_SiTrackerEndcap2","Local_SiTrackerEndcap2XY"):
             raise RuntimeError(f"Unexpected detector builder: {name}")
         for layer in det.findall("layer"):
             for ring in layer.findall("ring"):
@@ -53,9 +53,33 @@ def geometry(path):
                 if abs(phi) > 1e-12:
                     raise RuntimeError("Viewer assumes phi0=0")
                 z = xml_number(ring.attrib["zstart"], constants) + xml_number(ring.get("dz", "0"), constants)
+                z += xml_number(ring.get('global_z','0*mm'), constants)
                 x = -xml_number(ring.attrib["r"], constants)
                 lid = int(layer.attrib["id"])
                 result[lid] = (x, z, name)
     if set(result) != set(range(7)):
         raise RuntimeError(f"Expected seven layers L0..L6 in {path}, got {sorted(result)}")
+    return result
+
+
+def placement_transforms(path):
+    """Read focused telescope plane transforms, including Global rotations in radians."""
+    from geometry.transforms import RigidTransform,axis_rotation,multiply
+    root=ET.parse(path).getroot()
+    constants={c.get('name'):c.get('value') for c in root.findall('./define/constant')}
+    preview=geometry(path);result={}
+    for detector in root.findall('./detectors/detector'):
+        if detector.get('name') not in ('SiMAPS','MPGDPlane','ACLGADPlane'):continue
+        for layer in detector.findall('layer'):
+            lid=int(layer.get('id'));ring=layer.find('ring');x,z,_=preview[lid]
+            y=xml_number(ring.get('global_y','0*mm'),constants)
+            matrix_keys=[f'global_r{i}{j}' for i in range(3) for j in range(3)]
+            present=[key in ring.attrib for key in matrix_keys]
+            if any(present):
+                if not all(present) or any(key in ring.attrib for key in ('global_rx','global_ry','global_rz')):
+                    raise ValueError('A complete rotation matrix cannot be mixed with axis-angle placement attributes')
+                rotation=tuple(tuple(xml_number(ring.get(f'global_r{i}{j}'),constants) for j in range(3)) for i in range(3))
+            else:
+                rotation=multiply(axis_rotation('z',xml_number(ring.get('global_rz','0'),constants)),multiply(axis_rotation('y',xml_number(ring.get('global_ry','0'),constants)),axis_rotation('x',xml_number(ring.get('global_rx','0'),constants))))
+            result[lid]=RigidTransform(rotation=rotation,translation=(x,y,z),child='plane'+str(lid))
     return result

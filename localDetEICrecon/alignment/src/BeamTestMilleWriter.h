@@ -29,6 +29,16 @@ public:
   struct Config {
     std::string outputPath{"results/manual/mille.dat"};
     double zRefMm{100.0};
+    std::array<bool,5> rotationEnabled{};
+    std::array<bool,5> zEnabled{};
+    std::array<std::array<double,2>,5> pivotMm{};
+    // Experimental tilt path; legacy branches remain byte-for-byte separate.
+    bool tiltMeasurementModel{false};
+    std::array<bool,5> rxEnabled{};
+    std::array<bool,5> ryEnabled{};
+    std::array<std::array<double,3>,5> sensitiveCenterMm{};
+    std::array<std::array<double,3>,5> surfaceU{};
+    std::array<std::array<double,3>,5> surfaceV{};
     bool doublePrecision{false};
     bool writeZeroDerivatives{false};
   };

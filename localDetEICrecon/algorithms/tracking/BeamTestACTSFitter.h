@@ -56,6 +56,7 @@ public:
   BeamTestACTSFitter(std::string_view name);
 
   void init() final;
+  void setPlacements(const std::array<Acts::Transform3,7>& placements) { m_placements=placements; }
   void process(const Input&, const Output&) const final;
 
 private:
@@ -162,6 +163,7 @@ private:
   Acts::MagneticFieldContext m_mctx{};
   Acts::CalibrationContext m_cctx{};
 
+  std::optional<std::array<Acts::Transform3,7>> m_placements;
   std::array<double, 7> m_zmm{{0.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0}};
   double m_halfXmm{50.0};
   double m_halfYmm{50.0};

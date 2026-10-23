@@ -4,6 +4,8 @@
 #include "processors/BeamTestMilleProcessor.h"
 
 #include "BeamTestMilleWriter.h"
+#include "services/geometry/dd4hep/DD4hep_service.h"
+#include "geometry/SurfacePlacements.h"
 
 #include <JANA/JApplication.h>
 #include <JANA/JEvent.h>
@@ -47,7 +49,48 @@ void BeamTestMilleProcessor::Init() {
     return;
   }
 
+  app->SetDefaultParameter("beamtstreco:milleAlignmentMode",m_alignmentMode,
+                           "Mille derivative scope: legacy, validated Rz/Z/Rx/Ry modes or explicit coupled SO(3) modes; old two-axis tilts remain disabled");
+  if(m_alignmentMode=="l1_rx_ry" || m_alignmentMode=="l1_l2_rx_ry")
+    throw std::runtime_error("Combined Rx/Ry disabled after failed finite-rotation closure; see docs/TILT_ALIGNMENT_VALIDATION.md");
+  const bool coupled=m_alignmentMode=="l3_six_dof" || m_alignmentMode=="l1_l2_l3_six_dof" || m_alignmentMode=="l1_rotations" || m_alignmentMode=="l1_l2_rotations" || m_alignmentMode=="l1_six_dof" || m_alignmentMode=="l1_l2_six_dof";
+  if (!coupled && m_alignmentMode != "l1_ry" && m_alignmentMode != "l1_rx_ry" && m_alignmentMode != "l1_l2_rx_ry" && m_alignmentMode != "l1_rx" && m_alignmentMode != "legacy" && m_alignmentMode != "l1_rz" && m_alignmentMode != "l1_l2_rz" && m_alignmentMode != "l1_l2_xy_rz" && m_alignmentMode != "l1_z" && m_alignmentMode != "l1_l2_z" && m_alignmentMode != "l1_l2_xyz")
+    throw std::runtime_error("Unsupported Mille alignment mode");
   BeamTestMilleWriter::Config cfg;
+  if (m_alignmentMode == "l1_rz" || m_alignmentMode == "l1_l2_rz" || m_alignmentMode == "l1_l2_xy_rz") {
+    const auto placements = surfacePlacements(*app->GetService<DD4hep_service>()->converter(),false);
+    cfg.rotationEnabled[1] = true;
+    cfg.rotationEnabled[2] = m_alignmentMode != "l1_rz";
+    for (int layer=1; layer<=2; ++layer)
+      cfg.pivotMm[layer] = {placements[layer].translation().x(),placements[layer].translation().y()};
+  }
+  if(m_alignmentMode=="l1_z" || m_alignmentMode=="l1_l2_z" || m_alignmentMode=="l1_l2_xyz") {
+    cfg.zEnabled[1]=true;cfg.zEnabled[2]=m_alignmentMode!="l1_z";
+  }
+  if(coupled || m_alignmentMode=="l1_rx" || m_alignmentMode=="l1_ry" || m_alignmentMode=="l1_rx_ry" || m_alignmentMode=="l1_l2_rx_ry") {
+    cfg.tiltMeasurementModel=true;
+    cfg.rxEnabled[1]=m_alignmentMode!="l1_ry";
+    cfg.ryEnabled[1]=m_alignmentMode!="l1_rx";
+    cfg.rxEnabled[2]=cfg.ryEnabled[2]=m_alignmentMode=="l1_l2_rx_ry";
+    if(coupled) {
+      // Explicit supported SiMAPS scopes; no detector-general inference is implied.
+      cfg.rxEnabled.fill(false);cfg.ryEnabled.fill(false);
+      const int first=m_alignmentMode=="l3_six_dof"?3:1;
+      const int last=(m_alignmentMode=="l3_six_dof" || m_alignmentMode=="l1_l2_l3_six_dof")?3:
+        ((m_alignmentMode=="l1_l2_rotations" || m_alignmentMode=="l1_l2_six_dof")?2:1);
+      const bool six=m_alignmentMode.find("six_dof")!=std::string::npos;
+      for(int layer=first;layer<=last;++layer) {
+        cfg.rxEnabled[layer]=cfg.ryEnabled[layer]=cfg.rotationEnabled[layer]=true;
+        cfg.zEnabled[layer]=six;
+      }
+    }
+    const auto placements=surfacePlacements(*app->GetService<DD4hep_service>()->converter(),false);
+    for(int layer=0;layer<5;++layer)for(int i=0;i<3;++i) {
+      cfg.sensitiveCenterMm[layer][i]=placements[layer].translation()[i];
+      cfg.surfaceU[layer][i]=placements[layer].linear()(i,0);
+      cfg.surfaceV[layer][i]=placements[layer].linear()(i,1);
+    }
+  }
   cfg.outputPath = m_outputPath;
   cfg.zRefMm = m_zRefMm;
   cfg.doublePrecision = false;

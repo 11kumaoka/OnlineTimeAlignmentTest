@@ -111,13 +111,26 @@ void BeamTestACTSFitter::init() {
   m_surfaceSequence.reserve(7);
 
   for (int i = 0; i < 7; ++i) {
-    Acts::Transform3 tr = Acts::Transform3::Identity();
-    tr.translation() = Acts::Vector3(0.0, 0.0, m_zmm[i] * Acts::UnitConstants::mm);
+    if (!m_placements) throw std::runtime_error("Selected DD4hep surface placements are required");
+    Acts::Transform3 tr = m_placements->at(i);
+    m_zmm[i]=tr.translation().z()/Acts::UnitConstants::mm;
     auto bounds = std::make_shared<const Acts::RectangleBounds>(
         m_halfXmm * Acts::UnitConstants::mm, m_halfYmm * Acts::UnitConstants::mm);
     auto s = Acts::Surface::makeShared<Acts::PlaneSurface>(tr, bounds);
     auto gid = Acts::GeometryIdentifier().withVolume(1).withLayer(i + 1).withSensitive(1);
     s->assignGeometryId(gid);
+    double roundTripError=0.;
+    for (const auto& point : {Acts::Vector2(0.,0.),Acts::Vector2(10.,-7.)}) {
+      const Acts::Vector3 direction=tr.linear().col(2);
+      const auto global=s->localToGlobal(m_gctx,point,direction);
+      const auto local=s->globalToLocal(m_gctx,global,direction);
+      if(!local.ok())throw std::runtime_error("ACTS surface round-trip failed");
+      roundTripError=std::max(roundTripError,(local.value()-point).norm());
+      if((global-(tr*Acts::Vector3(point.x(),point.y(),0.))).norm()>1e-10)
+        throw std::runtime_error("DD4hep/ACTS surface transform mismatch");
+    }
+    if(roundTripError>1e-10)throw std::runtime_error("ACTS local/global precision mismatch");
+    std::cerr << "ACTSGeometryCheck layer=" << i << " round_trip_error_mm=" << roundTripError << std::endl;
     m_surfaceMap.emplace(gid.value(), s.get());
     m_surfaceSequence.push_back(s.get());
     m_surfaces.push_back(std::move(s));
@@ -196,8 +209,9 @@ BeamTestACTSFitter::fitSelected(const std::vector<LayerHit>& selected, bool useG
 
     const double sx2 = std::max(1e-8, static_cast<double>(h.exx)) * sqr(Acts::UnitConstants::mm);
     const double sy2 = std::max(1e-8, static_cast<double>(h.eyy)) * sqr(Acts::UnitConstants::mm);
-    m.cov(0, 0) = sx2;
-    m.cov(1, 1) = sy2;
+    // RecHit variances use sensor X/Z; plane u/v correspond to -Z/X for SiMAPS.
+    m.cov(0, 0) = h.layer<5 ? sy2 : sx2;
+    m.cov(1, 1) = h.layer<5 ? sx2 : sy2;
     m.cov(0, 1) = 0.0;
     m.cov(1, 0) = 0.0;
 
@@ -601,6 +615,17 @@ void BeamTestACTSFitter::process(const Input& input, const Output& output) const
   }
 
   for (const auto& s : fitBundle->states) {
+    // Measurement2D covariance remains in (u,v,time); TrackPoint uses Global XYZ.
+    const auto pointCovariance = [&](const Acts::SquareMatrix2& covariance) {
+      const auto basis=m_surfaceMap.at(s.surface)->localToGlobalTransform(m_gctx).linear().leftCols<2>().eval();
+      const Acts::SquareMatrix2 symmetric=0.5*(covariance+covariance.transpose());
+      const Acts::SquareMatrix3 global=(basis*symmetric*basis.transpose()) /
+          (Acts::UnitConstants::mm*Acts::UnitConstants::mm);
+      edm4eic::Cov3f result{};
+      result.xx=global(0,0);result.yy=global(1,1);result.zz=global(2,2);
+      result.xy=global(0,1);result.xz=global(0,2);result.yz=global(1,2);
+      return result;
+    };
     edm4eic::Cov3f measCov = makeCov3(static_cast<float>(s.measCov(0, 0)),
                       static_cast<float>(s.measCov(1, 1)),
                       sqr(static_cast<float>(m_cfg.timeResolution)));
@@ -613,9 +638,13 @@ void BeamTestACTSFitter::process(const Input& input, const Output& output) const
                       static_cast<float>(s.filtCov(1, 1)),
                       sqr(static_cast<float>(m_cfg.timeResolution)));
 
+    predCov.xy=static_cast<float>(0.5*(s.predCov(0,1)+s.predCov(1,0)));
+    filtCov.xy=static_cast<float>(0.5*(s.filtCov(0,1)+s.filtCov(1,0)));
+
     edm4eic::Cov3f smoothCov = makeCov3(static_cast<float>(s.smoothCov(0, 0)),
                       static_cast<float>(s.smoothCov(1, 1)),
                       sqr(static_cast<float>(m_cfg.timeResolution)));
+    smoothCov.xy=static_cast<float>(0.5*(s.smoothCov(0,1)+s.smoothCov(1,0)));
 
     if (s.hasMeasurement) {
       auto m = fitMeasurements->create();
@@ -651,7 +680,7 @@ void BeamTestACTSFitter::process(const Input& input, const Output& output) const
       tp.position = edm4hep::Vector3f{static_cast<float>(g.x() / Acts::UnitConstants::mm),
                                       static_cast<float>(g.y() / Acts::UnitConstants::mm),
                                       static_cast<float>(g.z() / Acts::UnitConstants::mm)};
-      tp.positionError = predCov;
+      tp.positionError = pointCovariance(s.predCov);
       tp.momentum = edm4hep::utils::sphericalToVector(fit.pGeV, fit.theta, fit.phi);
       tp.momentumError = edm4eic::Cov3f(std::numeric_limits<float>::quiet_NaN(),
                                         std::numeric_limits<float>::quiet_NaN(),
@@ -688,7 +717,7 @@ void BeamTestACTSFitter::process(const Input& input, const Output& output) const
       tp.position = edm4hep::Vector3f{static_cast<float>(g.x() / Acts::UnitConstants::mm),
                                       static_cast<float>(g.y() / Acts::UnitConstants::mm),
                                       static_cast<float>(g.z() / Acts::UnitConstants::mm)};
-      tp.positionError = filtCov;
+      tp.positionError = pointCovariance(s.filtCov);
       tp.momentum = edm4hep::utils::sphericalToVector(fit.pGeV, fit.theta, fit.phi);
       tp.momentumError = edm4eic::Cov3f(std::numeric_limits<float>::quiet_NaN(),
                                         std::numeric_limits<float>::quiet_NaN(),
@@ -725,7 +754,7 @@ void BeamTestACTSFitter::process(const Input& input, const Output& output) const
       tp.position = edm4hep::Vector3f{static_cast<float>(g.x() / Acts::UnitConstants::mm),
                                       static_cast<float>(g.y() / Acts::UnitConstants::mm),
                                       static_cast<float>(g.z() / Acts::UnitConstants::mm)};
-      tp.positionError = smoothCov;
+      tp.positionError = pointCovariance(s.smoothCov);
       tp.momentum = edm4hep::utils::sphericalToVector(fit.pGeV, fit.theta, fit.phi);
       tp.momentumError = edm4eic::Cov3f(std::numeric_limits<float>::quiet_NaN(),
                                         std::numeric_limits<float>::quiet_NaN(),

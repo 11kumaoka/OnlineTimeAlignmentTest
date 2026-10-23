@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import xml.etree.ElementTree as ET
+from geometry.environment import geometry_environment
 from research_common import REPO, cli_parser, run, stage, done, digest, write_json, execute
 
 DEFAULT_NOMINAL = REPO/'geometry/nominal/seven_layer_telescope.xml'
@@ -14,7 +15,7 @@ DEFAULT_GEOMETRY_CONFIG = REPO/'geometry/scenarios/L2_x200um.json'
 
 def ring(root, lid):
     det = root.find("./detectors/detector[@name='SiMAPS']")
-    if det is None or det.get('type') != 'DD4hep_SiTrackerEndcap2': raise ValueError('Unsupported detector builder')
+    if det is None or det.get('type') not in ('DD4hep_SiTrackerEndcap2','Local_SiTrackerEndcap2XY'): raise ValueError('Unsupported detector builder')
     matches = det.findall(f"./layer[@id='{lid}']/ring")
     if len(matches)!=1 or matches[0].get('nmodules')!='1' or float(matches[0].get('phi0','0'))!=0:
         raise ValueError('Only a single phi0=0 SiMAPS module is supported')
@@ -22,10 +23,32 @@ def ring(root, lid):
 
 def load_geometry_config(path, nominal_root):
     config = json.loads(path.read_text())
-    if not isinstance(config, dict) or set(config) != {'detector', 'global_x_shifts_mm'}:
-        raise ValueError('Geometry scenario supports only detector and global_x_shifts_mm; other displacement types are unsupported')
+    if not isinstance(config, dict) or not {'detector','global_x_shifts_mm'} <= set(config) or set(config)-{'detector','global_x_shifts_mm','global_y_shifts_mm','global_rz_rad','global_z_shifts_mm','global_rx_rad','global_ry_rad'}:
+        raise ValueError('Geometry scenario supports detector, Global X/Y/Z mm, and L1/L2/L3 Global Rx/Ry/Rz rad mappings only')
     if config['detector'] != 'SiMAPS' or not isinstance(config['global_x_shifts_mm'], dict):
         raise ValueError('Only a SiMAPS global_x_shifts_mm mapping is supported')
+    if not isinstance(config.get('global_y_shifts_mm',{}),dict):raise ValueError('Expected a Global Y mapping')
+    for key,value in config.get('global_y_shifts_mm',{}).items():
+        if key not in {'1','2','3'} or type(value) not in (int,float) or not math.isfinite(value):raise ValueError('Y translation supports finite SiMAPS L1/L2/L3 values only')
+        if float(f'{value:.8f}')!=value:raise ValueError('Geometry shifts support at most eight decimal places in mm')
+    if not isinstance(config.get('global_rz_rad',{}),dict):raise ValueError('Expected a Global Rz radian mapping')
+    for key,value in config.get('global_rz_rad',{}).items():
+        if key not in ('1','2','3') or type(value) not in (int,float) or not math.isfinite(value) or abs(value) > .1:
+            raise ValueError('Experimental Rz supports only finite SiMAPS L1/L2/L3 angles within 0.1 rad')
+        ring(nominal_root,int(key))
+    if not isinstance(config.get('global_z_shifts_mm',{}),dict):raise ValueError('Expected a Global Z mapping')
+    for key,value in config.get('global_z_shifts_mm',{}).items():
+        if key not in ('1','2','3') or type(value) not in (int,float) or not math.isfinite(value) or abs(value)>10:
+            raise ValueError('Global Z supports finite L1/L2/L3 displacements within 10 mm')
+        if float(f'{value:.8f}')!=value:raise ValueError('Global Z supports eight decimal places in mm')
+        ring(nominal_root,int(key))
+    for axis in ('rx','ry'):
+        values=config.get('global_'+axis+'_rad',{})
+        if not isinstance(values,dict):raise ValueError('Expected a tilt mapping in radians')
+        for key,value in values.items():
+            if key not in ('1','2','3') or type(value) not in (int,float) or not math.isfinite(value) or abs(value)>.1:
+                raise ValueError('Physical tilt preparation supports finite SiMAPS L1/L2/L3 angles within 0.1 rad only')
+            ring(nominal_root,int(key))
     shifts = {}
     for key, value in config['global_x_shifts_mm'].items():
         if key not in {'0', '1', '2', '3', '4'}:
@@ -39,7 +62,7 @@ def load_geometry_config(path, nominal_root):
     return config, shifts
 
 
-def write_shifted_xml(source, dest, shifts):
+def write_shifted_xml(source, dest, shifts, y_shifts=None, rz_rad=None, z_shifts=None, rx_rad=None, ry_rad=None, rotations=None):
     text = Path(source).read_text()
     parsed = ET.fromstring(text)
     for layer in shifts:
@@ -53,7 +76,62 @@ def write_shifted_xml(source, dest, shifts):
         block, count = re.subn(pattern, lambda match:match[1]+f'{-x_mm:.8f}*mm'+match[2], block)
         if count != 1:
             raise ValueError('Expected exactly one placement edit per requested layer')
+    if y_shifts is not None:
+        block=block.replace('type="DD4hep_SiTrackerEndcap2"','type="Local_SiTrackerEndcap2XY"')
+        for layer,value in y_shifts.items():
+            pattern=rf'(<layer\s+id="{layer}"[^>]*>[\s\S]*?<ring\b)([^>]*)(/>)'
+            def place(match):
+                attributes=re.sub(r'\s+global_y="[^"]*"','',match[2]).rstrip()
+                return match[1]+attributes+f' global_y="{value:.8f}*mm"'+match[3]
+            block,count=re.subn(pattern,place,block)
+            if count!=1:raise ValueError('Expected exactly one Global Y placement edit')
+    if rz_rad is not None:
+        block=block.replace('type="DD4hep_SiTrackerEndcap2"','type="Local_SiTrackerEndcap2XY"')
+        for layer,value in rz_rad.items():
+            if layer not in (1,2,3) or not math.isfinite(value) or abs(value) > .1:
+                raise ValueError('Only bounded SiMAPS L1/L2/L3 Global Rz is enabled')
+            pattern=rf'(<layer\s+id="{layer}"[^>]*>[\s\S]*?<ring\b)([^>]*)(/>)'
+            def rotate(match):
+                attributes=re.sub(r'\s+global_rz="[^"]*"','',match[2]).rstrip()
+                return match[1]+attributes+f' global_rz="{value:.14f}"'+match[3]
+            block,count=re.subn(pattern,rotate,block)
+            if count!=1:raise ValueError('Expected exactly one Global Rz placement edit')
+    if z_shifts is not None:
+        block=block.replace('type="DD4hep_SiTrackerEndcap2"','type="Local_SiTrackerEndcap2XY"')
+        for layer,value in z_shifts.items():
+            if layer not in (1,2,3) or not math.isfinite(value) or abs(value)>10:raise ValueError('Unsupported Global Z offset')
+            pattern=rf'(<layer\s+id="{layer}"[^>]*>[\s\S]*?<ring\b)([^>]*)(/>)'
+            def place_z(match):
+                attributes=re.sub(r'\s+global_z="[^"]*"','',match[2]).rstrip()
+                return match[1]+attributes+f' global_z="{value:.8f}*mm"'+match[3]
+            block,count=re.subn(pattern,place_z,block)
+            if count!=1:raise ValueError('Expected one independent Global Z placement edit')
+    for axis,values in (('rx',rx_rad),('ry',ry_rad)):
+        if values is None:continue
+        block=block.replace('type="DD4hep_SiTrackerEndcap2"','type="Local_SiTrackerEndcap2XY"')
+        for layer,value in values.items():
+            if layer not in (1,2,3) or not math.isfinite(value) or abs(value)>.1:raise ValueError('Unsupported physical tilt placement')
+            if any(f'global_r{i}{j}=' in block for i in range(3) for j in range(3)):raise ValueError('Use full-matrix composition for an existing matrix placement')
+            pattern=rf'(<layer\s+id="{layer}"[^>]*>[\s\S]*?<ring\b)([^>]*)(/>)'
+            def tilt(match):
+                attributes=re.sub(r'\s+global_'+axis+r'="[^"]*"','',match[2]).rstrip()
+                return match[1]+attributes+f' global_{axis}="{value:.17g}"'+match[3]
+            block,count=re.subn(pattern,tilt,block)
+            if count!=1:raise ValueError('Expected one physical tilt edit')
+    if rotations is not None:
+        from geometry.transforms import RigidTransform
+        block=block.replace('type="DD4hep_SiTrackerEndcap2"','type="Local_SiTrackerEndcap2XY"')
+        for layer,matrix in rotations.items():
+            if layer not in (1,2,3):raise ValueError('Unsupported matrix placement layer')
+            matrix=RigidTransform(rotation=matrix).rotation
+            pattern=rf'(<layer\s+id="{layer}"[^>]*>[\s\S]*?<ring\b)([^>]*)(/>)'
+            def rotate_matrix(match):
+                attributes=re.sub(r'\s+global_r(?:x|y|z|[0-2][0-2])="[^"]*"','',match[2]).rstrip()
+                return match[1]+attributes+''.join(f' global_r{i}{j}="{matrix[i][j]:.17g}"' for i in range(3) for j in range(3))+match[3]
+            block,count=re.subn(pattern,rotate_matrix,block)
+            if count!=1:raise ValueError('Expected one full-matrix placement edit')
     with Path(dest).open('x') as output:
+
         output.write(text[:detector.start()]+block+text[detector.end():])
     result = ET.parse(dest).getroot()
     for layer, x_mm in shifts.items():
@@ -96,18 +174,20 @@ def gdml_positions(path):
     return result
 
 
-def verify_positions(directory, shifts):
+def verify_positions(directory, shifts, y_shifts=None, z_shifts=None):
     nominal = gdml_positions(directory/'nominal_qa/geometry.gdml')
     misaligned = gdml_positions(directory/'misaligned_qa/geometry.gdml')
     rows = []
     for layer in range(7):
         requested = shifts.get(layer, 0.0)
-        expected = [nominal[layer][0]+requested, *nominal[layer][1:]]
+        expected = [nominal[layer][0]+requested, nominal[layer][1]+(y_shifts or {}).get(layer,0.),nominal[layer][2]+(z_shifts or {}).get(layer,0.)]
         if not all(math.isclose(a, b, rel_tol=0.0, abs_tol=1e-8)
                    for a, b in zip(misaligned[layer], expected)):
             raise ValueError(f'DD4hep placement does not match the requested Global X shift for L{layer}')
         rows.append({'layer':layer, 'nominal_xyz_mm':nominal[layer],
                      'misaligned_xyz_mm':misaligned[layer], 'requested_global_x_shift_mm':requested})
+        if y_shifts:rows[-1]['requested_global_y_shift_mm']=y_shifts.get(layer,0.)
+        if z_shifts:rows[-1]['requested_global_z_shift_mm']=z_shifts.get(layer,0.)
     write_json(directory/'placement_check.json', {'verified':True, 'source':'DD4hep geoConverter GDML module placements', 'layers':rows})
 
 
@@ -125,11 +205,12 @@ def prepare(a):
     p = stage(a.run_dir, 'step1')
     shutil.copyfile(nominal, p/'nominal.xml')
     write_json(p/'geometry_config.json', config)
-    write_shifted_xml(nominal, p/'misaligned.xml', shifts)
+    y_shifts={int(k):v for k,v in config.get('global_y_shifts_mm',{}).items()}
+    write_shifted_xml(nominal, p/'misaligned.xml', shifts, y_shifts if 'global_y_shifts_mm' in config else None, {int(k):v for k,v in config['global_rz_rad'].items()} if 'global_rz_rad' in config else None, {int(k):v for k,v in config['global_z_shifts_mm'].items()} if 'global_z_shifts_mm' in config else None, rx_rad={int(k):v for k,v in config.get('global_rx_rad',{}).items()} or None, ry_rad={int(k):v for k,v in config.get('global_ry_rad',{}).items()} or None)
     for name in ('nominal', 'misaligned'):
         qa = p/(name+'_qa'); qa.mkdir()
-        execute(['geoConverter', '-compact2gdml', '-input', p/(name+'.xml'), '-output', qa/'geometry.gdml'], qa)
-    verify_positions(p, shifts)
+        execute(['geoConverter', '-compact2gdml', '-input', p/(name+'.xml'), '-output', qa/'geometry.gdml'], qa,env=geometry_environment(p/(name+'.xml')))
+    verify_positions(p, shifts,y_shifts,{int(k):v for k,v in config.get('global_z_shifts_mm',{}).items()})
     version = {}
     for key in ['Acts', 'DD4hep', 'EICrecon', 'JANA']:
         path = Path('/opt/local/include')/key
@@ -147,5 +228,5 @@ if __name__ == '__main__':
     parser = cli_parser(__doc__)
     parser.add_argument('--nominal', type=Path, default=DEFAULT_NOMINAL, help='Nominal telescope XML; copied without modification')
     parser.add_argument('--geometry-config', type=Path, default=DEFAULT_GEOMETRY_CONFIG,
-                        help='SiMAPS Global X Geometry scenario; independent of beam/reconstruction settings')
+                        help='SiMAPS Global X and optional L1/L2/L3 Global Y/Z/Rx/Ry/Rz physical scenario (mm/rad); independent of beam/reconstruction settings')
     run(prepare, parser)

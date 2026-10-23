@@ -1,0 +1,26 @@
+{
+  "fallback_geometry": "geometry/nominal/seven_layer_telescope.xml",
+  "nominal_geometry": "geometry/nominal/seven_layer_telescope.xml",
+  "reconstruction_config": "reconstruction/configs/electron_1GeV.json",
+  "build_dir": "build/local_eicrecon_external",
+  "steering": "alignment/pede_l1_z.txt",
+  "scenario": "geometry/scenarios/L1_z_reference.json",
+  "poll_seconds": 1.0,
+  "ordering": "sequence",
+  "first_sequence": 1,
+  "gap_policy": "wait",
+  "max_attempts": 2,
+  "calibration": {
+    "enabled": false,
+    "measured_geometry": null,
+    "min_tracks": 20,
+    "max_iterations": 3,
+    "delta_tolerance_mm": 0.005,
+    "max_update_mm": 5.0,
+    "max_track_chi2_ratio": 1000.0,
+    "policy_label": "Provisional demonstration cuts; not scientific calibration certification",
+    "correction_mode": "l1_z",
+    "z_max_nominal_sigma_mm": 0.5,
+    "z_derivative_report": "result/YOUR_Z_DERIVATIVE_VALIDATION/gate.json"
+  }
+}

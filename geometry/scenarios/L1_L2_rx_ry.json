@@ -1,0 +1,12 @@
+{
+  "detector": "SiMAPS",
+  "global_x_shifts_mm": {},
+  "global_rx_rad": {
+    "1": 0.03,
+    "2": -0.025
+  },
+  "global_ry_rad": {
+    "1": -0.025,
+    "2": 0.02
+  }
+}

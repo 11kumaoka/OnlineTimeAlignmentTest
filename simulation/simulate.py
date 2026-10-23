@@ -1,5 +1,6 @@
 """Independent stage; invoke with python3 -m simulation.simulate."""
 import json
+from geometry.environment import geometry_environment
 from pathlib import Path
 from research_common import REPO, cli_parser, run, require, stage, done, digest, execute, write_json
 
@@ -32,7 +33,7 @@ def simulate(a):
          '--gun.phiMax',str(b['phi_max']),'--gun.distribution','uniform',
          '--gun.position='+' '.join(f'{v}*mm' for v in b.get('position_mm',[0.0,0.0,0.0])),
          '--vertexSigma',*map(str,b['vertex_sigma_mm_ns']),'--random.seed',str(b['seed'])]
-    execute(cmd,p)
+    execute(cmd,p,env=geometry_environment(a.run_dir/'step1/misaligned.xml'))
     if not out.is_file() or out.stat().st_size==0:raise RuntimeError('Missing simulation output')
     done(p,sha256=digest(out),input_events=check_simulation(out,cfg['events']),mode='Geant4')
 

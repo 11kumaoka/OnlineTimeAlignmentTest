@@ -57,6 +57,7 @@ target_link_libraries(BeamTestReco
     fmt::fmt
     spdlog::spdlog
     DD4hep::DDCore
+    DD4hep::DDRec
     Acts::Core
     podio::podioIO
     EDM4HEP::edm4hep
@@ -75,3 +76,8 @@ set_target_properties(BeamTestReco PROPERTIES
   PREFIX ""
   OUTPUT_NAME "BeamTestReco"
 )
+
+# Focused extension of the upstream builder: independent Global Y translation.
+add_library(LocalTelescopeGeometry SHARED geometry/SiTrackerEndcap2XY_geo.cpp)
+target_link_libraries(LocalTelescopeGeometry PRIVATE DD4hep::DDCore)
+dd4hep_generate_rootmap(LocalTelescopeGeometry)

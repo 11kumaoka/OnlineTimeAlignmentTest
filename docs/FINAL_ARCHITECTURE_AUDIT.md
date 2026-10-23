@@ -1,3 +1,6 @@
+> Historical baseline before the RawHit execution split. Current commands and
+> architecture are in [WORKFLOW.md](WORKFLOW.md) and [RAWHIT_BOUNDARY.md](RAWHIT_BOUNDARY.md).
+
 # Final Architecture and Publication Audit
 
 Date: 2026-10-21. This report records the source audit and validation performed

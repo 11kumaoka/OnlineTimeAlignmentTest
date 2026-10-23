@@ -5,6 +5,8 @@
 
 #include "algorithms/tracking/BeamTestACTSFitter.h"
 #include "extensions/jana/JOmniFactory.h"
+#include "services/geometry/dd4hep/DD4hep_service.h"
+#include "geometry/SurfacePlacements.h"
 
 namespace local_eicrecon {
 
@@ -15,6 +17,7 @@ public:
 
 private:
   std::unique_ptr<AlgoT> m_algo;
+  Service<DD4hep_service> m_geometry{this};
 
   PodioInput<edm4eic::TrackerHit> m_simaps_hits_input{this};
   PodioInput<edm4eic::TrackerHit> m_mpgd_hits_input{this};
@@ -46,6 +49,7 @@ public:
     m_algo = std::make_unique<AlgoT>(GetPrefix());
     m_algo->level(static_cast<algorithms::LogLevel>(logger()->level()));
     m_algo->applyConfig(config());
+    m_algo->setPlacements(surfacePlacements(*m_geometry().converter()));
     m_algo->init();
   }
 

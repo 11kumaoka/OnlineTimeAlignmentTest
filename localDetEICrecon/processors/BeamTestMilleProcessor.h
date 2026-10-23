@@ -26,6 +26,7 @@ public:
 private:
   int decodeLayer(uint64_t cellid) const;
 
+  std::string m_alignmentMode{"legacy"};
   bool m_enabled{false};
   std::string m_outputPath{"results/manual/mille.dat"};
   double m_zRefMm{100.0};

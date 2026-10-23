@@ -1,0 +1,45 @@
+{
+  "before_xy_foundation": {
+    "localDetEICrecon/algorithms/tracking/BeamTestACTSFitter.cc": "46798d65a418a71348dfdb59e7e8dc8f5c341ca27c31fbc12fac9df23202cbd5"
+  },
+  "reason": "The full fitter source changed only for selected-DD4hep surface placement, frame covariance mapping and consistency checks; historical electron hypothesis preserved.",
+  "validation_report": "docs/XY_FOUNDATION_VALIDATION.md",
+  "baseline_report": "docs/L1_L2_ITERATIVE_VALIDATION.md",
+  "before_tilt_output_covariance": {
+    "localDetEICrecon/algorithms/tracking/BeamTestACTSFitter.cc": "94086f587d1315b23d3a7a82617c49d25614c73e9370d1825d982877a618590f"
+  },
+  "tilt_output_covariance": {
+    "passed": true,
+    "old_source_sha256": "94086f587d1315b23d3a7a82617c49d25614c73e9370d1825d982877a618590f",
+    "new_source_sha256": "1445e19766a5014e469c53a1ca03c7ca7e068455c2eb315ed5f3e2ddbf0e3503",
+    "numerical_prefix_byte_identical": true,
+    "boundary": "  for (const auto& s : fitBundle->states) {",
+    "numerical_prefix_sha256": "2ce123f734c5534ed3c19f38a9c52c7d3099dbe159f5b23abeabd0c86674d78f",
+    "reason": "Only post-fit Measurement2D cross terms and Global XYZ TrackPoint covariance serialization changed; numerical KF, seed covariance and electron hypothesis unchanged",
+    "evidence": [
+      "covariance_replays/report.json",
+      "regressions_04/replay_report.json",
+      "final_tilt_replays.json"
+    ],
+    "validation_report": "docs/TILT_ALIGNMENT_VALIDATION.md",
+    "evidence_root": "result/tilt_alignment_20261022_01",
+    "superseded": true,
+    "superseded_reason": "A stricter intermediate-state check exposed tiny numerical asymmetry; the final serializer uses the same symmetric projection for local and global EDM covariances."
+  },
+  "before_tilt_symmetric_serialization": {
+    "localDetEICrecon/algorithms/tracking/BeamTestACTSFitter.cc": "1445e19766a5014e469c53a1ca03c7ca7e068455c2eb315ed5f3e2ddbf0e3503"
+  },
+  "tilt_symmetric_serialization": {
+    "new_source_sha256": "47152171637550f201bde18099e1a932edf4fc8524e08ea6006af078103bfb93",
+    "numerical_prefix_byte_identical": true,
+    "numerical_prefix_sha256": "2ce123f734c5534ed3c19f38a9c52c7d3099dbe159f5b23abeabd0c86674d78f",
+    "boundary": "  for (const auto& s : fitBundle->states) {",
+    "reason": "Symmetric projection in post-fit serialization only; no KF state, input uncertainty, seed or particle-hypothesis changes",
+    "validation_report": "docs/TILT_ALIGNMENT_VALIDATION.md",
+    "evidence": [
+      "result/tilt_alignment_20261022_01/archived_combined_geometry_checks_05/report.json",
+      "result/tilt_alignment_20261022_01/final_tilt_replays_05.json",
+      "result/tilt_alignment_20261022_01/regressions_05/replay_report.json"
+    ]
+  }
+}

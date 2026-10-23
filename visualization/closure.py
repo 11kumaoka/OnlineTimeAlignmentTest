@@ -92,7 +92,7 @@ def make_geometry(geo, truegeo, corrected):
 
 
 
-def make_closure(before, after, applied):
+def make_closure(before, after, applied, applied_by_layer=None):
     c = hold(ROOT.TCanvas("c_closure", "One geometry-update closure", 1430, 490))
     c.Divide(3, 1)
     c.cd(1)
@@ -129,6 +129,24 @@ def make_closure(before, after, applied):
     correction.SetPoint(0,0,0);correction.SetPoint(1,1,applied)
     correction.Draw("ALP")
 
+    if applied_by_layer and '1' in applied_by_layer:
+        c.cd(1)
+        g.SetTitle("L1/L2 bias after Geometry Correction;Geometry Correction step;Mean #Delta x [#mum]")
+        first=style_graph(ROOT.TGraph(2),ROOT.kRed+1,22);first.SetName('g_l1_by_step')
+        for i,data in enumerate((before,after)):first.SetPoint(i,i,mean_error(data['deltas'][1])[0])
+        first.Draw('LP SAME')
+        values=[mean_error(data['deltas'][layer])[0] for data in (before,after) for layer in (1,2)]
+        g.SetMinimum(min(values)-20);g.SetMaximum(max(values)+20)
+        legend=hold(ROOT.TLegend(.65,.7,.9,.9));legend.AddEntry(first,'L1','lp');legend.AddEntry(g,'L2','lp');legend.Draw()
+        c.cd(3)
+        correction.SetTitle('Applied L1/L2 X Geometry Correction;Geometry Correction step;Correction [#mum]')
+        first_correction=style_graph(ROOT.TGraph(2),ROOT.kRed+1,22)
+        first_correction.SetName('g_applied_l1_correction_um')
+        first_correction.SetPoint(0,0,0);first_correction.SetPoint(1,1,applied_by_layer['1'])
+        first_correction.Draw('LP SAME')
+        values=[0,applied,applied_by_layer['1']]
+        correction.SetMinimum(min(values)-20);correction.SetMaximum(max(values)+20)
+        legend=hold(ROOT.TLegend(.2,.7,.45,.9));legend.AddEntry(first_correction,'L1','lp');legend.AddEntry(correction,'L2','lp');legend.Draw()
     return c
 
 
@@ -155,6 +173,55 @@ def make_residual_distributions(before,after):
 
 
 
+def make_y_views(paths,before,after,components):
+    from geometry.placements import placement_transforms
+    placements=[placement_transforms(path) for path in paths]
+    detector=hold(ROOT.TCanvas('c_geometry_y','Detector Geometry: Global Y',1000,650))
+    detector.cd();legend=hold(ROOT.TLegend(.6,.7,.9,.9));graphs=[]
+    for label,values,color,marker in zip(('reference','simulation','corrected'),placements,(BLUE,ROOT.kRed+1,GREEN),(20,22,21)):
+        graph=style_graph(ROOT.TGraph(7),color,marker);graph.SetName('g_geometry_y_'+label)
+        graph.SetTitle('Detector centers in Global Y;Global Z [mm];Global Y [#mum]')
+        for layer in range(7):graph.SetPoint(layer,values[layer].translation[2],1000*values[layer].translation[1])
+        graph.Draw('ALP' if not graphs else 'LP SAME');graphs.append(graph);legend.AddEntry(graph,label,'lp')
+    ys=[1000*t.translation[1] for values in placements for t in values.values()]
+    graphs[0].SetMinimum(min(ys)-20);graphs[0].SetMaximum(max(ys)+20);legend.Draw()
+    closure=hold(ROOT.TCanvas('c_y_closure','L1/L2 Global Y Closure',1200,550));closure.Divide(2,1)
+    for panel in (1,2):
+        closure.cd(panel);legend=hold(ROOT.TLegend(.65,.7,.9,.9));graphs=[];values=[]
+        for layer,color,marker in ((1,ROOT.kRed+1,22),(2,GREEN,21)):
+            points=[mean_error(data['deltas_y'][layer])[0] for data in (before,after)] if panel==1 else [0,components[f'L{layer}_y']]
+            graph=style_graph(ROOT.TGraph(2),color,marker)
+            graph.SetName(f'g_l{layer}_y_'+('residual' if panel==1 else 'correction'))
+            graph.SetTitle(('Global Y Hit Residuals' if panel==1 else 'Global Y Geometry Correction')+';Geometry Correction step;'+('Mean Rec-Sim Y [#mum]' if panel==1 else 'Correction [#mum]'))
+            for i,value in enumerate(points):graph.SetPoint(i,i,value)
+            graph.Draw('ALP' if not graphs else 'LP SAME');graphs.append(graph);values.extend(points);legend.AddEntry(graph,f'L{layer}','lp')
+        graphs[0].SetMinimum(min(values)-20);graphs[0].SetMaximum(max(values)+20);legend.Draw()
+    return [detector,closure]
+
+
+def make_rotation(paths,rotations):
+    from geometry.placements import placement_transforms
+    c=hold(ROOT.TCanvas('c_rotation','Global Z rotation and Geometry Correction',1200,550*len(rotations)));c.Divide(2,len(rotations))
+    for row,(layer_key,summary) in enumerate(rotations.items()):
+        layer=int(layer_key)
+        c.cd(2*row+1)
+        frame=hold(ROOT.TH2F(f'frame_rotation_xy_{layer}',f'L{layer} sensitive plane;Global X [mm];Global Y [mm]',100,-60,60,100,-60,60));frame.Draw('AXIS')
+        legend=hold(ROOT.TLegend(.6,.75,.9,.9))
+        for label,path,color in zip(('reference','simulation','corrected'),paths,(BLUE,ROOT.kRed+1,GREEN)):
+            transform=placement_transforms(path)[layer]
+            graph=style_graph(ROOT.TGraph(5),color,20);graph.SetName(f'g_l{layer}_outline_'+label)
+            for i,(u,v) in enumerate(((-50,-50),(50,-50),(50,50),(-50,50),(-50,-50))):
+                x,y,_=transform.apply((u,v,0));graph.SetPoint(i,x,y)
+            graph.Draw('L SAME');legend.AddEntry(graph,label,'l')
+        legend.Draw();c.cd(2*row+2)
+        graph=style_graph(ROOT.TGraph(2),GREEN,21);graph.SetName(f'g_l{layer}_rz_correction')
+        graph.SetTitle(f'L{layer} Global +Z rotation;Geometry Correction step;Angle [mrad]')
+        for i,key in enumerate(('reference_rad','corrected_rad')):graph.SetPoint(i,i,1000*summary[key])
+        graph.Draw('ALP')
+        truth=hold(ROOT.TLine(0,1000*summary['simulation_rad'],1,1000*summary['simulation_rad']));truth.SetLineColor(ROOT.kRed+1);truth.Draw()
+    return c
+
+
 def main():
     ap=argparse.ArgumentParser(description="Render saved Closure metrics with ROOT")
     for key in ("nominal","misaligned","corrected","summary"):
@@ -171,7 +238,10 @@ def main():
     f=ROOT.TFile(str(args.outdir/"alignment.root"),"CREATE")
     if not f or f.IsZombie():raise RuntimeError("Cannot create ROOT output")
     try:
-        canvases=[make_geometry(nominal,simulated,corrected),make_residual_distributions(before,after),make_closure(before,after,applied)]
+        canvases=[make_geometry(nominal,simulated,corrected),make_residual_distributions(before,after),make_closure(before,after,applied,summary.get('applied_geometry_correction_um_by_layer'))]
+        if summary.get('applied_geometry_correction_um_by_component'):
+            canvases+=make_y_views((args.nominal,args.misaligned,args.corrected),before,after,summary['applied_geometry_correction_um_by_component'])
+        if summary.get('rotation'):canvases.append(make_rotation((args.nominal,args.misaligned,args.corrected),summary.get('rotation_by_layer',{'1':summary['rotation']})))
         for c in canvases:c.Modified();c.Update();c.Write()
         seen=set()
         for obj in HOLD:

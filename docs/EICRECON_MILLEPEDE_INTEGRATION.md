@@ -1,3 +1,8 @@
+> RawHit boundary update: the maintained command now uses separate Digitization
+> and truth-independent RawHit Reconstruction. See [RAWHIT_BOUNDARY.md](RAWHIT_BOUNDARY.md)
+> for profiles, input/conditions contract and combined/split equivalence results.
+> The mathematical writer and solver implementation below is unchanged.
+
 > Architecture update (2026-10-21): task implementations and configurations are
 > now top-level directories; new runs use `result/<name>/step1`–`step7`.
 > See [the current architecture](TASK_ARCHITECTURE.md) and [Workflow Guide](WORKFLOW.md).
@@ -21,7 +26,7 @@ EDM4hep Simulation + nominal DD4hep Detector Geometry
                          |
                   EICrecon / JANA2
                          |
-      local Digitization and Hit Reconstruction
+      local Digitization -> optional RawHit file -> Hit Reconstruction
                          |
       BeamTestACTSFitter: in-process ACTS Kalman fit
                          |
@@ -536,7 +541,8 @@ The exact relative layout under `result/mille_demo_001/` is:
 
 | File | Producer / consumer and interpretation |
 |---|---|
-| `step2/events.edm4hep.root` | DDSim output or link to preserved Simulation; reconstruction input. |
+| `step2/events.edm4hep.root` | DDSim output or link to preserved Simulation; Digitization input. |
+| `step2_digitization/rawhits.edm4eic.root` | Standalone common RawHit input; no MC event collections required downstream. |
 | `step1/nominal.xml`, `step1/misaligned.xml` | Local Geometry Preparation; nominal reconstruction and displaced Simulation configurations. |
 | `step3/reco.root` | EICrecon Tracks, Hits, and diagnostic measurements. |
 | `step3/mille.dat` | Official Mille C-binary records; input to pede. |
@@ -648,6 +654,8 @@ bash environment/run.sh bash geometry/prepare_geometry.sh \
 bash environment/run.sh bash simulation/simulate.sh \
   --result-dir result/mille_demo_001 \
   --sim-input results/reference/physical_alignment_L2_x200um/sim_electron_L2x200um_100.edm4hep.root
+bash environment/run.sh bash digitization/digitize.sh \
+  --result-dir result/mille_demo_001
 bash environment/run.sh bash reconstruction/reconstruct.sh \
   --result-dir result/mille_demo_001
 ```

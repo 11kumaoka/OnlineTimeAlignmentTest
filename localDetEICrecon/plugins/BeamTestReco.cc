@@ -10,6 +10,8 @@
 #include <JANA/JApplicationFwd.h>
 #include <iostream>
 #include <memory>
+#include <stdexcept>
+#include <string>
 
 #include "extensions/jana/JOmniFactoryGeneratorT.h"
 #include "factories/digi/SiliconTrackerDigi_factory.h"
@@ -35,6 +37,21 @@ void InitPlugin(JApplication* app) {
   app->SetDefaultParameter("beamtstreco:enableTruthDiagnosticRecHits", enableTruthDiagnosticRecHits,
                            "Enable truth-assisted diagnostic TrackerHit reconstruction outputs");
 
+  std::string profile = "combined";
+  app->SetDefaultParameter("beamtstreco:profile", profile,
+                           "Factory profile: combined, digitization, or raw");
+  if (profile != "combined" && profile != "digitization" && profile != "raw") {
+    throw std::runtime_error("Unknown BeamTestReco profile: " + profile);
+  }
+  if (profile != "combined" && enableTruthDiagnosticRecHits) {
+    throw std::runtime_error("Truth diagnostic RecHits require the combined profile");
+  }
+  const bool runDigi = profile != "raw";
+  const bool runReco = profile != "digitization";
+  std::cerr << "[local_eicrecon] profile=" << profile
+            << " register_digitization=" << runDigi << " register_reconstruction=" << runReco << std::endl;
+
+    if (runDigi) {
     app->Add(new JOmniFactoryGeneratorT<LocalSiliconTrackerDigi_factory>(
       "LocalSiMAPSRawHits", {"EventHeader", "SiMAPSHits"},
       {"LocalSiMAPSRawHits", "LocalSiMAPSRawHitLinks", "LocalSiMAPSRawHitAssociations"},
@@ -42,32 +59,40 @@ void InitPlugin(JApplication* app) {
           .threshold = 0.54 * dd4hep::keV,
       },
       app));
+    }
 
+    if (runReco) {
     app->Add(new JOmniFactoryGeneratorT<LocalTrackerHitReconstructionNoAssoc_factory>(
       "LocalSiMAPSRecHits", {"LocalSiMAPSRawHits"}, {"LocalSiMAPSRecHits"},
       {
         .useTruthPositionForDiagnostics = false,
       },
       app));
+    }
 
       // MPGD one-layer local chain (temporary pixel-like digi path via SiliconTrackerDigi).
-      app->Add(new JOmniFactoryGeneratorT<LocalSiliconTrackerDigi_factory>(
+      if (runDigi) {
+    app->Add(new JOmniFactoryGeneratorT<LocalSiliconTrackerDigi_factory>(
         "LocalMPGDRawHits", {"EventHeader", "MPGDHits"},
         {"LocalMPGDRawHits", "LocalMPGDRawHitLinks", "LocalMPGDRawHitAssociations"},
         {
           .threshold = 100 * dd4hep::eV, .timeResolution = 10,
         },
         app));
+    }
 
-      app->Add(new JOmniFactoryGeneratorT<LocalTrackerHitReconstructionNoAssoc_factory>(
+      if (runReco) {
+    app->Add(new JOmniFactoryGeneratorT<LocalTrackerHitReconstructionNoAssoc_factory>(
         "LocalMPGDRecHits", {"LocalMPGDRawHits"}, {"LocalMPGDRecHits"},
         {
           .timeResolution = 10, .useTruthPositionForDiagnostics = false,
         },
         app));
+    }
 
       // AC-LGAD one-layer local chain. Keep detector's approximate 1D behavior from geometry/readout settings.
-      app->Add(new JOmniFactoryGeneratorT<LocalSiliconTrackerDigi_factory>(
+      if (runDigi) {
+    app->Add(new JOmniFactoryGeneratorT<LocalSiliconTrackerDigi_factory>(
         "LocalACLGADRawHits", {"EventHeader", "ACLGADHits"},
         {"LocalACLGADRawHits", "LocalACLGADRawHitLinks", "LocalACLGADRawHitAssociations"},
         {
@@ -75,16 +100,19 @@ void InitPlugin(JApplication* app) {
           .timeResolution = 0.025,
         },
         app));
+    }
 
-      app->Add(new JOmniFactoryGeneratorT<LocalTrackerHitReconstructionNoAssoc_factory>(
+      if (runReco) {
+    app->Add(new JOmniFactoryGeneratorT<LocalTrackerHitReconstructionNoAssoc_factory>(
         "LocalACLGADRecHits", {"LocalACLGADRawHits"}, {"LocalACLGADRecHits"},
         {
           .timeResolution = 0.025,
           .useTruthPositionForDiagnostics = false,
         },
         app));
+    }
 
-      if (enableTruthDiagnosticRecHits) {
+      if (runReco && enableTruthDiagnosticRecHits) {
         app->Add(new JOmniFactoryGeneratorT<LocalTrackerHitReconstruction_factory>(
           "LocalSiMAPSRecHitsTruthDiag", {"LocalSiMAPSRawHits", "LocalSiMAPSRawHitAssociations"},
           {"LocalSiMAPSRecHitsTruthDiag"},
@@ -110,6 +138,7 @@ void InitPlugin(JApplication* app) {
           app));
       }
 
+    if (runReco) {
       app->Add(new JOmniFactoryGeneratorT<BeamTestACTSFitter_factory>(
           "LocalBeamTestTracks",
           {"LocalSiMAPSRecHits", "LocalMPGDRecHits", "LocalACLGADRecHits"},
@@ -131,13 +160,7 @@ void InitPlugin(JApplication* app) {
       // Optional in-process Mille binary writer for alignment.
       app->Add(new local_eicrecon::BeamTestMilleProcessor());
 
-    std::cerr << "[local_eicrecon] Registered local factories: "
-          << "LocalSiliconTrackerDigi_factory -> LocalSiMAPSRawHits, "
-          << "LocalTrackerHitReconstruction_factory -> LocalSiMAPSRecHits, "
-          << "LocalSiliconTrackerDigi_factory -> LocalMPGDRawHits, "
-          << "LocalTrackerHitReconstruction_factory -> LocalMPGDRecHits, "
-          << "LocalSiliconTrackerDigi_factory -> LocalACLGADRawHits, "
-          << "LocalTrackerHitReconstruction_factory -> LocalACLGADRecHits, "
-          << "BeamTestACTSFitter_factory -> LocalBeamTestTracks" << std::endl;
+    }
+    std::cerr << "[local_eicrecon] Registered BeamTestReco profile=" << profile << std::endl;
 }
 }

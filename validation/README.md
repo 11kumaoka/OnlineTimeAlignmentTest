@@ -77,3 +77,59 @@ New runs use `result/<name>/step1` through `step7`. Numerical extraction is in
 renderer in `visualization/`. Historical `results/` remains untouched. See the
 [Workflow Guide](../docs/WORKFLOW.md) for seven independent commands and the
 [architecture report](../docs/TASK_ARCHITECTURE.md) for migration validation.
+
+## RawHit split validation
+
+The historical Closure helper now inserts `digitization/digitize.sh` between
+steps2/3 and reconstructs the same saved RawHits at steps3/6. Simulation Hit
+Residuals use the separate step2 truth file after event-identity checks.
+`python3 -m validation.compare_raw_paths --help` documents the detailed
+combined/split comparator, including named PODIO relation targets, all shared
+fields, exact Mille Binary bytes and Pede parameters. See
+[the RawHit validation report](../docs/RAWHIT_BOUNDARY.md).
+
+Controller control-plane tests: `python3 -m unittest validation.test_calibration_controller -v`. These tests isolate orchestration invariants; real saved-RawHit execution and limits are recorded in [the controller validation report](../docs/CALIBRATION_CONTROLLER_VALIDATION.md).
+
+Simultaneous L1/L2 X composition and scope tests: `python3 -m unittest validation.test_geometry_correction -v`. See [two-layer iterative validation](../docs/L1_L2_ITERATIVE_VALIDATION.md) for executed saved-data closure and the preserved default L2 regression.
+
+Geometry foundation and metadata tests:
+
+```sh
+python3 -m unittest validation.test_transforms validation.test_raw_metadata validation.test_geometry_correction validation.test_calibration_controller
+```
+
+Run fresh-DD4hep and Mille finite-difference probes inside the EIC container; see [XY validation](../docs/XY_FOUNDATION_VALIDATION.md) for executed commands and results. Global Z translation and individual L1 tilts use their explicit gated modes, documented below; opt-in L1/L2 Rz modes are documented in [rotation validation](../docs/ROTATION_ALIGNMENT_VALIDATION.md). [Geometry conventions](../docs/GEOMETRY_CONVENTIONS.md) distinguish sensor axes, ACTS planes, reference/survey Geometry and optional simulation truth.
+
+## Global Z checks
+
+`python3 -m unittest validation.test_z_alignment` tests Global Z placement,
+physical correction sign/composition, unsupported scopes, evidence freshness and
+weak-information refusal. `python3 -m validation.validate_z_derivatives --help`
+checks actual Mille reference slopes and fresh-process DD4hep finite differences.
+`python3 -m validation.z_observability --help` profiles the actual weighted
+per-track local design before assessing selected global rank, weak modes and
+correlations. It is a diagnostic/gate, not a replacement fit or uncertainty
+rescaling. `python3 -m visualization.z_alignment --help` produces ROOT-only
+Geometry, matched X/Y/Z Hit Residuals, profiled track residuals and closure plots.
+Truth is read only by post-fit validation. See [Z validation](../docs/Z_ALIGNMENT_VALIDATION.md).
+
+## Tilt checkpoint
+
+`test_tilt_alignment.py` covers matrix composition/serialization, selected scope
+and refusal of scientifically unsupported combined modes.
+`validate_tilt_derivatives.py` uses the production C++ writer and fresh DD4hep
+contexts; `tilt_observability.py` profiles actual Mille local matrices;
+`tilt_hit_audit.py` records off-plane SimHits without filtering data.
+`geometry_probe.py --check-track-points` additionally checks actual intersections
+and Global XYZ diagnostic covariances. `gdml_geometry_probe.py
+--check-overlaps-mm .0001` checks independently exported physical matrices and
+overlaps/extrusions. `visualization.tilt_alignment` writes ROOT objects for
+supported results or explicitly labeled archived combined experiments.
+
+Read [the tilt checkpoint report](../docs/TILT_ALIGNMENT_VALIDATION.md) for exact
+commands, final build, preserved failure evidence, numerical regressions and the
+historical scientific stop at fixed-Global two-axis rotations. The successor explicit SO(3) scopes and their evidence are documented in [the coupled-rotation checkpoint](../docs/SO3_ALIGNMENT_VALIDATION.md).
+
+## L3 implementation checkpoint
+
+`validate_tilt_derivatives --layer 3 --coupled` extends the same physical-DD4hep/production-Mille check to all six L3 columns. Optional `--representative` restricts the diagnostic to one mixed orientation and one finite-difference step, retaining the full suite as default. `test_so3_alignment` checks explicit selected labels, fixed references and repeated current-Geometry composition. `so3_closure` additionally includes L3-only and three-layer six-DOF noiseless mathematical fixtures; these are not Geant4/statistical certification. Follow the [manual guide](../docs/L3_SIX_DOF_MANUAL.md) for proof generation and actual-row rank checks.
