@@ -2,12 +2,10 @@
 // Local purpose: configure in-process ACTS fitting in JANA2 factory
 
 #pragma once
-#include <string>
 
 namespace local_eicrecon {
 
 struct BeamTestACTSFitterConfig {
-  std::string geometryProvider = "local";
   bool useMPGD = true;
   bool useACLGAD = false;
   bool inputHitsAreGlobal = true;

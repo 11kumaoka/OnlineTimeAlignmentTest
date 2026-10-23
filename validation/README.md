@@ -138,11 +138,12 @@ historical scientific stop at fixed-Global two-axis rotations. The successor exp
 
 `python3 -m validation.official_geometry --help` describes the isolated local, official-provider and official-element modes. The latter is a component comparison, not a TrackingGeometry suitable for reconstruction. The official provider fails explicitly for the current one-sided telescope. See [the pinned-source audit and independent commands](../docs/OFFICIAL_ACTS_GEOMETRY_PHASE1.md). The production fitter and Controller defaults are unchanged.
 
-The optional `blueprint` diagnostic now closes a Gen3 TrackingGeometry and runs
-four independent installed-Navigator rays for each selected XML. See
-[the integration checks and tested manual workflow](../docs/ACTS_GEOMETRY_INTEGRATION.md)
-for the separate surface, complete-Geometry, navigation, reconstruction and
-fixed-RawHit alignment gates. `validation.compare_geometry_providers` compares
-all PODIO values and Mille records with semantic sensor-ID mapping and fixed
-numerical tolerances; it does not weaken historical exact local-path regression.
-Fresh derivative evidence must match the affected plugin and source files.
+The Blueprint implementation and provider selection were subsequently removed.
+See [the isolated legacy converter experiment](../docs/LEGACY_ENDCAP_SIMPLIFICATION.md)
+for current commands, exact downstream failures and local-path regressions.
+`legacy_endcap_experiment` builds only a private diagnostic executable; it does
+not install a library or select a reconstruction provider. Exit 2 reproduces the
+expected Geometry failure. `compare_geometry_providers` remains a read-only
+comparison tool for preserved historical outputs; its `--blueprint` input name
+is not a current provider option. Fresh source/plugin-matched derivative evidence
+is still required by the Controller.

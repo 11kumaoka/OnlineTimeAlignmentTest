@@ -96,11 +96,3 @@ if(TESTBENCH_BUILD_OFFICIAL_GEOMETRY_PROBE)
     EICrecon::algorithms_tracking_library Acts::Core Acts::PluginDD4hep nlohmann_json::nlohmann_json
     DD4hep::DDCore DD4hep::DDRec fmt::fmt spdlog::spdlog)
 endif()
-
-# Explicit experimental provider; default reconstruction remains local.
-option(TESTBENCH_ENABLE_BLUEPRINT_PROVIDER "Enable converted Gen3 telescope surfaces in BeamTestReco" OFF)
-if(TESTBENCH_ENABLE_BLUEPRINT_PROVIDER)
-  find_package(Acts REQUIRED COMPONENTS PluginDD4hep)
-  target_link_libraries(BeamTestReco PRIVATE Acts::PluginDD4hep)
-  target_compile_definitions(BeamTestReco PRIVATE TESTBENCH_BLUEPRINT_PROVIDER=1)
-endif()

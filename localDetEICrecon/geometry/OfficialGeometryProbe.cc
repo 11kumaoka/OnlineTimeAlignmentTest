@@ -1,10 +1,5 @@
 // Isolated installed-provider audit. No tracking, alignment, or Geometry activation.
 #include <Acts/ActsVersion.hpp>
-#include <Acts/Geometry/Blueprint.hpp>
-#include <Acts/Geometry/StaticBlueprintNode.hpp>
-#include <Acts/Geometry/CuboidVolumeBounds.hpp>
-#include <Acts/Navigation/TryAllNavigationPolicy.hpp>
-#include <Acts/Propagator/Navigator.hpp>
 #include <Acts/Surfaces/PlaneSurface.hpp>
 #include <Acts/Surfaces/RectangleBounds.hpp>
 #include <ActsPlugins/DD4hep/DD4hepConversionHelpers.hpp>
@@ -23,7 +18,6 @@
 #include <iostream>
 #include <set>
 #include "SurfacePlacements.h"
-#include "ConvertedTelescopeGeometry.h"
 
 using Json = nlohmann::json;
 namespace {
@@ -96,11 +90,11 @@ void writeExclusive(const std::filesystem::path& path,const Json& report) {
 
 int main(int argc,char** argv) {
   if(argc!=5) {
-    std::cerr<<"Usage: TelescopeGeometryProbe XML OUTPUT_JSON local|official|official-elements|blueprint none|discovery|discovery-and-flags\n";
+    std::cerr<<"Usage: TelescopeGeometryProbe XML OUTPUT_JSON local|official|official-elements none|discovery|discovery-and-flags\n";
     return 64;
   }
   const std::string provider=argv[3],metadata=argv[4];
-  if((provider!="local" && provider!="official" && provider!="official-elements" && provider!="blueprint") ||
+  if((provider!="local" && provider!="official" && provider!="official-elements") ||
      (metadata!="none" && metadata!="discovery" && metadata!="discovery-and-flags"))return 64;
   if(std::filesystem::exists(argv[2])) {std::cerr<<"Refusing existing output\n";return 64;}
   Json report={{"provider",provider},{"experimental_metadata",metadata},
@@ -144,7 +138,7 @@ int main(int argc,char** argv) {
         if(converter.findContext(cell|channel)->identifier!=volume->identifier)throw std::runtime_error("CellID channels map to different sensitive contexts");
       if(provider=="local") {
         surfaces[layer]=reference.get();localSurfaces.push_back(reference);
-      } else if(provider=="official-elements" || provider=="blueprint") {
+      } else if(provider=="official-elements") {
         if(!volume->element.volume().isSensitive())throw std::runtime_error("Volume context is not a sensitive DetElement");
         // Record the native missing-metadata default separately, never use it as
         // an equivalent surface for tracking or alignment.
@@ -177,90 +171,13 @@ int main(int argc,char** argv) {
       }
       report["planes"].push_back(row);
     }
-    if(provider=="blueprint") {
-      auto tracking=local_eicrecon::closeTelescopeGeometry(context,elements);
-      Acts::Vector3 lo=Acts::Vector3::Constant(1e100),hi=-lo;
-      for(const auto* surface:surfaces) {
-        const auto t=surface->localToGlobalTransform(context);
-        for(double x:{-50.,50.})for(double y:{-50.,50.}) {
-          const Acts::Vector3 point=surface->localToGlobal(context,{x,y},t.linear().col(2));
-          lo=lo.cwiseMin(point);hi=hi.cwiseMax(point);
-        }
-      }
-      lo.array()-=10.;hi.array()+=10.;
-      std::set<const Acts::Surface*> contained;
-      tracking->visitSurfaces([&](const Acts::Surface* surface){contained.insert(surface);});
-      if(contained.size()!=7)throw std::runtime_error("TrackingGeometry sensitive count is not seven");
-      for(const auto* surface:surfaces)
-        if(!contained.contains(surface) || tracking->findSurface(surface->geometryId())!=surface)
-          throw std::runtime_error("TrackingGeometry sensitive map mismatch");
-      report["tracking_geometry_sensitive_count"]=contained.size();
-      report["tracking_geometry_available"]=true;
-      std::set<uint64_t> ids;
-      for(int i=0;i<7;++i) {
-        const auto id=surfaces[i]->geometryId().value();
-        if(!id || !ids.insert(id).second)throw std::runtime_error("Unclosed or duplicate blueprint sensitive ID");
-        report["planes"][i]["selected"]=surfaceInfo(*surfaces[i],context);
-      }
-      report["blueprint_world_bounds"]=tracking->highestTrackingVolume()->volumeBounds().values();
-      std::shared_ptr<const Acts::TrackingGeometry> sharedTracking(std::move(tracking));
-      Acts::Navigator navigator({sharedTracking,true,false,false});
-      for(const auto& ray:std::vector<std::pair<Acts::Vector3,Acts::Vector3>>{
-          {{0.,0.,lo.z()-5.},{0.,0.,1.}},
-          {{49.,0.,lo.z()-5.},{.01,0.,1.}},
-          {{hi.x()+5.,0.,lo.z()-5.},{0.,0.,1.}},
-          {{0.,0.,hi.z()+5.},{0.,0.,-1.}}}) {
-        auto position=ray.first;const Acts::Vector3 direction=ray.second.normalized();
-        Json trial={{"start_mm",vector(position)},{"direction",vector(direction)}};
-        // Independent bounded intersections determine the expected sensor order.
-        std::vector<std::pair<double,int>> expected;
-        for(int i=0;i<7;++i) {
-          auto intersections=surfaces[i]->intersect(context,position,direction,Acts::BoundaryTolerance::None());
-          const auto hit=intersections.closest();
-          if(hit.isValid() && hit.pathLength()>0.)expected.emplace_back(hit.pathLength(),i);
-        }
-        std::sort(expected.begin(),expected.end());
-        std::vector<int> expectedLayers,actualLayers;
-        for(auto [_,layer]:expected)expectedLayers.push_back(layer);
-        Acts::Navigator::Options navOptions(context);auto state=navigator.makeState(navOptions);
-        auto initialized=navigator.initialize(state,position,direction,Acts::Direction::Forward());
-        if(!initialized.ok())throw std::runtime_error("Navigator initialization failed");
-        Json steps=Json::array();bool exhausted=false;
-        for(int step=0;step<32;++step) {
-          const auto target=navigator.nextTarget(state,position,direction);
-          if(!target.isValid()) {exhausted=true;break;}
-          const auto* before=navigator.currentVolume(state);
-          position=target.position();
-          int layer=-1;for(int i=0;i<7;++i)if(&target.surface()==surfaces[i])layer=i;
-          if(layer>=0)actualLayers.push_back(layer);
-          navigator.handleSurfaceReached(state,position,direction,target.surface());
-          const auto* after=navigator.currentVolume(state);
-          steps.push_back({{"layer",layer},{"position_mm",vector(position)},
-            {"from",before?before->volumeName():"outside"},{"to",after?after->volumeName():"outside"}});
-        }
-        trial["expected_layers"]=expectedLayers;trial["actual_layers"]=actualLayers;
-        trial["steps"]=steps;trial["exhausted"]=exhausted;
-        std::set<int> uniqueLayers(actualLayers.begin(),actualLayers.end());
-        bool entered=false,left=false;
-        for(const auto& step:steps) {
-          entered=entered || (step["from"]=="World" && step["to"]=="Telescope");
-          left=left || (step["from"]=="Telescope" && step["to"]=="World");
-        }
-        const bool transitions=expectedLayers.empty() || (entered && left);
-        trial["passed"]=exhausted && expectedLayers==actualLayers && uniqueLayers.size()==actualLayers.size()
-          && transitions && !steps.empty() && steps.back()["to"]=="outside";
-        report["navigation"].push_back(trial);
-        if(!bool(trial["passed"]))throw std::runtime_error("Complete-geometry navigation gate failed; reconstruction prohibited");
-      }
-      report["status"]="Closed Gen3 TrackingGeometry; seven DD4hep surfaces and four installed-Navigator rays validated";
-    }
     if(!conversionError.empty()) {
       report["passed"]=false;report["status"]="Official TrackingGeometry unavailable; production local path unchanged";
       writeExclusive(argv[2],report);return 2;
     }
     bool passed=true;for(const auto& row:report["planes"])passed=passed && bool(row["equivalent"]);
     report["passed"]=passed;
-    if(provider!="blueprint")report["status"]=provider=="official-elements"?"Component surface conversion only; identifiers remain unclosed; NOT a TrackingGeometry provider":"Geometry probe only; no numerical fitter or navigation replacement";
+    report["status"]=provider=="official-elements"?"Component surface conversion only; identifiers remain unclosed; NOT a TrackingGeometry provider":"Geometry probe only; no numerical fitter or navigation replacement";
     writeExclusive(argv[2],report);return passed?0:3;
   } catch(const std::exception& e) {
     report["passed"]=false;report["error"]=e.what();

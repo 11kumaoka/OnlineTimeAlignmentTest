@@ -1,3 +1,5 @@
+> Historical audit: retained results and commands describe their recorded source/build state. The Blueprint reconstruction implementation was later removed; current status and commands are in [LEGACY_ENDCAP_SIMPLIFICATION.md](LEGACY_ENDCAP_SIMPLIFICATION.md). Use preserved builds or the recorded commit when reproducing historical Blueprint commands.
+
 # Official EICrecon ACTS Geometry integration: Phase 1
 
 ## Outcome and safety boundary

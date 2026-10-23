@@ -7,9 +7,6 @@
 #include "extensions/jana/JOmniFactory.h"
 #include "services/geometry/dd4hep/DD4hep_service.h"
 #include "geometry/SurfacePlacements.h"
-#ifdef TESTBENCH_BLUEPRINT_PROVIDER
-#include "geometry/ConvertedTelescopeGeometry.h"
-#endif
 
 namespace local_eicrecon {
 
@@ -37,7 +34,6 @@ private:
   PodioOutput<edm4eic::TrackSegment> m_filtered_segments_output{this};
   PodioOutput<edm4eic::TrackSegment> m_smoothed_segments_output{this};
 
-  ParameterRef<std::string> m_geometryProvider{this, "geometryProvider", config().geometryProvider};
   ParameterRef<bool> m_useMPGD{this, "useMPGD", config().useMPGD};
   ParameterRef<bool> m_useACLGAD{this, "useACLGAD", config().useACLGAD};
   ParameterRef<bool> m_inputHitsAreGlobal{this, "inputHitsAreGlobal", config().inputHitsAreGlobal};
@@ -54,16 +50,6 @@ public:
     m_algo->level(static_cast<algorithms::LogLevel>(logger()->level()));
     m_algo->applyConfig(config());
     m_algo->setPlacements(surfacePlacements(*m_geometry().converter()));
-    if(config().geometryProvider=="blueprint") {
-#ifdef TESTBENCH_BLUEPRINT_PROVIDER
-      auto geometry=std::make_shared<ConvertedTelescopeGeometry>(*m_geometry().converter());
-      m_algo->setConvertedSurfaces(geometry->surfaces,geometry->context,geometry);
-#else
-      throw std::runtime_error("blueprint provider was requested but is not enabled in this build");
-#endif
-    } else if(config().geometryProvider!="local") {
-      throw std::runtime_error("Unknown geometryProvider; expected local or blueprint");
-    }
     m_algo->init();
   }
 

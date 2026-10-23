@@ -57,16 +57,9 @@ public:
 
   void init() final;
   void setPlacements(const std::array<Acts::Transform3,7>& placements) { m_placements=placements; }
-  // Optional converted surfaces retain their detector-element/Geometry owner.
-  void setConvertedSurfaces(const std::array<std::shared_ptr<Acts::PlaneSurface>,7>& surfaces,
-                            const Acts::GeometryContext& context, std::shared_ptr<void> owner) {
-    m_convertedSurfaces=surfaces; m_gctx=context; m_geometryOwner=std::move(owner);
-  }
   void process(const Input&, const Output&) const final;
 
 private:
-  std::optional<std::array<std::shared_ptr<Acts::PlaneSurface>,7>> m_convertedSurfaces;
-  std::shared_ptr<void> m_geometryOwner;
   struct FitSourceLink {
     Acts::GeometryIdentifier gid{};
     std::size_t index{0};

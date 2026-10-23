@@ -116,11 +116,9 @@ void BeamTestACTSFitter::init() {
     m_zmm[i]=tr.translation().z()/Acts::UnitConstants::mm;
     auto bounds = std::make_shared<const Acts::RectangleBounds>(
         m_halfXmm * Acts::UnitConstants::mm, m_halfYmm * Acts::UnitConstants::mm);
-    auto s = m_convertedSurfaces ? m_convertedSurfaces->at(i)
-                                : Acts::Surface::makeShared<Acts::PlaneSurface>(tr, bounds);
-    auto gid = m_convertedSurfaces ? s->geometryId()
-        : Acts::GeometryIdentifier().withVolume(1).withLayer(i + 1).withSensitive(1);
-    if (!m_convertedSurfaces) s->assignGeometryId(gid);
+    auto s = Acts::Surface::makeShared<Acts::PlaneSurface>(tr, bounds);
+    auto gid = Acts::GeometryIdentifier().withVolume(1).withLayer(i + 1).withSensitive(1);
+    s->assignGeometryId(gid);
     double roundTripError=0.;
     for (const auto& point : {Acts::Vector2(0.,0.),Acts::Vector2(10.,-7.)}) {
       const Acts::Vector3 direction=tr.linear().col(2);

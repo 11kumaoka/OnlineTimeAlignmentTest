@@ -52,5 +52,21 @@
     "validation_report": "docs/ACTS_GEOMETRY_INTEGRATION.md",
     "historical_reference_values_unchanged": true,
     "reason": "Optional init surface injection only; numerical functions and default local PODIO/Mille values unchanged"
+  },
+  "blueprint_removal": {
+    "previous_source_sha256": "9d3a23613d6f8255544ac059da8bb949920a38fc081eea960cf09f0f0247e51f",
+    "restored_source_sha256": "47152171637550f201bde18099e1a932edf4fc8524e08ea6006af078103bfb93",
+    "checkpoint": "7fd70f34bbf3761f13a8938ed4ba23f926f1adbe",
+    "checkpoint_identical_files": [
+      "localDetEICrecon/algorithms/tracking/BeamTestACTSFitter.cc",
+      "localDetEICrecon/algorithms/tracking/BeamTestACTSFitter.h",
+      "localDetEICrecon/algorithms/tracking/BeamTestACTSFitterConfig.h",
+      "localDetEICrecon/factories/tracking/BeamTestACTSFitter_factory.h",
+      "reconstruction/reconstruct.py"
+    ],
+    "numerical_changes": false,
+    "evidence_root": "result/legacy_endcap_20261023_01",
+    "historical_reference_values_changed": false,
+    "reason": "Remove optional surface injection and provider selection; restore exact validated local source path"
   }
 }

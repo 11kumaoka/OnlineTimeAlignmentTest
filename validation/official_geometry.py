@@ -1,8 +1,7 @@
 """Isolated local/official Geometry audit; never selects a calibration provider.
 
 The official-elements mode tests the surface converter component only.
-The blueprint mode closes a complete Geometry and independently tests Navigator
-traversal; this diagnostic itself performs no track fitting or alignment.
+This diagnostic performs no track fitting or alignment.
 """
 import argparse
 import json
@@ -18,7 +17,7 @@ def main():
     parser.add_argument('--geometry',type=Path,required=True)
     parser.add_argument('--build-dir',type=Path,required=True,help='New build containing TelescopeGeometryProbe')
     parser.add_argument('--geometry-build-dir',type=Path,help='Existing validated local detector-factory build; required for Local_SiTrackerEndcap2XY XML')
-    parser.add_argument('--provider',choices=('local','official','official-elements','blueprint'),default='local')
+    parser.add_argument('--provider',choices=('local','official','official-elements'),default='local')
     parser.add_argument('--metadata',choices=('none','discovery','discovery-and-flags'),default='none',help='Explicit process-local metadata experiment; never edits XML/placements')
     parser.add_argument('--output-dir',type=Path,required=True,help='New diagnostic directory under result/; never reused')
     a=parser.parse_args();xml=a.geometry.resolve();out=a.output_dir.resolve()
@@ -31,7 +30,6 @@ def main():
     command=list(map(str,[binary,xml,out/'geometry.json',a.provider,a.metadata]))
     write_json(out/'command.json',{'argv':command,'cwd':str(REPO),'geometry_sha256':digest(xml),'probe_sha256':digest(binary),
         'probe_source_sha256':digest(REPO/'localDetEICrecon/geometry/OfficialGeometryProbe.cc'),
-        'construction_source_sha256':digest(REPO/'localDetEICrecon/geometry/ConvertedTelescopeGeometry.h'),
         'provider_selection':'Diagnostic only; production fitter and Controller remain unchanged',
         'image':env.get('TESTBENCH_IMAGE')})
     with (out/'stdout.log').open('x') as log:process=subprocess.run(command,cwd=REPO,env=env,stdout=log,stderr=subprocess.STDOUT)

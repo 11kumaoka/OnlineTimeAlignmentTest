@@ -8,7 +8,6 @@ from research_common import REPO,digest,write_json
 # Pin the adapters that select and physically place the supported scopes as well
 # as the numerical model. Binary fingerprints remain independently mandatory.
 IMPLEMENTATION_SOURCES=(
-    'localDetEICrecon/geometry/ConvertedTelescopeGeometry.h',
     'localDetEICrecon/algorithms/tracking/BeamTestACTSFitter.cc',
     'localDetEICrecon/algorithms/tracking/BeamTestACTSFitter.h',
     'localDetEICrecon/algorithms/tracking/BeamTestACTSFitterConfig.h',
