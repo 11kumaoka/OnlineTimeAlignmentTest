@@ -133,3 +133,16 @@ historical scientific stop at fixed-Global two-axis rotations. The successor exp
 ## L3 implementation checkpoint
 
 `validate_tilt_derivatives --layer 3 --coupled` extends the same physical-DD4hep/production-Mille check to all six L3 columns. Optional `--representative` restricts the diagnostic to one mixed orientation and one finite-difference step, retaining the full suite as default. `test_so3_alignment` checks explicit selected labels, fixed references and repeated current-Geometry composition. `so3_closure` additionally includes L3-only and three-layer six-DOF noiseless mathematical fixtures; these are not Geant4/statistical certification. Follow the [manual guide](../docs/L3_SIX_DOF_MANUAL.md) for proof generation and actual-row rank checks.
+
+## Optional official Geometry audit
+
+`python3 -m validation.official_geometry --help` describes the isolated local, official-provider and official-element modes. The latter is a component comparison, not a TrackingGeometry suitable for reconstruction. The official provider fails explicitly for the current one-sided telescope. See [the pinned-source audit and independent commands](../docs/OFFICIAL_ACTS_GEOMETRY_PHASE1.md). The production fitter and Controller defaults are unchanged.
+
+The optional `blueprint` diagnostic now closes a Gen3 TrackingGeometry and runs
+four independent installed-Navigator rays for each selected XML. See
+[the integration checks and tested manual workflow](../docs/ACTS_GEOMETRY_INTEGRATION.md)
+for the separate surface, complete-Geometry, navigation, reconstruction and
+fixed-RawHit alignment gates. `validation.compare_geometry_providers` compares
+all PODIO values and Mille records with semantic sensor-ID mapping and fixed
+numerical tolerances; it does not weaken historical exact local-path regression.
+Fresh derivative evidence must match the affected plugin and source files.

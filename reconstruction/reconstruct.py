@@ -58,6 +58,8 @@ def reconstruct(a):
          '-Pbeamtstreco:milleZRefMm=100.0','-Pbeamtstreco:milleRequireSingleTrack=1',
          '-Pbeamtstreco:milleInjectedShiftLayer=-1',f'-Ppodio:output_file={p}/reco.root',
          f'-Ppodio:output_collections={coll}',source]
+    provider=getattr(a,'geometry_provider',None) or (previous.get('geometry_provider','local') if previous else 'local')
+    if provider!='local':cmd.insert(-1,f'-PBeamTestReco:LocalBeamTestTracks:geometryProvider={provider}')
     if a.alignment_mode!='legacy':cmd.insert(-1,f'-Pbeamtstreco:milleAlignmentMode={a.alignment_mode}')
     execute(cmd,p,env=env)
     log=(p/'stdout.log').read_text(); match=re.search(r'BeamTestMilleProcessor::Finish[^\n]*records=(\d+)[^\n]*measurements=(\d+)',log)
@@ -65,7 +67,7 @@ def reconstruct(a):
     if not match or not evt or int(evt[1])!=events or int(evt[2])==0:raise RuntimeError('Missing/empty reconstruction counters')
     if int(match[1])!=int(evt[2]) or int(match[2])!=10*int(match[1]):raise RuntimeError('Mille counters do not match accepted tracks')
     if a.input_mode == 'raw' and 'SiliconTrackerDigi::process' in log: raise RuntimeError('RawHit reconstruction unexpectedly ran Digitization')
-    done(p,input_mode=a.input_mode,input_source=str(source),input_sha256=digest(source),
+    done(p,geometry_provider=provider,input_mode=a.input_mode,input_source=str(source),input_sha256=digest(source),
          raw_input_sha256=digest(source) if metadata else None,
          config_sha256=digest(p/'config.json'),events=int(evt[1]),tracks=int(evt[2]),records=int(match[1]),scalars=int(match[2]),
          plugin_sha256=digest(plugin),simulation_sha256=digest(source) if not metadata else contract['producer'].get('simulation_sha256'),geometry_sha256=digest(geom))
@@ -73,6 +75,7 @@ def reconstruct(a):
 
 if __name__ == "__main__":
     parser = cli_parser(__doc__)
+    parser.add_argument('--geometry-provider',choices=['local','blueprint'],default=None,help='Explicit experimental converted Gen3 surfaces; default local, no fallback')
     parser.add_argument('--alignment-mode',choices=[*SO3_MODES,'legacy','l1_ry','l1_rx','l1_rz','l1_l2_rz','l1_l2_xy_rz','l1_z','l1_l2_z','l1_l2_xyz'],default='legacy',help='Opt-in experimental rotation derivatives; default preserves Mille bytes')
     parser.add_argument('--raw-input',type=Path,help='Explicit RawHit PODIO ROOT input; no Simulation stages required')
     parser.add_argument('--raw-metadata',type=Path,help='RawHit contract JSON; defaults to input sibling rawhit_contract.json')

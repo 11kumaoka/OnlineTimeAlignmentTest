@@ -81,3 +81,26 @@ set_target_properties(BeamTestReco PROPERTIES
 add_library(LocalTelescopeGeometry SHARED geometry/SiTrackerEndcap2XY_geo.cpp)
 target_link_libraries(LocalTelescopeGeometry PRIVATE DD4hep::DDCore)
 dd4hep_generate_rootmap(LocalTelescopeGeometry)
+
+# Isolated compatibility probe: never changes BeamTestReco or its default geometry.
+option(TESTBENCH_BUILD_OFFICIAL_GEOMETRY_PROBE "Build the installed EICrecon Geometry compatibility probe" OFF)
+if(TESTBENCH_BUILD_OFFICIAL_GEOMETRY_PROBE)
+  find_package(Acts REQUIRED COMPONENTS PluginDD4hep)
+  find_package(nlohmann_json CONFIG REQUIRED)
+  find_package(EICrecon CONFIG REQUIRED)
+  add_executable(TelescopeGeometryProbe geometry/OfficialGeometryProbe.cc)
+  target_include_directories(TelescopeGeometryProbe PRIVATE
+    ${TESTBENCH_SOURCE_DIR} ${EICRECON_INCLUDE_DIR})
+  target_compile_definitions(TelescopeGeometryProbe PRIVATE Acts_VERSION_MAJOR=${Acts_VERSION_MAJOR})
+  target_link_libraries(TelescopeGeometryProbe PRIVATE
+    EICrecon::algorithms_tracking_library Acts::Core Acts::PluginDD4hep nlohmann_json::nlohmann_json
+    DD4hep::DDCore DD4hep::DDRec fmt::fmt spdlog::spdlog)
+endif()
+
+# Explicit experimental provider; default reconstruction remains local.
+option(TESTBENCH_ENABLE_BLUEPRINT_PROVIDER "Enable converted Gen3 telescope surfaces in BeamTestReco" OFF)
+if(TESTBENCH_ENABLE_BLUEPRINT_PROVIDER)
+  find_package(Acts REQUIRED COMPONENTS PluginDD4hep)
+  target_link_libraries(BeamTestReco PRIVATE Acts::PluginDD4hep)
+  target_compile_definitions(BeamTestReco PRIVATE TESTBENCH_BLUEPRINT_PROVIDER=1)
+endif()

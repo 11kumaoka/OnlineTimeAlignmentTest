@@ -41,5 +41,16 @@
       "result/tilt_alignment_20261022_01/final_tilt_replays_05.json",
       "result/tilt_alignment_20261022_01/regressions_05/replay_report.json"
     ]
+  },
+  "converted_geometry_surface_injection": {
+    "passed": true,
+    "only_change": "init surface injection; all numerical functions byte-identical",
+    "historical_source_sha256": "47152171637550f201bde18099e1a932edf4fc8524e08ea6006af078103bfb93",
+    "current_source_sha256": "9d3a23613d6f8255544ac059da8bb949920a38fc081eea960cf09f0f0247e51f",
+    "numerical_suffix_sha256": "03631d50463d93246644b66184cdd0e92aacb2cf47dac19107ee106a2d0960ec",
+    "evidence_root": "result/complete_acts_geometry_20261023_01",
+    "validation_report": "docs/ACTS_GEOMETRY_INTEGRATION.md",
+    "historical_reference_values_unchanged": true,
+    "reason": "Optional init surface injection only; numerical functions and default local PODIO/Mille values unchanged"
   }
 }

@@ -164,3 +164,7 @@ refused are documented in [the tilt report](docs/TILT_ALIGNMENT_VALIDATION.md).
 Geometric validation does not certify the nominal uncertainty model.
 
 The explicit SiMAPS `l3_six_dof` and `l1_l2_l3_six_dof` prototypes extend the same SO(3) model to L3 with L0/L4 fixed. They remain disabled by default and require matching technical evidence. See the [independent-stage manual](docs/L3_SIX_DOF_MANUAL.md) and [implementation checkpoint](docs/L3_SIX_DOF_IMPLEMENTATION.md); statistical accuracy and uncertainty coverage are not certified.
+
+The default Geometry provider remains `local`. The opt-in [converted ACTS Geometry integration](docs/ACTS_GEOMETRY_INTEGRATION.md) constructs a complete Gen3 TrackingGeometry from the seven physical DD4hep sensors and validates installed-Navigator traversal separately. Reconstruction can explicitly select `--geometry-provider blueprint` in an enabled build and still uses the existing DirectNavigator fitter. This project-specific provider reuses official ACTS/DD4hep components; the installed EICrecon legacy provider remains blocked, as documented in the [Phase 1 audit](docs/OFFICIAL_ACTS_GEOMETRY_PHASE1.md). The Controller remains on the local provider and no candidate is automatically activated.
+
+For a code-level handoff, see the [source-based architecture and workflow guide](docs/ARCHITECTURE_AND_WORKFLOW_GUIDE.md), including component provenance, independent stages, alignment equations and remaining validation limits.
