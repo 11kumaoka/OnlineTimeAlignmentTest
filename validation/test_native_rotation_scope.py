@@ -18,14 +18,29 @@ class NativeRotationScope(unittest.TestCase):
             self.assertEqual(component.find('rotation').get('z'),'0')
 
     def test_coupled_rotation_is_rejected(self):
-        for first,second in [('x','y'),('y','x')]:
+        for first,second in [(a,b) for a in 'xyz' for b in 'xyz' if a!=b]:
             component=self.component();rotate_component(component,.002,first)
             before=ET.tostring(component)
             with self.assertRaises(ValueError):rotate_component(component,.003,second)
             self.assertEqual(ET.tostring(component),before)
 
     def test_unsupported_or_nonfinite_update_is_rejected(self):
-        for angle,axis in [(.001,'z'),(.02,'x'),(math.inf,'y'),(math.nan,'x')]:
+        for angle,axis in [(.001,'w'),(.02,'x'),(math.inf,'y'),(math.nan,'x')]:
             component=self.component();before=ET.tostring(component)
             with self.assertRaises(ValueError):rotate_component(component,angle,axis)
             self.assertEqual(ET.tostring(component),before)
+
+    def test_rz_equivalent_chart_and_signed_composition(self):
+        component=self.component()
+        rotate_component(component,-.005,'z')
+        rotate_component(component,.002,'z')
+        r=component.find('rotation')
+        self.assertEqual(r.get('x'),'0')
+        self.assertAlmostEqual(float(r.get('y')),-math.pi/2+.003,places=14)
+        self.assertAlmostEqual(float(r.get('z')),math.pi/2,places=14)
+
+    def test_rz_rejects_inexact_zero_chart(self):
+        component=self.component();component.find('rotation').set('y',str(-math.pi/2+.0001))
+        before=ET.tostring(component)
+        with self.assertRaises(ValueError):rotate_component(component,.003,'z')
+        self.assertEqual(ET.tostring(component),before)

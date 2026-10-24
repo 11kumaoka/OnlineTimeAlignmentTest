@@ -112,12 +112,12 @@ def geometry_step(args):
     if getattr(args,'mode','l1_l2_y')=='l1_l2_y':
         displaced_xml(nominal,p/'truth.xml',{1:.150,2:.200})
     else:
-        from validation.telescope_closure.rotation import injected_rx,INJECTED_RY_RAD,axis
+        from validation.telescope_closure.rotation import injected_rotation,axis
         shifts={1:.150,2:.200} if args.mode=='l1_y_rx_l2_y' else {}
-        angle=INJECTED_RY_RAD if args.mode=='l1_ry' else injected_rx(args.mode)
+        angle=injected_rotation(args.mode)
         displaced_xml(nominal,p/'truth.xml',shifts,rotations={1:angle},rotation_axis=axis(args.mode))
         write_json(p/'rotation_fixture.json',{'mode':args.mode,'injected_global_y_mm':shifts,'injected_global_r'+axis(args.mode)+'_rad':{'1':angle}})
-    done(p,nominal_sha256=digest(nominal),truth_sha256=digest(p/'truth.xml'),injected_global_y_mm=({'1':.150,'2':.200} if args.mode not in ('l1_rx','l1_rx_negative','l1_ry') else {}))
+    done(p,nominal_sha256=digest(nominal),truth_sha256=digest(p/'truth.xml'),injected_global_y_mm=({'1':.150,'2':.200} if args.mode in ('l1_l2_y','l1_y_rx_l2_y') else {}))
 
 
 def data_step(args):
@@ -185,7 +185,7 @@ def solve(args,reconstruction,name):
     for block in blocks:
         a,b,_=profile(block,selected);normal+=a;rhs+=b
     assert np.linalg.matrix_rank(normal)==dimension
-    if getattr(args,'mode','l1_l2_y')=='l1_ry':
+    if getattr(args,'mode','l1_l2_y') in ('l1_ry','l1_ry_negative','l1_rz','l1_rz_negative'):
         # Refuse to run Pede before the actual native design resolves this tilt.
         # Include transverse translations and other rotations as diagnostic nuisance
         # columns; none of these additional columns is enabled in the Mille fit.
@@ -193,8 +193,10 @@ def solve(args,reconstruction,name):
         design=analyze(args.result/reconstruction/'mille.json')
         last=design['prefix_designs'][str(args.events)]
         assert last['rank']==5 and last['diagonal_scaled_condition']<100
-        assert last['sigma'][3]<.001,'Native Ry unresolved before Pede'
+        from validation.telescope_closure.rotation import axis
+        index=3 if axis(args.mode)=='y' else 4
         write_json(p/'observability.json',design)
+        assert last['sigma'][index]<.001,'Native selected tilt unresolved before Pede'
     text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n700102 0.0 1.0\n700202 0.0 1.0\n\nprintcounts\nend\n'
     if rotation:
         text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n'+''.join(f'{label} 0.0 1.0\n' for label in selected)+'\nprintcounts\nend\n'
@@ -221,9 +223,9 @@ def solve(args,reconstruction,name):
         correlation=covariance/np.outer(sigma,sigma)
         scaled=normal/np.sqrt(np.outer(np.diag(normal),np.diag(normal)))
         assert np.linalg.cond(scaled)<100,'Insufficient selected information'
-        assert all(v<(.001 if k in (700104,700105) else .02) for k,v in zip(selected,sigma)),'Insufficient angular/linear sensitivity'
+        assert all(v<(.001 if k in (700104,700105,700106) else .02) for k,v in zip(selected,sigma)),'Insufficient angular/linear sensitivity'
         write_json(p/'independent.json',{'parameters':parameters,'schur_solution':expected.tolist(),
-          'parameter_units':{k:('rad' if k in (700104,700105) else 'mm') for k in selected},'nominal_sigma':sigma.tolist(),'pede_reported_sigma':reported.tolist(),
+          'parameter_units':{k:('rad' if k in (700104,700105,700106) else 'mm') for k in selected},'nominal_sigma':sigma.tolist(),'pede_reported_sigma':reported.tolist(),
           'rank':dimension,'condition':float(np.linalg.cond(normal)),'condition_diagonal_scaled':float(np.linalg.cond(scaled)),
           'correlation':correlation.tolist(),'normal':normal.tolist(),'status':status,'records':len(blocks)})
     else:
@@ -511,7 +513,7 @@ def main():
     parser.add_argument('--result',type=Path,required=True)
     parser.add_argument('--build',type=Path,required=True)
     parser.add_argument('--validation-name',default='validation',help='New validation/regression output stage name; existing reports remain immutable')
-    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_y_rx_l2_y'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
+    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_ry_negative','l1_rz_negative','l1_rz','l1_y_rx_l2_y'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
     parser.add_argument('--beam',type=Path,help='Optional bounded angular study recipe; never changes the baseline cohort')
     parser.add_argument('--events',type=int,default=32)
     parser.add_argument('--chi2-cut',type=float,default=None,help='Explicit alignment capture window; same setting in all closure passes')

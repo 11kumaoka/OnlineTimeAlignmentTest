@@ -11,26 +11,33 @@ from research_common import stage,execute,digest,require,done,write_json
 
 INJECTED_RX_RAD=.0018
 INJECTED_RY_RAD=.005
+INJECTED_RZ_RAD=.005
 
 
 def axis(mode):
-    return 'y' if mode=='l1_ry' else 'x'
+    return 'y' if mode in ('l1_ry','l1_ry_negative') else ('z' if mode in ('l1_rz','l1_rz_negative') else 'x')
 
 
 def rotation_label(mode):
-    return 700105 if mode=='l1_ry' else 700104
+    return {'x':700104,'y':700105,'z':700106}[axis(mode)]
 
 
 def injected_rx(mode):
     return -INJECTED_RX_RAD if mode=='l1_rx_negative' else INJECTED_RX_RAD
 
 
+def injected_rotation(mode):
+    if axis(mode)=='x':return injected_rx(mode)
+    magnitude=INJECTED_RY_RAD if axis(mode)=='y' else INJECTED_RZ_RAD
+    return -magnitude if mode.endswith('_negative') else magnitude
+
+
 def labels(mode):
-    return [700105] if mode=='l1_ry' else ([700104] if mode in ('l1_rx','l1_rx_negative') else [700102,700104,700202])
+    return [rotation_label(mode)] if mode!='l1_y_rx_l2_y' else [700102,700104,700202]
 
 
 def config_name(mode):
-    return 'l1_global_ry' if mode=='l1_ry' else ('l1_global_rx' if mode in ('l1_rx','l1_rx_negative') else 'l1_y_rx_l2_y')
+    return 'l1_y_rx_l2_y' if mode=='l1_y_rx_l2_y' else 'l1_global_r'+axis(mode)
 
 
 def rotate_component(component,increment,axis='x'):
@@ -38,12 +45,24 @@ def rotate_component(component,increment,axis='x'):
 
     Actual DD4hep probes establish Rx = -(XML y + pi/2) and
     Ry = -(XML x + pi/2) on their separate one-axis charts. Compositions
-    outside either subgroup are rejected; this is not an Euler serializer.
+    outside each subgroup are rejected. Rz uses the independently verified
+    alternate chart x=0, y=-pi/2-Rz, z=pi/2; this is not a general serializer.
     """
-    if axis not in ('x','y') or not math.isfinite(increment) or abs(increment)>.01:
-        raise ValueError('Only bounded separate L1 Global Rx or Ry enabled')
+    if axis not in ('x','y','z') or not math.isfinite(increment) or abs(increment)>.01:
+        raise ValueError('Only bounded separate L1 Global Rx, Ry or Rz enabled')
     r=component.find('rotation')
     x,y,z=[xml_number(r.get(a,'0'),{'pi':math.pi}) for a in 'xyz']
+    if axis=='z':
+        # The alternate zero chart is physically identical to the nominal chart.
+        # Only the pure-Rz subgroup is admitted; never decompose a general pose.
+        nominal=abs(x+math.pi/2)<1e-12 and abs(y+math.pi/2)<1e-12 and abs(z)<1e-12
+        selected=abs(x)<1e-12 and abs(z-math.pi/2)<1e-12
+        if not (nominal or selected):raise ValueError('Unsupported composition outside the selected Rz chart')
+        current=0. if nominal else -(y+math.pi/2)
+        vector=rotation_log(multiply(rotation_exp((0.,0.,increment)),rotation_exp((0.,0.,current))))
+        if abs(vector[0])+abs(vector[1])>1e-12:raise ValueError('Outside pure-Rz subgroup')
+        r.set('x','0');r.set('y',f'{-math.pi/2-vector[2]:.17g}');r.set('z',f'{math.pi/2:.17g}')
+        return
     if abs(z)>1e-12 or abs((x if axis=='x' else y)+math.pi/2)>1e-12:
         raise ValueError('Unsupported composition outside the selected one-axis chart')
     index=0 if axis=='x' else 1
@@ -58,7 +77,7 @@ def rotate_component(component,increment,axis='x'):
 def pose_checks(before,after,shifts,rx,axis='x'):
     """Actual DD4hep and ACTS poses, not XML attribute assumptions."""
     for a,b in zip(before,after):
-        layer=a['layer'];vector=[0.,0.,0.];vector[0 if axis=='x' else 1]=rx.get(layer,0.)
+        layer=a['layer'];vector=[0.,0.,0.];vector['xyz'.index(axis)]=rx.get(layer,0.)
         q=np.array(rotation_exp(vector))
         assert a['volume_id']==b['volume_id'] and a['geometry_id']==b['geometry_id']
         assert np.allclose(b['center_mm'],np.array(a['center_mm'])+[0,shifts.get(layer,0.),0],atol=1e-9,rtol=0)
@@ -72,7 +91,7 @@ def pose_checks(before,after,shifts,rx,axis='x'):
             half=50*(abs(total[1,1])+abs(total[1,2]))
             assert half+abs(b['center_mm'][1])<50.25
             assert 50*(abs(total[2,1])+abs(total[2,2]))<51.
-            if axis=='y':
+            if axis in ('y','z'):
                 # Native component half lengths: X=50, Y=.025, Z=50 mm.
                 # Parent module world half lengths: X=.325, Y/Z=50.25 mm.
                 extent=np.abs(np.array(b['dd4hep_rotation']))@np.array([50.,.025,50.])
@@ -113,7 +132,7 @@ def physical_derivatives(args,reconstruction="nominal"):
                 predictions.append((r.T@(intersection-center))[:2])
             finite=(predictions[0]-predictions[1])/(2*step)
             equation=next(e for e in event['equations'] if e['layer']==1)
-            error=max(error,float(np.max(np.abs(finite-np.array(equation['global'])[:,4 if args.mode=='l1_ry' else 3]))));checks+=1
+            error=max(error,float(np.max(np.abs(finite-np.array(equation['global'])[:,3+'xyz'.index(axis(args.mode))]))));checks+=1
         assert error<2e-5,(step,error)
         errors[str(step)]=error;maximum=max(maximum,error)
     write_json(p/'report.json',{'passed':True,'checks':checks,'errors_mm_per_rad':errors,
@@ -149,7 +168,7 @@ def check(args):
     for name in ('geometry','data','nominal','physical_derivatives','corrected_physical_derivatives','solve','correction','corrected','postsolve','control','controlsolve'):require(args.result,name)
     p=stage(args.result,args.validation_name)
     selected=labels(args.mode);combined=args.mode=='l1_y_rx_l2_y'
-    injected={rotation_label(args.mode):INJECTED_RY_RAD if args.mode=='l1_ry' else injected_rx(args.mode)}
+    injected={rotation_label(args.mode):injected_rotation(args.mode)}
     if combined:injected.update({700102:.150,700202:.200})
     truth=json.loads((args.result/'data/shifted/channels_truth.json').read_text())
     base=json.loads((args.result/'data/control/channels_truth.json').read_text())
@@ -168,8 +187,9 @@ def check(args):
             normalized=copy.deepcopy(module);normalized.set('name',reference.get('name'))
             normalized.find('./module_component/position').set('x',reference.find('./module_component/position').get('x'))
             if layer==1:
-                attribute='x' if args.mode=='l1_ry' else 'y'
-                normalized.find('./module_component/rotation').set(attribute,reference.find('./module_component/rotation').get(attribute))
+                attributes='xyz' if axis(args.mode)=='z' else ('x' if axis(args.mode)=='y' else 'y')
+                for attribute in attributes:
+                    normalized.find('./module_component/rotation').set(attribute,reference.find('./module_component/rotation').get(attribute))
             assert structure(normalized)==structure(reference)
             detector.remove(module);b.set('module',a.get('module'))
         assert structure(candidate)==structure(nominal_xml)
@@ -183,7 +203,7 @@ def check(args):
     for i,k in enumerate(selected):
         assert abs(values[k]-injected[k])<tolerances[k]
         assert abs(control_solution['parameters'][str(k)])<5*control_solution['nominal_sigma'][i]
-        assert abs(post[k])<(solution['nominal_sigma'][i]/4 if args.mode=='l1_ry' else 2e-5),(k,post[k])
+        assert abs(post[k])<(solution['nominal_sigma'][i]/4 if axis(args.mode) in ('y','z') else 2e-5),(k,post[k])
     from geometry.transforms import orientation_distance
     angle_error=orientation_distance(truth['sensors'][1]['acts_rotation'],actual[1]['acts_rotation'])
     assert angle_error<tolerances[rotation_label(args.mode)]
@@ -191,7 +211,7 @@ def check(args):
     assert digest(input_path)==json.loads((args.result/'data/shifted_input.json').read_text())['file_sha256']
     assert channel_values(args.result/'nominal/reco.root')==channel_values(args.result/'corrected/reco.root')==payload
     changed=sum(a[1][1][0]!=b[1][1][0] for a,b in zip(payload,channel_values(args.result/'data/control.root')))
-    assert changed>=args.events//(32 if args.mode=='l1_ry' else 4),'Rotation/translation fixture must have nontrivial quantized channel changes'
+    assert changed>=args.events//(32 if axis(args.mode) in ('y','z') else 4),'Rotation/translation fixture must have nontrivial quantized channel changes'
     nominal_audit=json.loads((args.result/'nominal/audit.json').read_text())
     corrected_audit=json.loads((args.result/'corrected/audit.json').read_text())
     for a,b in zip(nominal_audit['events'],corrected_audit['events']):
@@ -218,7 +238,7 @@ def check(args):
                 g=w@np.array(equation['global']);l=equation['layer']
                 for j in (0,1):
                     coefficients=rows[2*l+j][3]
-                    expected={k:g[j,4 if k==700105 else (3 if k==700104 else 1)] for k in selected if (1 if k in (700104,700105) else (k-700002)//100)==l and g[j,4 if k==700105 else (3 if k==700104 else 1)]!=0}
+                    expected={k:g[j,k-700101 if k in (700104,700105,700106) else 1] for k in selected if (1 if k in (700104,700105,700106) else (k-700002)//100)==l and g[j,k-700101 if k in (700104,700105,700106) else 1]!=0}
                     assert coefficients.keys()==expected.keys()
                     assert all(abs(coefficients[k]-expected[k])<1e-10 for k in expected)
         for event in audit['events']:

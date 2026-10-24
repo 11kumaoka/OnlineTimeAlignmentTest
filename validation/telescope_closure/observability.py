@@ -49,7 +49,7 @@ def analyze(native):
             h=sum(v for v,take in zip(contributions,mask) if take)
             sigma=np.sqrt(np.diag(np.linalg.inv(h)))
             subsets[name+'_'+side]={'tracks':int(mask.sum()),'median_split':median,
-                'sigma':sigma.tolist(),'Ry_information_per_track':float(h[3,3]/mask.sum())}
+                'sigma':sigma.tolist(),'Ry_information_per_track':float(h[3,3]/mask.sum()),'Rz_information_per_track':float(h[4,4]/mask.sum())}
     full=sum(extended);full_cov=np.linalg.inv(full);full_sigma=np.sqrt(full_cov.diagonal())
     extended_report={'parameters':['Global X mm','Global Y mm','Global Z mm','Global Rx rad','Global Ry rad','Global Rz rad'],
         'rank':int(np.linalg.matrix_rank(full)),'sigma':full_sigma.tolist(),

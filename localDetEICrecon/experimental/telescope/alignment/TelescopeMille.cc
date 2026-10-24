@@ -49,7 +49,7 @@ public:
     app->SetDefaultParameter("TelescopeMille:multipleEvents",multipleEvents,"Write one native Mille record per accepted event and aggregate diagnostics");
     app->SetDefaultParameter("TelescopeMille:output",output,"New official Mille Binary; experimental single-track probe");
     app->SetDefaultParameter("TelescopeMille:report",reportPath,"New native equation JSON audit");
-    app->SetDefaultParameter("TelescopeMille:config",configPath,"Explicit selected physical Global Y / separate L1 Global Rx or Ry label map JSON");
+    app->SetDefaultParameter("TelescopeMille:config",configPath,"Explicit selected physical Global Y / separate L1 Global Rx, Ry or Rz label map JSON");
     app->SetDefaultParameter("TelescopeMille:derivativeGate",gatePath,"Successful derivative gate JSON from this build/fixture");
     for(const auto& path:{output,reportPath}) if(path.empty() || std::filesystem::exists(path))
       throw std::runtime_error("Mille probe requires new explicit output paths");
@@ -62,14 +62,15 @@ public:
       const int layer=p.at("layer"),label=p.at("label");
       const bool translation=p.at("axis")=="global_y" && (layer==1 || layer==2) && label==700002+100*layer;
       const bool rotation=((p.at("axis")=="global_rx" && label==700104) ||
-          (p.at("axis")=="global_ry" && label==700105)) && layer==1 &&
+          (p.at("axis")=="global_ry" && label==700105) ||
+          (p.at("axis")=="global_rz" && label==700106)) && layer==1 &&
           p.at("unit")=="rad" && p.at("pivot")=="sensitive_surface_center" && p.at("composition")=="left_global_exp";
       if(p.at("system")!=31 || (!translation && !rotation) || !labels.insert(label).second)
         throw std::runtime_error("Unsupported or duplicate selected physical alignment parameter");
     }
     if(labels!=std::set<int>{700102,700202} && labels!=std::set<int>{700104} &&
-       labels!=std::set<int>{700102,700104,700202} && labels!=std::set<int>{700105})
-      throw std::runtime_error("Only two-Y, separate L1 Rx or Ry, or L1 Y/Rx plus L2 Y scopes are enabled");
+       labels!=std::set<int>{700102,700104,700202} && labels!=std::set<int>{700105} && labels!=std::set<int>{700106})
+      throw std::runtime_error("Only two-Y, separate L1 Rx, Ry or Rz, or L1 Y/Rx plus L2 Y scopes are enabled");
   }
   void Process(const std::shared_ptr<const JEvent>& event) override {
     std::lock_guard<std::mutex> guard(mutex);++processed;
@@ -158,7 +159,7 @@ public:
         Row data;data.value=whitened[row];
         for(int j=0;j<4;++j)data.local.push_back(local(row,j));
         for(const auto& parameter:config.at("parameters")) if(parameter.at("layer")==layer) {
-          const int column=parameter.at("axis")=="global_y"?1:(parameter.at("axis")=="global_rx"?3:4);
+          const int column=parameter.at("axis")=="global_y"?1:(parameter.at("axis")=="global_rx"?3:(parameter.at("axis")=="global_ry"?4:5));
           data.labels.push_back(parameter.at("label"));data.global.push_back(global(row,column));
         }
         rows.push_back(std::move(data));

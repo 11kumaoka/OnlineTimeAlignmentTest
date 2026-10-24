@@ -1,5 +1,7 @@
 # Legacy/native telescope alignment parity
 
+Latest scope: [signed single-axis Ry/Rz completion](#signed-single-axis-ryrz-completion).
+
 Baseline: clean `feature/upstream-acts-geometry` at
 `1d4696bea597893c9afb7de237e9094dbfcc6f91`. This document separates implemented
 code, enabled configuration, numerical tests, actual reconstructed closure and
@@ -584,3 +586,335 @@ installed ActsGeometryProvider/SurfaceMap -> unchanged JANA measurements and
 ACTS CKF/smoothing. No replacement provider, navigator, fitter or material map
 was introduced. No legacy scientific code was deleted. Candidates stay inactive;
 no merge or push is performed.
+
+## Signed single-axis Ry/Rz completion
+
+This milestone starts at `6b8136428fc81fbbbfad483f75319e9311e68fc1` on
+`feature/upstream-acts-geometry`. All earlier results above are retained.
+The numerical NativeMilleModel, installed CKF/Navigator/smoother, seeds,
+particle hypothesis, calibrated covariance, whitening and selector settings
+are unchanged. All new technical evidence is in fresh `result/native_signed_tilt*`
+directories; the fresh build is `build/native_signed_tilt_20261024_01`.
+
+### Restricted Rz chart: physical Geometry first
+
+The retained DD4hep 1.36 constructor source is
+`result/barrel_geometry_20261023_01/source/SiTrackerBarrel_geo.cpp`.
+Lines 58–64 pass `RotationZYX(x_rot.z(0),x_rot.y(0),x_rot.x(0))` to the real
+component placement; line 128 places the parent module. XML attribute names
+alone therefore do not establish physical Global axes. Source hash and calls
+are recorded in `native_signed_tilt_20261024_01_audit/source_reference.json`.
+
+Fresh-process actual sensitive-context and ACTS matrices establish an alternate
+zero chart, physically equivalent to the original nominal component:
+
+```
+Original zero:   x=-pi/2, y=-pi/2,     z=0
+Rz-only chart:   x=0,     y=-pi/2-Rz,  z=+pi/2
+Rnew = Exp([0,0,dRz_global]) Rcurrent
+```
+
+The alternate zero and +/-5 mrad charts preserve centers, VolumeID and
+GeometryIdentifier and agree with the corresponding active Global rotation
+on **both DD4hep and ACTS bases**. The initial probes are in
+`result/native_signed_tilt_20261024_01_audit/rz_chart_*/`; their independent
+verdict is `rz_chart_validation.json`. The separate component-identity probe
+is solely a parent-frame diagnostic, not a contained physical closure input.
+Only the zero chart and this pure-Rz subgroup are accepted. Rx/Ry combinations,
+arbitrary Euler decompositions and unsupported charts are rejected.
+
+`rotate_component` composes the selected SO(3) increment before serializing
+this restricted chart. Real-surface finite differences subsequently verify it
+at +/-1e-4, 1e-5 and 1e-6 rad around both nominal and corrected poses. The
+XML whitelist permits only the L1 module reference/clone and the three L1
+rotation attributes required by this equivalent chart; all unrelated
+attributes, shapes, materials, segmentation, envelopes and other layers are
+compared exactly. Actual eight-corner containment is checked against the
+unchanged module box and layer cylinder. The sensitive-center pivot, VolumeID
+272631839 and GeometryIdentifier 216173056991691039 remain fixed.
+
+The verified physical migration is unchanged: legacy +Rx -> native -Ry,
+legacy +Ry -> native -Rz, and legacy +Rz -> native +Rx. Thus negative native
+Ry and Rz test the physically mapped legacy-positive directions. A valid
+one-axis chart is not a general SO(3) serializer.
+
+### Prospective inference gates and beam
+
+The declared tilt injections are +/-5 mrad. Gates were declared before fitting:
+full profiled design rank, diagonal-scaled condition below 100, formal angular
+sigma below 1 mrad, recovery within five initial unscaled nominal sigmas,
+post-correction update below one quarter of that initial sigma, original pose
+and ID tolerances, and at least N/32 nontrivially changed L1 channel IDs.
+Existing Rx and translation gates were not relaxed. Geometry containment is
+an additional hard requirement, including derivative perturbations.
+
+The native Rz uncertainty, with Y/Z/Rx/Ry also profiled as diagnostic columns,
+is 56.273 mrad for the narrow32 cohort, 3.426 mrad for broad64, and 0.814 mrad
+for broad1024. Narrow32 is full rank but cannot resolve a 5 mrad tilt. Its
+actual Rz run was refused before Pede steering was created:
+`result/native_signed_tilt_weak_rz32_20261024_01/driver/`.
+The refused design has sigma 56.273 mrad, with all output/logs preserved.
+No tighter covariance, seed constraint or Pede steering change was used.
+
+The beam remains the previously declared bounded uniform recipe: intercepts
+Y +/-12 mm and Z +/-10 mm at X=250 mm; independent slopes dy/dx and dz/dx
+within +/-0.08. All trajectories fit inside the real seven-plane envelope.
+Seeds 2026102402, 2026102403 and 2026102404 are explicitly recorded. The first
+is the established comparison cohort; the latter two are newly generated
+independent cohorts. Each contains 1024 rays. Four sign/axis fixtures within
+a seed share those rays intentionally; they are **three independent cohorts,
+not twelve independent experiments**. Pixel pitch, original uncertainties,
+geometry and fit settings remain fixed. Inputs contain only EventHeader and
+immutable quantized TelescopeChannels. This is a material-free synthetic
+geometric test, not migrated Geant4 physics or statistical coverage validation.
+
+Read-only actual weighted ACTS-row studies are in the audit directory's
+`design_narrow32/`, `design_broad64/` and `rz_observability.json`. They include
+sample-size prefixes, slope/impact-position splits, all translation and
+rotation correlations, and bounded-pixel quantization effects. Truth is used
+only by the generator and offline accuracy evaluation, never to infer the
+corrections.
+
+### Baseline signed closures (seed 2026102402)
+
+| Mode | Injection [mrad] | Initial Pede [mrad] | Formal sigma [mrad] | Post-update [urad] | ACTS chi2/stored-NDF before -> after |
+|---|---:|---:|---:|---:|---:|
+| Positive Ry, preserved/replayed | +5 | +3.8135 | 0.91215 | -14.044 | 0.602587 -> 0.600885 |
+| Negative Ry | -5 | -5.8213 | 0.91213 | -48.826 | 0.603172 -> 0.599151 |
+| Negative Rz, legacy-positive direction | -5 | -3.5964 | 0.79965 | +12.239 | 0.599422 -> 0.597452 |
+| Positive Rz | +5 | +5.7680 | 0.79966 | -5.112 | 0.602704 -> 0.597618 |
+
+Each case passes full actual-channel, native JANA/ACTS, official Mille/Pede,
+physical XML correction and fresh corrected reconstruction closure. All accept
+1024 tracks, five measurements, zero outliers and two holes. Initial Pede
+rank is one; the diagnostic nuisance matrix has rank five, while the optional
+six-column correlation study is not an enabled fit. Initial/final Pede statuses
+and rejected-fit diagnostics are retained in each validation report.
+The negative Ry, negative Rz and positive Rz physical fixtures change 55, 62
+and 77 L1 channel IDs, respectively. The same input-file checksum and channel
+tuples are verified across nominal and corrected reconstruction. Full matrices
+and poses, not XML angle names or chi2 alone, establish physical correction.
+
+The native stages remain channel-based official Hit Reconstruction -> adapted
+official Measurement conversion -> official CKF/smoothing -> unchanged native
+ACTS derivative/transport rows -> official Mille Binary/Pede -> restricted
+physical SO(3) XML update -> fresh installed ActsGeometryProvider/SurfaceMap
+and reconstruction. No provider, navigator, fitter or material map was added.
+
+### Current capability table
+
+| Native parameters | Sensors | Enabled scope | Actual demonstrated closure | Remaining restriction |
+|---|---|---|---|---|
+| Global Y translations | L1 and L2 | `l1_l2_y`, labels 700102/700202 together | 32-track +0.150/+0.200 mm baseline | No arbitrary translation subset or native X/Z mode |
+| In-plane Global Rx | L1 | `l1_rx`, `l1_rx_negative`, label 700104 | Both +/-1.8 mrad | L1 only; pure-Rx chart |
+| Y1/Rx1/Y2 | L1/L2 | `l1_y_rx_l2_y` | Existing +Y/+Rx/+Y three-parameter fixture | No simultaneous multiple rotation axes |
+| Tilt Global Ry | L1 | `l1_ry`, `l1_ry_negative`, label 700105 | Both +/-5 mrad | Pure-Ry chart, observability and containment gates |
+| Tilt Global Rz | L1 | `l1_rz_negative`, `l1_rz`, label 700106 | Both -/+5 mrad | Alternate pure-Rz chart, same gates |
+| X/Z, other-layer rotations | Numerical ACTS columns available | No native fit/correction scope | None claimed | Derivative implementation alone is not enabled closure |
+| Coupled rotations, arbitrary six-DOF | Legacy implementation retained | Not enabled natively | None claimed | Requires general validated SO(3) serializer and inference gates |
+| Sequential/iterative Controller | Legacy stages retained | No native Controller migration | Legacy tests preserved | Native test driver is not an online Controller |
+| Geant4/endcap RawHit input | Legacy workflow retained | Native synthetic radial channels only | Historical 99-track regression retained | No silent endcap-to-radial reinterpretation |
+| Uncertainty coverage | Formal original-error model | Not statistically certified | Handful of seeds only | Requires adequately powered independent ensemble |
+
+This restores both independent physical legacy tilt axes in the native frame
+at the stated bounded synthetic scope. It does not establish full legacy
+rotation, multi-layer, six-DOF, material, Geant4 or Controller parity. Original
+failed fixed-ordered Rx/Ry finite-rotation evidence remains failed historical
+evidence; no scientific assertion was weakened to relabel it as success.
+
+### Independent-cohort diagnostic results
+
+All 12 planned fixtures passed: three independent 1024-ray cohorts per mode.
+The sign/axis variants within each seed are paired, not independent trials.
+No broad-cohort failure was omitted. The separate narrow32 sensitivity refusal
+is reported above and was never sent to Pede.
+
+Error below is **injected minus fitted**; Pull is **(fitted minus injected)/sigma**.
+The sigma is the initial unscaled covariance result, checked against the actual
+Pede printed nominal error. Post-updates are not combined as independent fits.
+
+| Mode | Seed | Injection [mrad] | Fit [mrad] | Truth-minus-fit [mrad] | Nominal sigma [mrad] | Pull | Tracks |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| l1_ry | 2026102402 | +5.0 | +3.8135 | +1.1865 | 0.91215 | -1.301 | 1024 |
+| l1_ry | 2026102403 | +5.0 | +5.1314 | -0.1314 | 0.87768 | +0.150 | 1024 |
+| l1_ry | 2026102404 | +5.0 | +3.9707 | +1.0293 | 0.91740 | -1.122 | 1024 |
+| l1_ry_negative | 2026102402 | -5.0 | -5.8213 | +0.8213 | 0.91213 | -0.900 | 1024 |
+| l1_ry_negative | 2026102403 | -5.0 | -4.2160 | -0.7840 | 0.87768 | +0.893 | 1024 |
+| l1_ry_negative | 2026102404 | -5.0 | -5.5136 | +0.5136 | 0.91740 | -0.560 | 1024 |
+| l1_rz | 2026102402 | +5.0 | +5.7680 | -0.7680 | 0.79966 | +0.960 | 1024 |
+| l1_rz | 2026102403 | +5.0 | +5.0928 | -0.0928 | 0.78074 | +0.119 | 1024 |
+| l1_rz | 2026102404 | +5.0 | +5.4945 | -0.4945 | 0.78053 | +0.634 | 1024 |
+| l1_rz_negative | 2026102402 | -5.0 | -3.5964 | -1.4036 | 0.79965 | +1.755 | 1024 |
+| l1_rz_negative | 2026102403 | -5.0 | -4.6456 | -0.3544 | 0.78075 | +0.454 | 1024 |
+| l1_rz_negative | 2026102404 | -5.0 | -4.3078 | -0.6922 | 0.78052 | +0.887 | 1024 |
+
+| Mode | Mean truth-minus-fit [mrad] | Sample SD [mrad] | Mean nominal sigma [mrad] | Pull mean | Pull sample SD |
+|---|---:|---:|---:|---:|---:|
+| l1_ry | +0.6948 | 0.7198 | 0.9024 | -0.758 | 0.791 |
+| l1_ry_negative | +0.1836 | 0.8520 | 0.9024 | -0.189 | 0.953 |
+| l1_rz_negative | -0.8167 | 0.5356 | 0.7870 | +1.032 | 0.663 |
+| l1_rz | -0.4518 | 0.3396 | 0.7870 | +0.571 | 0.424 |
+
+These are three-point sample moments (only two degrees of freedom for each
+sample variance), not calibrated uncertainty or coverage estimates. Both Rz
+signs have positive initial pulls in these three paired cohorts. This is a
+trend worth checking with more independent seeds; the present sample cannot
+separate a systematic bias from finite quantization/sample fluctuations.
+Neither errors, priors, selection nor steering were changed to improve it.
+No larger campaign was launched. The next statistical study should keep the
+same recipe and inferential settings and use a prospectively chosen, adequately
+powered number of independent seeds.
+
+Each row's full generated slope range/RMS, seed, ray-cohort hash, immutable
+channel checksum, initial Pede status, post-update, accepted count and nominal/
+corrected ACTS chi2 are in
+`result/native_signed_tilt_20261024_01_audit/cohort_summary/output/report.json`.
+`cohorts.root` next to it contains eight TBrowser-readable estimate/Pull objects;
+ROOT batch read-back verifies all graph point and histogram entry counts.
+Per-run `validation/rotation.root` preserves the full chi2 and residual plots.
+No interactive TBrowser GUI test is claimed.
+
+### Regression and preservation results
+
+The fresh Plugin build and all five established modes passed. For two-Y,
+positive Rx, negative Rx, combined Y/Rx/Y and positive Ry, the nominal/Truth/
+corrected XML and nominal/corrected/control Mille binaries are **byte-identical**
+to their existing successful references. Evidence:
+`result/native_signed_tilt_20261024_01_audit/baseline_identity.json`.
+The original Y result remains +149.14/+203.18 um and ACTS
+37.16731567382813 -> 0.6908491410315036; the protected positive Ry replay
+remains +3.8135 mrad and 0.6025865641314022 -> 0.6008848699318217.
+
+The **18-command** consolidated suite passed, including fresh standalone
+Geometry/CKF builds, installed-component one-event reconstruction, actual ACTS
+finite differences, native/legacy Mille equivalence, official mathematical Pede
+fixture, **51 unit tests** (49 existing plus two new Rz chart tests), safety and
+preservation. Logs:
+`result/native_signed_tilt_regression_l1_l2_y_20261024_01/signed_tilt_regressions/`.
+Preservation confirms 221 baseline records and 2046 relocated files unchanged,
+including the protected electron-hypothesis implementation. The historical
+99-track workflow passed in `result/native_signed_tilt_legacy_20261024_01/`,
+retaining +198.75 um correction, -199.571 -> -0.821 um residual and
+45.592 -> 1.981 ACTS chi2/stored-NDF.
+
+Pinned upstream patch reproduction regenerated all nine local adaptation
+patches byte-for-byte, with no changes to the external EICrecon checkout.
+Actual official `inspectMilleBinary` logs for negative Ry and both Rz signs
+are in the audit directory's `decode_l1_*/` stages. Every closure independently
+checks decoded native coefficients against the actual covariance-whitened ACTS
+column. Each signed tilt initial/corrected finite-difference gate checks 3072
+vectors. The primary Rz maximum error is 1.106e-8 mm/rad, well below the
+unchanged 2e-5 gate. Full matrices, center pivots, bounds and ID preservation
+are checked at each perturbation, not just at the nominal pose.
+
+All 12 signed-cohort initial/post/control Pede fits ended normally (status 0),
+with zero rejected local fits. Pede warnings/logs remain unsuppressed and
+unmodified. No error rescaling was applied. Unsuccessful developmental test
+setup and the expected weak-design refusal do not represent successful physics
+runs; existing partial and historical outputs remain preserved.
+
+### Changed source and reproduction
+
+- `TelescopeMille.cc::Init/Process`: explicit label 700106/Global Rz whitelist
+  and selection of the unchanged ACTS rotation column 5. No new equations.
+- `rotation.py::axis/rotation_label/labels/config_name/injected_rotation`:
+  explicit signed Ry/Rz fixtures and scope routing.
+- `rotation.py::rotate_component/pose_checks/physical_derivatives/check`:
+  pure-Rz chart, actual three-dimensional containment, exact XML whitelist,
+  sign-specific real-Geometry finite differences and closure checks.
+- `closure.py::geometry_step/solve/main`: signed modes and the actual chosen
+  tilt's pre-Pede sensitivity guard. Failed-design evidence is saved before
+  refusal. Existing fit settings and numerical acceptance thresholds remain.
+- `observability.py::analyze`: adds Rz information to slope/position subsets.
+- `cohort_summary.py`: offline independent-cohort accounting and ROOT export;
+  includes any valid initial fits even if later closure fails, rather than
+  conditioning initial-fit statistics on closure success.
+- `l1_global_rz.json`, `tilt_beam_seed3.json`, `tilt_beam_seed4.json`: explicit
+  parameter scope and two additional independent seeds, same angular recipe.
+- `test_native_rotation_scope.py`: Rz chart/composition tests, all cross-axis
+  composition refusals, and invalid-axis safety with the new supported axis.
+
+The following are the executed build/run interfaces. Set new output paths when
+repeating them: all existing stages and result directories must remain immutable.
+
+```bash
+export TESTBENCH_CONTAINER=sweet_mahavira
+bash environment/run.sh cmake -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_signed_tilt_20261024_01 \
+  -DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON
+bash environment/run.sh cmake --build /work/build/native_signed_tilt_20261024_01 -j2
+
+# In this order: negative Ry, legacy-positive-direction Rz, opposite Rz.
+for mode in l1_ry_negative l1_rz_negative l1_rz; do
+  bash environment/run.sh python3 validation/telescope_closure/closure.py \
+    --build build/native_signed_tilt_20261024_01 \
+    --result result/native_signed_tilt_primary_${mode}_20261024_01 \
+    --events 1024 --beam validation/telescope_alignment/tilt_beam_validation.json \
+    --chi2-cut 1000 --mode "$mode" --step all
+done
+# Each --step is also independently runnable, in order:
+# geometry data nominal solve correct corrected postsolve control controlsolve check
+# solve/postsolve include actual nominal/corrected Geometry finite differences.
+
+for seed in 3 4; do
+  for mode in l1_ry l1_ry_negative l1_rz_negative l1_rz; do
+    bash environment/run.sh python3 validation/telescope_closure/closure.py \
+      --build build/native_signed_tilt_20261024_01 \
+      --result result/native_signed_tilt_seed${seed}_${mode}_20261024_01 \
+      --events 1024 --beam validation/telescope_alignment/tilt_beam_seed${seed}.json \
+      --chi2-cut 1000 --mode "$mode" --step all
+  done
+done
+# The actual cohort drivers additionally retain stdout and exit codes even on
+# failure; see each run's driver/command.json, stdout.log and exit.json.
+
+for mode in l1_l2_y l1_rx l1_rx_negative l1_y_rx_l2_y; do
+  bash environment/run.sh python3 validation/telescope_closure/closure.py \
+    --build build/native_signed_tilt_20261024_01 \
+    --result result/native_signed_tilt_regression_${mode}_20261024_01 \
+    --events 32 --chi2-cut 1000 --mode "$mode" --step all
+done
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/native_signed_tilt_20261024_01 \
+  --result result/native_signed_tilt_regression_l1_ry_20261024_01 \
+  --events 1024 --beam validation/telescope_alignment/tilt_beam_validation.json \
+  --chi2-cut 1000 --mode l1_ry --step all
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/native_signed_tilt_20261024_01 \
+  --result result/native_signed_tilt_regression_l1_l2_y_20261024_01 \
+  --events 32 --chi2-cut 1000 --step regressions --validation-name signed_tilt
+bash environment/run.sh bash validation/run_regression.sh \
+  /work/result/native_signed_tilt_legacy_20261024_01 \
+  /work/build/telescope_consolidation_legacy_20261024_01
+
+# This one must refuse at solve, before Pede:
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/native_signed_tilt_20261024_01 \
+  --result result/native_signed_tilt_weak_rz32_20261024_01 \
+  --events 32 --chi2-cut 1000 --mode l1_rz_negative --step all
+
+bash environment/run.sh python3 validation/telescope_closure/observability.py \
+  --native result/native_tilt_broad1024_20261024_01/control/mille.json \
+  --output result/native_signed_tilt_20261024_01_audit/rz_observability.json
+bash environment/run.sh python3 -m unittest discover -s validation -p 'test_*.py'
+bash environment/run.sh python3 validation/check_safety.py
+python3 validation/verify_preservation.py
+
+# Read-only external source audit; use the pinned local checkout, never edit it.
+python3 validation/telescope_factories/upstream_diff.py \
+  --source /Users/tkumaoka/eic/EICrecon \
+  --output result/native_signed_tilt_20261024_01_audit/upstream_diffs
+# Compare every generated patch with the same filename under:
+# localDetEICrecon/experimental/telescope/upstream_diffs/
+```
+
+To reproduce the cohort summary, run
+`python3 validation/telescope_closure/cohort_summary.py --runs RUN1 ... RUN12 --output-dir NEW_RESULT_DIR`
+in the container. The exact 12 paths, order and output location are recorded in
+`result/native_signed_tilt_20261024_01_audit/cohort_summary/command.json`.
+The four seed-2026102402 inputs are the positive Ry regression and three primary
+signed runs; the other eight are the seed3/seed4 runs above. Repeated runs with
+the same seed within one mode are rejected as independent observations.
+All datasets, ROOT outputs and detailed logs remain local and excluded from Git.
+Only maintained source, configurations, tests and this report belong in the
+milestone commit. No push, merge, production activation or legacy removal occurs.
