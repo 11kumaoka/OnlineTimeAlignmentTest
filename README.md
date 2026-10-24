@@ -168,3 +168,9 @@ The explicit SiMAPS `l3_six_dof` and `l1_l2_l3_six_dof` prototypes extend the sa
 Geometry uses the maintained local DD4hep-placement → manual ACTS PlaneSurface path. The optional Blueprint implementation and its reconstruction selector have been removed. The [legacy endcap experiment](docs/LEGACY_ENDCAP_SIMPLIFICATION.md) directly exercises the installed EICrecon provider with a private exact-version converter; relaxing the paired-endcap guard still fails during layer construction. No replacement provider is enabled. The [earlier integration audit](docs/ACTS_GEOMETRY_INTEGRATION.md) remains a historical record with preserved results.
 
 For a code-level handoff, see the [source-based architecture and workflow guide](docs/ARCHITECTURE_AND_WORKFLOW_GUIDE.md), including component provenance, independent stages, alignment equations and remaining validation limits.
+
+An isolated [source-based barrel reconstruction milestone](docs/BARREL_FACTORY_RECONSTRUCTION.md)
+now runs the installed EICrecon services, adapted official measurement/CKF
+modules, and unchanged ActsToTracks through real JANA factories. It reproduces
+one synthetic, material-free radial track; it does not replace the production
+alignment workflow or claim RawHit, material, or alignment closure validation.
