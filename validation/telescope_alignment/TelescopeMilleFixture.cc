@@ -12,7 +12,7 @@
 #include <iostream>
 using namespace eicrecon::telescope;
 int main(int argc,char** argv) {
-  if(argc!=4 || std::filesystem::exists(argv[3])) {std::cerr<<"Usage: BarrelMilleFixture XML NATIVE_REPORT NEW_OUTPUT_DIRECTORY\n";return 64;}
+  if(argc!=4 || std::filesystem::exists(argv[3])) {std::cerr<<"Usage: TelescopeMilleFixture XML NATIVE_REPORT NEW_OUTPUT_DIRECTORY\n";return 64;}
   try {
     const std::filesystem::path output(argv[3]);
     if(!std::filesystem::create_directory(output))throw std::runtime_error("Output must be new");

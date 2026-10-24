@@ -1,4 +1,4 @@
-"""Check independent barrel Geometry gates from probe reports (read-only)."""
+"""Check independent barrel-compatible telescope Geometry gates from probe reports (read-only)."""
 import argparse
 import itertools
 import json

@@ -1,4 +1,4 @@
-"""Create independent physical barrel fixtures; never modifies canonical Geometry.
+"""Create independent barrel-compatible telescope fixtures; never modifies canonical Geometry.
 
 Run from the repository root. Only writes a new child directory of result/.
 The installed DD4hep_SiTrackerBarrel constructor is used without changes.

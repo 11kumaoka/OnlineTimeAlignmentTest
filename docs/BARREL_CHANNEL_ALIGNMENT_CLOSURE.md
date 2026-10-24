@@ -48,7 +48,7 @@ Its one-event reconstruction/read-back, derivative evidence, historical writer
 comparison, 16-ray mathematical fixture, 46 tests and preservation checks passed.
 At the time of this report these changes were uncommitted. They are now preserved
 in local commit `288e80e934b0acb09ef8eb7001398baea565dcf6`.
-See the [entry-point guide](BARREL_ALIGNMENT_USER_GUIDE.md) and
+See the [entry-point guide](TELESCOPE_ALIGNMENT_USER_GUIDE.md) and
 [new reproduction record](BARREL_ALIGNMENT_VALIDATION.md). Nothing was pushed or merged.
 
 The fixed Docker environment remains EICrecon

@@ -1,5 +1,5 @@
 --- src/algorithms/tracking/CKFTracking.cc
-+++ localDetEICrecon/experimental/barrel/algorithms/tracking/CKFTracking.cc
++++ localDetEICrecon/experimental/telescope/algorithms/tracking/CKFTracking.cc
 @@ -67,8 +67,8 @@
  // IWYU pragma: no_include <Acts/Utilities/detail/ContextType.hpp>
  // IWYU pragma: no_include <Acts/Utilities/detail/ContainerIterator.hpp>

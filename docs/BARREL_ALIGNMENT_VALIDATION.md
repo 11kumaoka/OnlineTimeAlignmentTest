@@ -2,7 +2,7 @@
 
 対象 repository は `11kumaoka/OnlineTimeAlignmentTest`、branch は
 `feature/upstream-acts-geometry`。作業識別子は `barrel_onboarding_20261023_01`。
-本記録の commands は [user guide](BARREL_ALIGNMENT_USER_GUIDE.md) のものを実行しました。
+本記録の commands は [user guide](TELESCOPE_ALIGNMENT_USER_GUIDE.md) のものを実行しました。
 source の物理/再構成/誤差/selection model は変更していません。
 
 ## 実装確定前のレビュー

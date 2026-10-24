@@ -1,4 +1,4 @@
-// DD4hep XML initialization hook for the experimental physical barrel fixture.
+// DD4hep XML initialization hook for the temporary barrel-compatible telescope representation.
 // This supplies metadata only; it constructs no ACTS objects or detector volumes.
 #include <DD4hep/Detector.h>
 #include <DD4hep/DetType.h>

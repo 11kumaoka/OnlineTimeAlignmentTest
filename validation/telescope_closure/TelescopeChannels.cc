@@ -14,7 +14,7 @@
 #include <iostream>
 #include <cmath>
 int main(int argc,char** argv) {
-  if(argc!=4 || std::filesystem::exists(argv[3])) {std::cerr<<"Usage: BarrelChannels XML EVENT_COUNT_OR_ZERO_AUDIT NEW_JSON\n";return 64;}
+  if(argc!=4 || std::filesystem::exists(argv[3])) {std::cerr<<"Usage: TelescopeChannels XML EVENT_COUNT_OR_ZERO_AUDIT NEW_JSON\n";return 64;}
   try {
     const int count=std::stoi(argv[2]);if(count<0 || count>64)throw std::runtime_error("Expected 0..64 events");
     auto& detector=dd4hep::Detector::getInstance();detector.fromXML(argv[1]);detector.apply("DD4hepVolumeManager",0,nullptr);

@@ -1,5 +1,5 @@
 --- src/algorithms/tracking/TrackerMeasurementFromHits.h
-+++ localDetEICrecon/experimental/barrel/algorithms/tracking/TrackerMeasurementFromHits.h
++++ localDetEICrecon/experimental/telescope/algorithms/tracking/TrackerMeasurementFromHits.h
 @@ -18,7 +18,7 @@
  #include "algorithms/interfaces/WithPodConfig.h"
  #include "algorithms/tracking/ActsGeometryProvider.h"

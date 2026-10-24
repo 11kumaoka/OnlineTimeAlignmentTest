@@ -12,7 +12,7 @@
 using namespace eicrecon::telescope;
 int main(int argc,char** argv) {
   if(argc!=4 || std::filesystem::exists(argv[3])) {
-    std::cerr<<"Usage: BarrelMilleDerivatives BARREL_XML NATIVE_AUDIT_OR_geometry-center NEW_REPORT_JSON\n";return 64;
+    std::cerr<<"Usage: TelescopeMilleDerivatives BARREL_XML NATIVE_AUDIT_OR_geometry-center NEW_REPORT_JSON\n";return 64;
   }
   try {
     auto& detector=dd4hep::Detector::getInstance();detector.fromXML(argv[1]);

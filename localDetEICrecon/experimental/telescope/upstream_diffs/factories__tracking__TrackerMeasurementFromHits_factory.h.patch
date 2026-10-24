@@ -1,5 +1,5 @@
 --- src/factories/tracking/TrackerMeasurementFromHits_factory.h
-+++ localDetEICrecon/experimental/barrel/factories/tracking/TrackerMeasurementFromHits_factory.h
++++ localDetEICrecon/experimental/telescope/factories/tracking/TrackerMeasurementFromHits_factory.h
 @@ -12,18 +12,18 @@
  #include <vector>
  

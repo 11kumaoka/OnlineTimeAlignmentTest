@@ -37,7 +37,7 @@ void save(const char* name,const Json& report) {
   ::close(fd);
 }
 int main(int argc,char** argv) {
-  if(argc!=3) {std::cerr<<"Usage: BarrelOneTrack BARREL_XML NEW_OUTPUT_JSON\n";return 64;}
+  if(argc!=3) {std::cerr<<"Usage: TelescopeOneTrack BARREL_XML NEW_OUTPUT_JSON\n";return 64;}
   if(std::filesystem::exists(argv[2])) {std::cerr<<"Refusing existing output\n";return 64;}
   Json report={{"passed",false},{"material_free",true},{"synthetic_input",true},
     {"simulation_or_old_rawhits_used",false},{"alignment_performed",false},
@@ -74,7 +74,7 @@ int main(int argc,char** argv) {
     ActsExamples::GeometryIdMultiset<ActsExamples::IndexSourceLink> links;
     std::vector<Acts::Vector3> points;
     std::set<uint64_t> volumeIds,geometryIds;
-    // Generate fresh barrel pixel hits by quantizing a fixed straight ray.
+    // Generate fresh telescope pixel hits by quantizing a fixed straight ray.
     // Only SiMAPS X/Z is a validated two-coordinate readout in this fixture.
     for(int layer=0;layer<5;++layer) {
       const uint64_t base=31ULL|(uint64_t(layer)<<11)|(1ULL<<22)|(1ULL<<28);

@@ -1,5 +1,5 @@
 --- src/algorithms/tracking/CKFTracking.h
-+++ localDetEICrecon/experimental/barrel/algorithms/tracking/CKFTracking.h
++++ localDetEICrecon/experimental/telescope/algorithms/tracking/CKFTracking.h
 @@ -21,11 +21,12 @@
  #include <vector>
  

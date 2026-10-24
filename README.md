@@ -1,9 +1,10 @@
 # Local Detector Alignment Research
 
-For the **experimental EICrecon-style barrel alignment**, start with the
-[32-track alignment user guide](docs/BARREL_ALIGNMENT_USER_GUIDE.md), then the
-[source/architecture map](docs/BARREL_ALIGNMENT_CODE_MAP.md) and
+For the **experimental EICrecon-style telescope alignment**, start with the
+[32-track alignment user guide](docs/TELESCOPE_ALIGNMENT_USER_GUIDE.md), then the
+[source/architecture map](docs/TELESCOPE_ALIGNMENT_CODE_MAP.md) and
 [reproduction record](docs/BARREL_ALIGNMENT_VALIDATION.md).
+The [telescope naming validation](docs/TELESCOPE_RENAME_VALIDATION.md) records the current source moves and equivalent closure results.
 The original endcap/BeamTestReco workflow below remains separately supported.
 
 Independent DD4hep/EICrecon research tasks: Detector Geometry → Simulation →
@@ -175,7 +176,7 @@ Geometry uses the maintained local DD4hep-placement → manual ACTS PlaneSurface
 
 For a code-level handoff, see the [source-based architecture and workflow guide](docs/ARCHITECTURE_AND_WORKFLOW_GUIDE.md), including component provenance, independent stages, alignment equations and remaining validation limits.
 
-An isolated [source-based barrel reconstruction milestone](docs/BARREL_FACTORY_RECONSTRUCTION.md)
+An isolated [source-based telescope reconstruction milestone](docs/BARREL_FACTORY_RECONSTRUCTION.md)
 now runs the installed EICrecon services, adapted official measurement/CKF
 modules, and unchanged ActsToTracks through real JANA factories. It reproduces
 one synthetic, material-free radial track; it does not replace the production

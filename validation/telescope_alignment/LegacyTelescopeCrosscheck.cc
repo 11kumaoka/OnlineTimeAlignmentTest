@@ -6,7 +6,7 @@
 #include <iostream>
 #include <cmath>
 int main(int argc,char** argv) {
-  if(argc!=3 || std::filesystem::exists(argv[2])) {std::cerr<<"Usage: LegacyBarrelCrosscheck NATIVE_REPORT NEW_MILLE_DAT\n";return 64;}
+  if(argc!=3 || std::filesystem::exists(argv[2])) {std::cerr<<"Usage: LegacyTelescopeCrosscheck NATIVE_REPORT NEW_MILLE_DAT\n";return 64;}
   try {
     const auto report=nlohmann::json::parse(std::ifstream(argv[1]));
     std::array<local_eicrecon::BeamTestMilleWriter::Hit2D,5> hits;

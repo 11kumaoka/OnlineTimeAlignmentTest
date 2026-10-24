@@ -15,9 +15,9 @@ REPO=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(REPO))
 from research_common import execute,stage,done,require,write_json,digest
 from geometry.transforms import matvec,transpose
-from validation.barrel_geometry.prepare import prepare
+from validation.telescope_geometry.prepare import prepare
 from alignment.align import read_pede
-from validation.barrel_alignment.check import records,profile
+from validation.telescope_alignment.check import records,profile
 
 LABELS=[700102,700202]
 MODULE_TO_GLOBAL=((0.,0.,1.),(-1.,0.,0.),(0.,-1.,0.))
@@ -109,7 +109,7 @@ def data_step(args):
     require(args.result,'geometry');p=stage(args.result,'data')
     for name,xml in [('shifted',args.result/'geometry/truth.xml'),('control',args.result/'geometry/fixtures/nominal.xml')]:
         q=stage(p,name)
-        execute([args.build/'BarrelChannels',xml,args.events,q/'channels_truth.json'],q,env=environment(args.build))
+        execute([args.build/'TelescopeChannels',xml,args.events,q/'channels_truth.json'],q,env=environment(args.build))
         info=pack(q/'channels_truth.json',p/(name+'.root'))
         write_json(p/(name+'_input.json'),info)
     done(p,events=args.events)
@@ -124,7 +124,7 @@ def reconstruct(args,name,geometry,input_name,limit=None,cut=None):
         if (cut or 15.)!=initial:raise ValueError('Closure passes must use the same measurement-selection cut')
     p=stage(args.result,name);env=environment(args.build)
     gate=stage(p,'gate')
-    execute([args.build/'BarrelMilleDerivatives',geometry,'geometry-center',gate/'derivatives.json'],gate,env=env)
+    execute([args.build/'TelescopeMilleDerivatives',geometry,'geometry-center',gate/'derivatives.json'],gate,env=env)
     source=args.result/'data'/f'{input_name}.root';before=digest(source)
     # This invocation has no Truth trajectories, placements or MC collections.
     command=['eicrecon','-Pplugins_to_ignore=default',
@@ -133,7 +133,7 @@ def reconstruct(args,name,geometry,input_name,limit=None,cut=None):
       '-Pacts:MaterialMap=','-PTelescopeTracking:channelInput=true','-PTelescopeAudit:multipleEvents=true',
       '-PTelescopeMille:multipleEvents=true',f'-PTelescopeAudit:output={p}/audit.json',
       f'-PTelescopeMille:output={p}/mille.dat',f'-PTelescopeMille:report={p}/mille.json',
-      f'-PTelescopeMille:config={REPO}/validation/barrel_alignment/l1_l2_global_y.json',
+      f'-PTelescopeMille:config={REPO}/validation/telescope_alignment/l1_l2_global_y.json',
       f'-PTelescopeMille:derivativeGate={gate}/derivatives.json',f'-Ppodio:output_file={p}/reco.root',
       '-Ppodio:output_collections=EventHeader,TelescopeChannels,TelescopeHits,TelescopeHitAssociations,TelescopeMeasurements,TelescopeSeeds,TelescopeSeedParameters,TelescopeTrajectories,TelescopeTrackParameters,TelescopeTracks,TelescopeTrackLinks,TelescopeTrackAssociations']
     if cut is not None:command.append(f'-PTelescopeTracking:TelescopeCKF:Chi2CutOff={cut}')
@@ -182,7 +182,7 @@ def correct(args):
     write_json(p/'provenance.json',{'parent_sha256':digest(nominal),'pede_sha256':digest(args.result/'solve/millepede.res'),
       'physical_global_y_mm':shifts,'truth_used':False,'activated':False})
     q=stage(p,'geometry_audit')
-    execute([args.build/'BarrelChannels',p/'corrected.xml','0',q/'geometry.json'],q,env=environment(args.build))
+    execute([args.build/'TelescopeChannels',p/'corrected.xml','0',q/'geometry.json'],q,env=environment(args.build))
     nominal_audit=json.loads((args.result/'data/control/channels_truth.json').read_text())['sensors']
     corrected=json.loads((q/'geometry.json').read_text())['sensors']
     for before,after in zip(nominal_audit,corrected):
@@ -399,17 +399,17 @@ def regressions(args):
     def command(name,argv,cwd=None,selected_env=None):
         q=stage(p,name);execute(argv,q,cwd=cwd,env=selected_env or env);return q
     builds={}
-    for name,source in [('geometry','barrel_geometry'),('benchmark','barrel_one_track')]:
+    for name,source in [('geometry','telescope_geometry'),('benchmark','telescope_one_track')]:
         build=args.build.parent/(args.build.name+'_'+p.name+'_'+name)
         if build.exists():raise ValueError('Regression build must be new: '+str(build))
         command(name+'_configure',['cmake','-S',REPO/'validation'/source,'-B',build,'-DCMAKE_BUILD_TYPE=Release'])
         command(name+'_build',['cmake','--build',build,'-j2'])
         builds[name]=build
     geometry=args.result/'geometry/fixtures/nominal.xml'
-    command('geometry_probe',[builds['geometry']/'BarrelGeometryProbe',geometry,p/'geometry.json','official','none','nominal'],selected_env=environment(builds['geometry']))
-    command('geometry_check',[sys.executable,REPO/'validation/barrel_geometry/check.py','--report',p/'geometry.json','--fixture',geometry,'--integration'])
-    command('standalone',[builds['benchmark']/'BarrelOneTrack',geometry,p/'reference.json'],selected_env=environment(builds['benchmark']))
-    command('fixture_input',[sys.executable,REPO/'validation/barrel_factories/prepare.py','--output',p/'input.root'])
+    command('geometry_probe',[builds['geometry']/'TelescopeGeometryProbe',geometry,p/'geometry.json','official','none','nominal'],selected_env=environment(builds['geometry']))
+    command('geometry_check',[sys.executable,REPO/'validation/telescope_geometry/check.py','--report',p/'geometry.json','--fixture',geometry,'--integration'])
+    command('standalone',[builds['benchmark']/'TelescopeOneTrack',geometry,p/'reference.json'],selected_env=environment(builds['benchmark']))
+    command('fixture_input',[sys.executable,REPO/'validation/telescope_factories/prepare.py','--output',p/'input.root'])
     q=stage(p,'one_event')
     previous=json.loads((args.result/'nominal/command.json').read_text())['argv']
     argv=[]
@@ -423,15 +423,15 @@ def regressions(args):
         if argument.startswith('-Ppodio:output_collections='):argument=argument.replace(',TelescopeChannels','')
         argv.append(argument)
     argv.append(str(p/'input.root'));execute(argv,q,env=env)
-    command('one_event_check',[sys.executable,REPO/'validation/barrel_factories/check.py','--audit',q/'audit.json',
+    command('one_event_check',[sys.executable,REPO/'validation/telescope_factories/check.py','--audit',q/'audit.json',
       '--root',q/'reco.root','--reference',p/'reference.json','--output',p/'one_event_comparison.json'])
-    command('legacy_writer',[args.build/'LegacyBarrelCrosscheck',q/'mille.json',p/'legacy.dat'])
+    command('legacy_writer',[args.build/'LegacyTelescopeCrosscheck',q/'mille.json',p/'legacy.dat'])
     gate=args.result/'nominal/gate/derivatives.json'
-    command('native_legacy_check',[sys.executable,REPO/'validation/barrel_alignment/check.py','--native',q/'mille.dat',
+    command('native_legacy_check',[sys.executable,REPO/'validation/telescope_alignment/check.py','--native',q/'mille.dat',
       '--report',q/'mille.json','--legacy',p/'legacy.dat','--gate',gate,'--output',p/'native_legacy.json'])
-    command('mathematical_generate',[args.build/'BarrelMilleFixture',geometry,q/'mille.json',p/'mathematical_fixture'])
+    command('mathematical_generate',[args.build/'TelescopeMilleFixture',geometry,q/'mille.json',p/'mathematical_fixture'])
     command('mathematical_pede',[REPO/'external/install/bin/pede','pede.txt'],cwd=p/'mathematical_fixture')
-    command('mathematical_check',[sys.executable,REPO/'validation/barrel_alignment/check.py','--native',q/'mille.dat',
+    command('mathematical_check',[sys.executable,REPO/'validation/telescope_alignment/check.py','--native',q/'mille.dat',
       '--report',q/'mille.json','--legacy',p/'legacy.dat','--gate',gate,'--fixture',p/'mathematical_fixture','--output',p/'mathematical_comparison.json'])
     command('unit_tests',[sys.executable,'-m','unittest','discover','-s','validation','-p','test_*.py'],cwd=REPO)
     command('safety',[sys.executable,REPO/'validation/check_safety.py'])

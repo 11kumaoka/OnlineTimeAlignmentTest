@@ -1,5 +1,5 @@
 --- src/algorithms/tracking/TrackerMeasurementFromHits.cc
-+++ localDetEICrecon/experimental/barrel/algorithms/tracking/TrackerMeasurementFromHits.cc
++++ localDetEICrecon/experimental/telescope/algorithms/tracking/TrackerMeasurementFromHits.cc
 @@ -38,13 +38,17 @@
  #include <utility>
  #include <vector>

@@ -108,7 +108,7 @@ void writeExclusive(const std::filesystem::path& path,const Json& report) {
 
 int main(int argc,char** argv) {
   if(argc!=6) {
-    std::cerr<<"Usage: BarrelGeometryProbe XML OUTPUT_JSON local|official|official-elements none|discovery|discovery-and-flags nominal|translated|tilted\n";
+    std::cerr<<"Usage: TelescopeGeometryProbe XML OUTPUT_JSON local|official|official-elements none|discovery|discovery-and-flags nominal|translated|tilted\n";
     return 64;
   }
   const std::string provider=argv[3],metadata=argv[4],scenario=argv[5];

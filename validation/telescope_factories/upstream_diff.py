@@ -11,7 +11,7 @@ from pathlib import Path
 import subprocess
 
 REPO = Path(__file__).resolve().parents[2]
-LOCAL = REPO / 'localDetEICrecon/experimental/barrel'
+LOCAL = REPO / 'localDetEICrecon/experimental/telescope'
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -28,7 +28,7 @@ def main():
         current = (LOCAL / entry['local']).read_text()
         patch = ''.join(difflib.unified_diff(original.decode().splitlines(keepends=True),
             current.splitlines(keepends=True), fromfile=entry['upstream'],
-            tofile='localDetEICrecon/experimental/barrel/'+entry['local']))
+            tofile='localDetEICrecon/experimental/telescope/'+entry['local']))
         name = entry['local'].replace('/','__')+'.patch'
         (args.output / name).write_text(patch)
         print(entry['upstream'], 'modified' if patch else 'identical')
