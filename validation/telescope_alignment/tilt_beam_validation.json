@@ -1,0 +1,8 @@
+{
+  "recipe": "bounded_uniform_tilt_v1",
+  "seed": 2026102402,
+  "origin_half_y_mm": 12.0,
+  "origin_half_z_mm": 10.0,
+  "slope_half_range": 0.08,
+  "description": "Independent larger sensitivity and closure cohort; same bounded distribution as the 64-track pilot. Material-free geometric study only."
+}

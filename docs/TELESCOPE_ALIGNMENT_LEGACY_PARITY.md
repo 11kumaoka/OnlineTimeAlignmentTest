@@ -318,3 +318,269 @@ No general six-DOF, material-aware performance, unbiased estimator or calibrated
 uncertainty coverage is claimed. No candidate is activated and no legacy source
 is deleted. The next scientifically justified step is an independently scoped
 native mode, not automatic enablement of the six available derivative columns.
+
+## Signed Rx and native tilt milestone (2026-10-24)
+
+Starting commit: `27f2ed7f93349117457eb5ad235555e62d46a7de`. This adds
+one **experimental L1 Global Ry** scope, not arbitrary rotation or six-DOF
+alignment. The CKF, seed, particle hypothesis, calibrated errors, transport,
+`NativeMilleModel`, legacy correction, and Controller are unchanged.
+
+### Physical frame mapping, including sensor roll
+
+Actual VolumeManager contexts, rather than beam directions alone, give
+
+```
+Dlegacy = [ 0  0 -1 ]     Dnative = [ 0 -1  0 ]
+          [ 1  0  0 ]               [ 0  0  1 ]
+          [ 0 -1  0 ]               [-1  0  0 ]
+
+Q = Dnative Dlegacy^T = [ 0  0  1 ]
+                       [-1  0  0 ]
+                       [ 0 -1  0 ]
+p_native = Q p_legacy + (250,0,0) mm
+```
+
+The columns of D are the DD4hep sensitive X/Y/Z axes in world coordinates.
+The native parent module axes and nominal ACTS u/v/normal are the columns
+of Q: `(-Global Y, -Global Z, +Global X)`. Native sensitive X/Y/Z are
+`(-Global Z, -Global X, +Global Y)`. The native ACTS-to-sensitive matrix is
+`[[0,1,0],[0,0,-1],[-1,0,0]]`.
+
+For active right-handed rotations, `Q Exp(w) Q^T = Exp(Q w)`. Consequently:
+
+| Legacy physical rotation | Native physical rotation |
+|---|---|
+| +Rx (tilt) | -Ry (tilt) |
+| +Ry (tilt) | -Rz (tilt) |
+| +Rz (in-plane) | +Rx (in-plane) |
+
+All rotations use radians and the corresponding **current sensitive center**
+as pivot. The actual-pose conjugation check at both signs has maximum error
+`1.231e-16`. Source poses and checksums are in
+`result/native_tilt_observability_20261024_01/frame_mapping.json`.
+
+Do not confuse Q with the Writer-equivalence helper's comparison-only rotation
+`[[0,0,1],[0,1,0],[-1,0,0]]`. That helper deliberately permutes/signs the two
+transverse measurement coordinates. It preserves the beam direction but uses
+a different roll. It remains a valid mathematical comparison; it does not define
+the physical sensor-to-sensor migration. `prepare.py`'s recorded rotation agrees
+with the actual physical Q above.
+
+### Prospective gates and observability
+
+The new negative Rx uses the existing gates: recovery within five initial
+unscaled nominal sigmas, post-correction update below 20 urad, actual matrix
+agreement within `2e-12`, center agreement within `1e-9 mm`, and unchanged IDs.
+These are engineering gates, not coverage claims.
+
+Before the Ry fit, the declared fixture was **+5 mrad**, with required angular
+sensitivity below **1 mrad**, diagonal-scaled condition below 100, and full
+profiled rank. The corresponding prefit diagnostic includes Y/Z/Rx/Ry/Rz on
+L1 as nuisance/design columns; only Ry is written as a free Pede parameter.
+A separate six-column matrix checks correlations with longitudinal X as well;
+no six-DOF Pede configuration is enabled. Per-track four-parameter nuisance
+states are QR-profiled out using original calibrated covariance and actual
+ACTS derivatives. No seed-prior equations or smoothed-state covariance replace
+the measurement errors.
+
+| Actual nominal control cohort | Ry sigma [mrad], Y/Z/Rx/Rz also profiled | Rz sigma [mrad] | Scaled condition |
+|---|---:|---:|---:|
+| Original deterministic 32 | 64.774 | 56.273 | 2.061 |
+| Independent broad 64, seed 2026102401 | 3.808 | 3.426 | 2.317 |
+| Broad 1024, seed 2026102402 | 0.9452 | 0.8138 | 1.713 |
+
+The exact matrices and five-column values are recorded in `baseline32.json`.
+Full rank alone clearly did not resolve the original tilt. The bounded broad
+recipe draws independent uniform intercepts `Y in [-12,12]`, `Z in [-10,10] mm`
+at X=250 mm and slopes `dy/dx,dz/dx in [-0.08,0.08]`, using `mt19937_64` and
+explicit seeds. Even at X=550 mm the bounds are 36 mm in Y and 34 mm in Z,
+inside the real sensors. This is an intentionally divergent **synthetic,
+material-free geometric validation beam**, not a measured beam distribution
+or a Geant4 electron-physics performance claim. The baseline recipe is unchanged.
+
+In the independent 1024 cohort, prefix Ry sigmas at N=32/64/128/256/512/1024
+are 4.680/3.788/2.392/1.751/1.309/0.945 mrad. Prefixes share tracks and are
+not independent experiments. The higher-slope half supplies 3.39 times the
+Ry information per track of the lower half; the higher-impact-radius half
+supplies 3.49 times that of the lower half. With all three translations included,
+Ry sigma is 0.9456 mrad, scaled condition 1.718, and correlations with
+X/Y/Z are +0.0293/+0.0061/+0.2622. These diagnostics are in
+`all_translation_correlations.json` under the observability result directory.
+
+Pixel pitch remains 0.034641 mm, sigma approximately 0.010 mm. The coherent
+worst-case bounded-pixel error on Ry is about 94 mrad; it is **not** a statistical
+error bar. Uniformly distributed intercepts/slopes improve phase sampling but
+one realization does not establish independence of all quantization errors.
+The nominal unshifted control's five-column inferred Ry fluctuation is
+-1.391 mrad. No error rescaling was applied. A statistically validated uncertainty
+model requires an independent ensemble, beyond this milestone.
+
+### Restricted serializer and actual reconstruction closure
+
+`l1_ry` selects label **700105**, ACTS physical Global rotation column 4.
+Existing labels/modes remain unchanged. In the installed DD4hep constructor's
+verified component chart:
+
+- Pure Rx: `x=-pi/2`, `y=-pi/2-Rx`, `z=0`.
+- Pure Ry: `x=-pi/2-Ry`, `y=-pi/2`, `z=0`.
+
+Updates compute `Exp(dw_global) Rcurrent` and serialize only their separate
+one-axis subgroup. Coupled Rx/Ry, Rz serialization, nonfinite updates and
+unsupported parameter combinations are rejected. All eight sensitive-box
+corners are checked against the unchanged module and cylindrical layer
+envelopes for Ry. At +5 mrad the normal half extent is about 0.275 mm, below
+the existing 0.325 mm module half thickness. Centers, sensitive VolumeID
+272631839, and ACTS GeometryIdentifier 216173056991691039 are preserved.
+
+Actual DD4hep/ACTS perturbations of +/-1e-4, 1e-5, 1e-6 rad, at both nominal
+and corrected poses, are compared with the unchanged official ACTS derivative
+using frozen native track references. Nominal Ry maximum discrepancy is
+`8.964e-9 mm/rad` over 3072 vector comparisons; the gate is `2e-5 mm/rad`.
+No analytic legacy tilt derivative replaces the native model.
+
+| Fixture | Injection [mrad] | Pede [mrad] | Nominal sigma [mrad] | Post-update [urad] | ACTS chi2/stored-NDF before -> after |
+|---|---:|---:|---:|---:|---:|
+| Positive Rx, 32 | +1.8 | +1.6622 | 0.23264 | -0.25248 | 0.828764 -> 0.669254 |
+| Independent negative Rx, 32 | -1.8 | -2.1773 | 0.23266 | +0.040135 | 0.922513 -> 0.648842 |
+| Ry, 1024 | +5.0 | +3.8135 | 0.91215 | -14.044 | 0.602587 -> 0.600885 |
+
+Negative Rx error is -0.3773 mrad (about -1.62 nominal sigma). Ry error is
+-1.1865 mrad (about -1.30 nominal sigma). These are finite quantized-sample
+results, not exact truth recovery. The Ry post-update gate was prospectively
+one quarter of its initial nominal sigma; the observed update also meets the
+older 20 urad Rx threshold. Existing Rx assertions were not relaxed.
+
+Ry control/nominal/corrected passes each accept 1024 tracks, five measurements,
+zero outliers and two holes. There are 1024 official Mille records and 10240
+scalar equations. The unchanged RawTrackerHit tuples and input-file checksum
+are verified across fresh processes; only EventHeader/TelescopeChannels enter
+reconstruction. Seventy L1 channel IDs differ from the unrotated control.
+The tilt-specific nontrivial-channel gate is N/32 (small normal-tilt projection),
+while the original in-plane Rx gate remains N/4.
+
+Ry aggregate local residual RMS (u,v) changes from (7.775,7.750) to
+(7.756,7.747) um. Aggregate Global X RecHit-minus-Truth RMS changes from
+13.985 to 3.319 um. Full orientation error is 1.1865 mrad; the pivot stays fixed.
+Truth is used only for generation and these accuracy checks. Pede status is
+0 in initial/post/control fits, with zero rejected local fits. Initial Pede
+chi2/NDF is 6152.921788/6143=1.001615; post-correction is 1.001624.
+The small ACTS improvement is appropriate to a weak, approximately five-sigma
+initial signal; ACTS stored NDF and profiled Pede statistical NDF differ.
+
+### Parity and retained limits
+
+| Legacy capability | Native status after this milestone |
+|---|---|
+| Single-plane in-plane rotation | Positive/negative Rx full actual-channel reconstruction closure |
+| Legacy Rx tilt | Native Ry is the same physical axis with opposite sign; +5 mrad native closure validated, at a different amplitude/cohort from legacy |
+| Legacy Ry tilt | Native Rz remains unavailable; generic ACTS derivative gate alone is not closure |
+| Coupled tilt rotations / SO(3) | Not enabled natively; old failed ordered-Euler cases remain failed historical evidence |
+| Full legacy rotation/6-DOF/Controller/Geant4 parity | Not established; legacy code retained |
+
+### Reproduction and evidence
+
+All commands run from the repository root in the existing fixed container.
+Use new build/result paths when repeating them; stages refuse existing outputs.
+
+```bash
+export TESTBENCH_CONTAINER=sweet_mahavira
+bash environment/run.sh cmake -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_tilt_20261024_02 \
+  -DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON
+bash environment/run.sh cmake --build /work/build/native_tilt_20261024_02 -j2
+
+# Each step can instead be invoked separately, in the order printed here:
+# geometry data nominal solve correct corrected postsolve control controlsolve check
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/native_tilt_20261024_02 --result result/native_tilt_ry_20261024_02 \
+  --events 1024 --beam validation/telescope_alignment/tilt_beam_validation.json \
+  --chi2-cut 1000 --mode l1_ry --step all
+
+for mode in l1_l2_y l1_rx l1_rx_negative l1_y_rx_l2_y; do
+  bash environment/run.sh python3 validation/telescope_closure/closure.py \
+    --build build/native_tilt_20261024_02 \
+    --result result/native_tilt_final_${mode}_20261024_01 \
+    --events 32 --chi2-cut 1000 --mode "$mode" --step all
+done
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/native_tilt_20261024_02 --result result/native_tilt_final_l1_l2_y_20261024_01 \
+  --events 32 --chi2-cut 1000 --step regressions --validation-name tilt
+bash environment/run.sh bash validation/run_regression.sh \
+  /work/result/native_tilt_legacy_20261024_01 \
+  /work/build/telescope_consolidation_legacy_20261024_01
+
+# Read-only study of already reconstructed native states, independent of Pede:
+bash environment/run.sh python3 validation/telescope_closure/observability.py \
+  --native result/native_tilt_broad1024_20261024_01/control/mille.json \
+  --output result/native_tilt_observability_20261024_01/all_translation_correlations.json
+# Repeat with the baseline control or broad64 control to compare sensitivity.
+bash environment/run.sh python3 validation/geometry_probe.py \
+  --geometry result/native_rotation_legacy_20261024_01/step1/nominal.xml \
+  --output result/native_tilt_observability_20261024_01/legacy_actual_geometry.json
+bash environment/run.sh python3 validation/telescope_closure/observability.py \
+  --native result/native_rotation_baseline_20261024_01/control/mille.json \
+  --legacy-geometry result/native_tilt_observability_20261024_01/legacy_actual_geometry.json \
+  --native-geometry result/native_tilt_broad64_20261024_01/data/control/channels_truth.json \
+  --output result/native_tilt_observability_20261024_01/frame_mapping.json
+```
+
+The broad64/broad1024 control studies used build `native_tilt_20261024_01`:
+run `--step geometry`, then `data`, then `control` using `--events 64` and
+`--beam validation/telescope_alignment/tilt_beam.json`, or `--events 1024`
+and `tilt_beam_validation.json`, respectively. Their source distributions/seeds
+are embedded in the immutable generator reports. Re-run with the latest build
+in new directories. The weak32 Ry case uses `--mode l1_ry --events 32` without
+`--beam`; running through `solve` must refuse before creating Pede steering.
+
+Final closure JSON and TBrowser-readable `rotation.root` are under each
+rotation run's `validation/`. Build 01's initial Ry closure remains preserved
+at `result/native_tilt_ry_20261024_01/`. Build 02 is the final complete replay.
+Every stage saves command, exit code, stdout and output hashes. Official binary
+inspection logs are in the observability directory's `decode_ry/` and
+`decode_negative_rx/` stages. Existing failed combined development output
+`result/native_tilt_regression_l1_y_rx_l2_y_20261024_01/` is retained: changing
+Python helper signatures during that process caused an import/signature mismatch.
+The final replay used fixed sources and a separate output directory. An early
+control invocation was also correctly refused before data preparation completed;
+no stage was overwritten.
+
+The final fresh-build replay and the full **18-command** consolidated suite
+passed. It includes fresh standalone Geometry/CKF builds, original one-event
+JANA/default-cut check, ACTS finite differences, native/legacy Writer comparison,
+official mathematical Pede fixture, **49 unit tests** (46 existing plus three
+new one-axis boundary tests), safety and preservation. Evidence:
+`result/native_tilt_final_l1_l2_y_20261024_01/tilt_regressions/complete.json`.
+The weak32 Ry run was correctly rejected by its sensitivity gate before Pede;
+its partial outputs remain at `result/native_tilt_weak32_20261024_01/`.
+
+The original Y result remains 32 tracks, +149.14/+203.18 um, and ACTS
+37.16731567382813 -> 0.6908491410315036. The combined result remains
+Y1=+148.99 um, Rx1=+1.7632 mrad, Y2=+203.18 um. For all three existing
+cohorts, nominal/Truth/corrected XML and nominal/corrected/control Mille binaries
+are byte-identical to the prior successful milestone, as recorded in
+`result/native_tilt_observability_20261024_01/scientific_identity_complete.json`.
+The historical 99-track regression also passed: +198.75 um correction,
+-199.571 -> -0.821 um residual, ACTS 45.592 -> 1.981.
+Preservation verified 221 baseline records and 2046 relocated files unchanged,
+including the protected electron-hypothesis diff. ROOT batch write/read-back
+passed; interactive TBrowser GUI operation was not tested.
+
+| Maintained file / functions | Change in this milestone |
+|---|---|
+| `TelescopeMille.cc::Init/Process` | Explicit additional Ry label whitelist and selection of existing ACTS column 4 |
+| `TelescopeChannels.cc::main` | Optional bounded angular recipe and explicit seed; baseline generation untouched |
+| `closure.py::geometry_step/data_step/solve/main` | Negative Rx and single Ry fixtures, optional study input, pre-Pede sensitivity refusal |
+| `closure.py::displaced_xml` | Pass the explicitly selected one-axis chart |
+| `rotation.py` | Selected-axis configuration, restricted SO(3)/XML serialization, real-surface finite differences, full tilt-envelope/identity/closure checks |
+| `observability.py` | Read-only actual weighted-row profiling, sample/slope/position/quantization diagnostics, actual-pose frame mapping |
+| `l1_global_ry.json`, `tilt_beam*.json` | Explicit parameter scope and reproducible beam recipes |
+| `test_native_rotation_scope.py` | Signed incremental update, coupled-chart refusal, invalid-update refusal |
+
+The actual inference path remains calibrated native ACTS states -> unchanged
+`NativeMilleModel::nativeEquation` -> selected whitened official Mille rows ->
+official Pede -> restricted physical SO(3) correction -> fresh DD4hep loading ->
+installed ActsGeometryProvider/SurfaceMap -> unchanged JANA measurements and
+ACTS CKF/smoothing. No replacement provider, navigator, fitter or material map
+was introduced. No legacy scientific code was deleted. Candidates stay inactive;
+no merge or push is performed.

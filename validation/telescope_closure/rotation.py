@@ -1,4 +1,4 @@
-"""Selected native in-plane rotation closure gates, not a general alignment framework."""
+"""Selected native one-axis rotation closure gates, not a general alignment framework."""
 import json
 import re
 import copy
@@ -10,38 +10,56 @@ from geometry.placements import xml_number
 from research_common import stage,execute,digest,require,done,write_json
 
 INJECTED_RX_RAD=.0018
+INJECTED_RY_RAD=.005
+
+
+def axis(mode):
+    return 'y' if mode=='l1_ry' else 'x'
+
+
+def rotation_label(mode):
+    return 700105 if mode=='l1_ry' else 700104
+
+
+def injected_rx(mode):
+    return -INJECTED_RX_RAD if mode=='l1_rx_negative' else INJECTED_RX_RAD
 
 
 def labels(mode):
-    return [700104] if mode=='l1_rx' else [700102,700104,700202]
+    return [700105] if mode=='l1_ry' else ([700104] if mode in ('l1_rx','l1_rx_negative') else [700102,700104,700202])
 
 
 def config_name(mode):
-    return 'l1_global_rx' if mode=='l1_rx' else 'l1_y_rx_l2_y'
+    return 'l1_global_ry' if mode=='l1_ry' else ('l1_global_rx' if mode in ('l1_rx','l1_rx_negative') else 'l1_y_rx_l2_y')
 
 
-def rotate_component(component,increment):
-    """Left-Global Exp(dx) about this sensor center, serialized in the proven Rx chart.
+def rotate_component(component,increment,axis='x'):
+    """Restricted left-Global Exp(dw), current sensitive-center pivot.
 
-    The actual DD4hep constructor maps decreasing component XML y to increasing
-    physical Global X. The restriction to this one-axis subgroup is intentional;
-    this is not additive Euler correction for arbitrary coupled rotations.
+    Actual DD4hep probes establish Rx = -(XML y + pi/2) and
+    Ry = -(XML x + pi/2) on their separate one-axis charts. Compositions
+    outside either subgroup are rejected; this is not an Euler serializer.
     """
-    if not math.isfinite(increment) or abs(increment)>.01:raise ValueError('Only bounded L1 Global Rx enabled')
+    if axis not in ('x','y') or not math.isfinite(increment) or abs(increment)>.01:
+        raise ValueError('Only bounded separate L1 Global Rx or Ry enabled')
     r=component.find('rotation')
     x,y,z=[xml_number(r.get(a,'0'),{'pi':math.pi}) for a in 'xyz']
-    if abs(x+math.pi/2)>1e-12 or abs(z)>1e-12:raise ValueError('Selected Rx serialization requires the proven component chart')
-    current=rotation_exp((-(y+math.pi/2),0.,0.))
-    target=multiply(rotation_exp((increment,0.,0.)),current)
-    vector=rotation_log(target)
-    if abs(vector[1])+abs(vector[2])>1e-12:raise ValueError('Outside selected one-axis subgroup')
-    r.set('y',f'{-math.pi/2-vector[0]:.17g}')
+    if abs(z)>1e-12 or abs((x if axis=='x' else y)+math.pi/2)>1e-12:
+        raise ValueError('Unsupported composition outside the selected one-axis chart')
+    index=0 if axis=='x' else 1
+    current=[0.,0.,0.];current[index]=-((y if axis=='x' else x)+math.pi/2)
+    delta=[0.,0.,0.];delta[index]=increment
+    vector=rotation_log(multiply(rotation_exp(delta),rotation_exp(current)))
+    if sum(abs(v) for i,v in enumerate(vector) if i!=index)>1e-12:
+        raise ValueError('Outside selected one-axis subgroup')
+    r.set('y' if axis=='x' else 'x',f'{-math.pi/2-vector[index]:.17g}')
 
 
-def pose_checks(before,after,shifts,rx):
+def pose_checks(before,after,shifts,rx,axis='x'):
     """Actual DD4hep and ACTS poses, not XML attribute assumptions."""
     for a,b in zip(before,after):
-        layer=a['layer'];q=np.array(rotation_exp((rx.get(layer,0.),0.,0.)))
+        layer=a['layer'];vector=[0.,0.,0.];vector[0 if axis=='x' else 1]=rx.get(layer,0.)
+        q=np.array(rotation_exp(vector))
         assert a['volume_id']==b['volume_id'] and a['geometry_id']==b['geometry_id']
         assert np.allclose(b['center_mm'],np.array(a['center_mm'])+[0,shifts.get(layer,0.),0],atol=1e-9,rtol=0)
         assert np.allclose(b['acts_rotation'],q@a['acts_rotation'],atol=2e-12,rtol=0)
@@ -54,6 +72,17 @@ def pose_checks(before,after,shifts,rx):
             half=50*(abs(total[1,1])+abs(total[1,2]))
             assert half+abs(b['center_mm'][1])<50.25
             assert 50*(abs(total[2,1])+abs(total[2,2]))<51.
+            if axis=='y':
+                # Native component half lengths: X=50, Y=.025, Z=50 mm.
+                # Parent module world half lengths: X=.325, Y/Z=50.25 mm.
+                extent=np.abs(np.array(b['dd4hep_rotation']))@np.array([50.,.025,50.])
+                offset=np.array(b['center_mm'])-np.array([250.+50*layer,0.,0.])
+                assert np.all(np.abs(offset)+extent < [.325,50.25,50.25])
+                for signs in __import__('itertools').product((-1,1),repeat=3):
+                    corner=np.array(b['center_mm'])+np.array(b['dd4hep_rotation'])@(np.array(signs)*[50.,.025,50.])
+                    radius=np.linalg.norm(corner[:2]);nominal=250.+50*layer
+                    assert nominal-.025-1 < radius < math.hypot(nominal+.025+.4,50.3)+1
+                    assert abs(corner[2])<51.
 
 
 def physical_derivatives(args,reconstruction="nominal"):
@@ -69,10 +98,10 @@ def physical_derivatives(args,reconstruction="nominal"):
         poses=[]
         for sign in (1,-1):
             q=stage(p,f'step_{step:g}_{sign:+d}')
-            displaced_xml(geometry,q/'geometry.xml',{},rotations={1:sign*step})
+            displaced_xml(geometry,q/'geometry.xml',{},rotations={1:sign*step},rotation_axis=axis(args.mode))
             execute([args.build/'TelescopeChannels',q/'geometry.xml',0,q/'geometry.json'],q,env=environment(args.build))
             sensors=json.loads((q/'geometry.json').read_text())['sensors']
-            pose_checks(base,sensors,{}, {1:sign*step})
+            pose_checks(base,sensors,{}, {1:sign*step},axis=axis(args.mode))
             poses.append(sensors[1])
         error=0.
         for event in native['events']:
@@ -84,7 +113,7 @@ def physical_derivatives(args,reconstruction="nominal"):
                 predictions.append((r.T@(intersection-center))[:2])
             finite=(predictions[0]-predictions[1])/(2*step)
             equation=next(e for e in event['equations'] if e['layer']==1)
-            error=max(error,float(np.max(np.abs(finite-np.array(equation['global'])[:,3]))));checks+=1
+            error=max(error,float(np.max(np.abs(finite-np.array(equation['global'])[:,4 if args.mode=='l1_ry' else 3]))));checks+=1
         assert error<2e-5,(step,error)
         errors[str(step)]=error;maximum=max(maximum,error)
     write_json(p/'report.json',{'passed':True,'checks':checks,'errors_mm_per_rad':errors,
@@ -99,16 +128,16 @@ def correct(args):
     require(args.result,'solve');p=stage(args.result,'correction')
     values=read_pede(args.result/'solve/millepede.res')
     shifts={l:values[k] for l,k in [(1,700102),(2,700202)] if k in values}
-    rotations={1:values[700104]}
+    rotations={1:values[rotation_label(args.mode)]}
     nominal=args.result/'geometry/fixtures/nominal.xml'
-    displaced_xml(nominal,p/'corrected.xml',shifts,rotations=rotations)
+    displaced_xml(nominal,p/'corrected.xml',shifts,rotations=rotations,rotation_axis=axis(args.mode))
     write_json(p/'provenance.json',{'parent_sha256':digest(nominal),'pede_sha256':digest(args.result/'solve/millepede.res'),
-       'physical_global_y_mm':shifts,'physical_global_rx_rad':rotations,'pivot':'current sensitive center',
-       'composition':'Rnew=Exp([dx,0,0]) Rcurrent','truth_used':False,'activated':False})
+       'physical_global_y_mm':shifts,'physical_global_r'+axis(args.mode)+'_rad':rotations,'pivot':'current sensitive center',
+       'composition':'Rnew=Exp(dw_global) Rcurrent; selected '+axis(args.mode)+' subgroup','truth_used':False,'activated':False})
     q=stage(p,'geometry_audit');execute([args.build/'TelescopeChannels',p/'corrected.xml',0,q/'geometry.json'],q,env=environment(args.build))
     base=json.loads((args.result/'data/control/channels_truth.json').read_text())['sensors']
-    pose_checks(base,json.loads((q/'geometry.json').read_text())['sensors'],shifts,rotations)
-    done(p,physical_global_y_mm=shifts,physical_global_rx_rad=rotations)
+    pose_checks(base,json.loads((q/'geometry.json').read_text())['sensors'],shifts,rotations,axis=axis(args.mode))
+    done(p,physical_global_y_mm=shifts,physical_rotation_rad=rotations,rotation_axis=axis(args.mode))
 
 
 def check(args):
@@ -119,12 +148,12 @@ def check(args):
     from alignment.pede import read_pede
     for name in ('geometry','data','nominal','physical_derivatives','corrected_physical_derivatives','solve','correction','corrected','postsolve','control','controlsolve'):require(args.result,name)
     p=stage(args.result,args.validation_name)
-    selected=labels(args.mode);combined=args.mode!='l1_rx'
-    injected={700104:INJECTED_RX_RAD}
+    selected=labels(args.mode);combined=args.mode=='l1_y_rx_l2_y'
+    injected={rotation_label(args.mode):INJECTED_RY_RAD if args.mode=='l1_ry' else injected_rx(args.mode)}
     if combined:injected.update({700102:.150,700202:.200})
     truth=json.loads((args.result/'data/shifted/channels_truth.json').read_text())
     base=json.loads((args.result/'data/control/channels_truth.json').read_text())
-    pose_checks(base['sensors'],truth['sensors'],{1:.150,2:.200} if combined else {},{1:INJECTED_RX_RAD})
+    pose_checks(base['sensors'],truth['sensors'],{1:.150,2:.200} if combined else {},{1:injected[rotation_label(args.mode)]},axis=axis(args.mode))
     # Independent XML whitelist: only selected module references, component X
     # translation and the selected L1 component Y rotation serialization may vary.
     def structure(n):return n.tag,dict(n.attrib),(n.text or '').strip(),tuple(structure(c) for c in n)
@@ -138,7 +167,9 @@ def check(args):
             reference=original.find(f"./module[@name='{a.get('module')}']")
             normalized=copy.deepcopy(module);normalized.set('name',reference.get('name'))
             normalized.find('./module_component/position').set('x',reference.find('./module_component/position').get('x'))
-            if layer==1:normalized.find('./module_component/rotation').set('y',reference.find('./module_component/rotation').get('y'))
+            if layer==1:
+                attribute='x' if args.mode=='l1_ry' else 'y'
+                normalized.find('./module_component/rotation').set(attribute,reference.find('./module_component/rotation').get(attribute))
             assert structure(normalized)==structure(reference)
             detector.remove(module);b.set('module',a.get('module'))
         assert structure(candidate)==structure(nominal_xml)
@@ -152,15 +183,15 @@ def check(args):
     for i,k in enumerate(selected):
         assert abs(values[k]-injected[k])<tolerances[k]
         assert abs(control_solution['parameters'][str(k)])<5*control_solution['nominal_sigma'][i]
-        assert abs(post[k])<2e-5,(k,post[k])
+        assert abs(post[k])<(solution['nominal_sigma'][i]/4 if args.mode=='l1_ry' else 2e-5),(k,post[k])
     from geometry.transforms import orientation_distance
     angle_error=orientation_distance(truth['sensors'][1]['acts_rotation'],actual[1]['acts_rotation'])
-    assert angle_error<tolerances[700104]
+    assert angle_error<tolerances[rotation_label(args.mode)]
     input_path=args.result/'data/shifted.root';payload=channel_values(input_path)
     assert digest(input_path)==json.loads((args.result/'data/shifted_input.json').read_text())['file_sha256']
     assert channel_values(args.result/'nominal/reco.root')==channel_values(args.result/'corrected/reco.root')==payload
     changed=sum(a[1][1][0]!=b[1][1][0] for a,b in zip(payload,channel_values(args.result/'data/control.root')))
-    assert changed>=args.events//4,'Rotation/translation fixture must have nontrivial quantized channel changes'
+    assert changed>=args.events//(32 if args.mode=='l1_ry' else 4),'Rotation/translation fixture must have nontrivial quantized channel changes'
     nominal_audit=json.loads((args.result/'nominal/audit.json').read_text())
     corrected_audit=json.loads((args.result/'corrected/audit.json').read_text())
     for a,b in zip(nominal_audit['events'],corrected_audit['events']):
@@ -187,7 +218,7 @@ def check(args):
                 g=w@np.array(equation['global']);l=equation['layer']
                 for j in (0,1):
                     coefficients=rows[2*l+j][3]
-                    expected={k:g[j,3 if k==700104 else 1] for k in selected if (1 if k==700104 else (k-700002)//100)==l and g[j,3 if k==700104 else 1]!=0}
+                    expected={k:g[j,4 if k==700105 else (3 if k==700104 else 1)] for k in selected if (1 if k in (700104,700105) else (k-700002)//100)==l and g[j,4 if k==700105 else (3 if k==700104 else 1)]!=0}
                     assert coefficients.keys()==expected.keys()
                     assert all(abs(coefficients[k]-expected[k])<1e-10 for k in expected)
         for event in audit['events']:
@@ -253,8 +284,8 @@ def check(args):
         h=ROOT.TH1D(name+'_chi2',name+';ACTS chi2/stored-NDF;Tracks',100,0,max(2,max(data['chi2'])/10*1.05))
         for x in data['chi2']:h.Fill(x/10)
         h.Write()
-        for j,axis in enumerate(('u','v')):
-            h=ROOT.TH1D(name+'_'+axis,name+';Local residual [mm];Measurements',160,-.3,.3)
+        for j,coordinate in enumerate(('u','v')):
+            h=ROOT.TH1D(name+'_'+coordinate,name+';Local residual [mm];Measurements',160,-.3,.3)
             for r in data['residual']:h.Fill(r[j])
             h.Write()
     f.Close();f=ROOT.TFile.Open(str(p/'rotation.root'));assert f.GetListOfKeys().GetEntries()==9;f.Close()

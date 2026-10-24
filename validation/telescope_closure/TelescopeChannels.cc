@@ -13,10 +13,19 @@
 #include <fstream>
 #include <iostream>
 #include <cmath>
+#include <random>
 int main(int argc,char** argv) {
-  if(argc!=4 || std::filesystem::exists(argv[3])) {std::cerr<<"Usage: TelescopeChannels XML EVENT_COUNT_OR_ZERO_AUDIT NEW_JSON\n";return 64;}
+  if((argc!=4 && argc!=5) || std::filesystem::exists(argv[3])) {std::cerr<<"Usage: TelescopeChannels XML EVENT_COUNT_OR_ZERO_AUDIT NEW_JSON [BOUNDED_BEAM_JSON]\n";return 64;}
   try {
-    const int count=std::stoi(argv[2]);if(count<0 || count>64)throw std::runtime_error("Expected 0..64 events");
+    nlohmann::json beam;
+    if(argc==5) {std::ifstream input(argv[4]);input>>beam;
+      if(beam.at("recipe")!="bounded_uniform_tilt_v1" || beam.at("origin_half_y_mm")!=12. ||
+         beam.at("origin_half_z_mm")!=10. || beam.at("slope_half_range")!=.08)
+        throw std::runtime_error("Only the declared bounded tilt-study beam is supported");
+    }
+    const int count=std::stoi(argv[2]);if(count<0 || count>(beam.is_null()?64:1024))throw std::runtime_error("Expected 0..64 baseline or 0..1024 study events");
+    std::mt19937_64 random(beam.is_null()?0:beam.at("seed").get<uint64_t>());
+    std::uniform_real_distribution<double> uniform(-1.,1.);
     auto& detector=dd4hep::Detector::getInstance();detector.fromXML(argv[1]);detector.apply("DD4hepVolumeManager",0,nullptr);
     algorithms::GeoSvc::instance().init(&detector);
     auto provider=std::make_shared<ActsGeometryProvider>();auto logger=spdlog::stdout_color_mt("channel_geometry");
@@ -47,10 +56,17 @@ int main(int argc,char** argv) {
       report["sensors"].push_back({{"layer",layer},{"volume_id",context->identifier},{"geometry_id",surface->geometryId().value()},
         {"center_mm",{center.x(),center.y(),center.z()}},{"acts_rotation",rotation},{"dd4hep_rotation",ddRotation}});
     }
+    if(!beam.is_null())report["beam_recipe"]=beam;
     auto fraction=[](double x){return x-std::floor(x);};
     for(int event=0;event<count;++event) {
-      const Acts::Vector3 origin(250.,-12.+24.*fraction(.137+.61803398875*event),-10.+20.*fraction(.231+.41421356237*event));
-      const Acts::Vector3 direction=Acts::Vector3(1.,-.008+.016*fraction(.31+.7548776662*event),-.006+.012*fraction(.27+.569840291*event)).normalized();
+      Acts::Vector3 origin(250.,-12.+24.*fraction(.137+.61803398875*event),-10.+20.*fraction(.231+.41421356237*event));
+      Acts::Vector3 direction=Acts::Vector3(1.,-.008+.016*fraction(.31+.7548776662*event),-.006+.012*fraction(.27+.569840291*event)).normalized();
+      if(!beam.is_null()) {
+        // Draw independent intercepts and slopes; preserve the baseline recipe.
+        const double y=12.*uniform(random),z=10.*uniform(random);
+        const double sy=.08*uniform(random),sz=.08*uniform(random);
+        origin=Acts::Vector3(250.,y,z);direction=Acts::Vector3(1.,sy,sz).normalized();
+      }
       nlohmann::json data={{"event",event},{"origin_mm",{origin.x(),origin.y(),origin.z()}},
         {"direction",{direction.x(),direction.y(),direction.z()}},{"channels",nlohmann::json::array()}};
       for(int layer=0;layer<5;++layer) {
