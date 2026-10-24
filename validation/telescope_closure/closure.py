@@ -116,7 +116,9 @@ def geometry_step(args):
         shifts={1:.150,2:.200} if args.mode=='l1_y_rx_l2_y' else {}
         angle=injected_rotation(args.mode)
         displaced_xml(nominal,p/'truth.xml',shifts,rotations={1:angle},rotation_axis=axis(args.mode))
-        write_json(p/'rotation_fixture.json',{'mode':args.mode,'injected_global_y_mm':shifts,'injected_global_r'+axis(args.mode)+'_rad':{'1':angle}})
+        metadata={'mode':args.mode,'injected_global_y_mm':shifts,'injected_global_r'+axis(args.mode)+'_rad':{'1':angle}}
+        if axis(args.mode)=='yz':metadata.update(truth_definition='single Exp([0,Ry,Rz]) Rnominal',injected_rotation_vector_rad=[0.,*angle])
+        write_json(p/'rotation_fixture.json',metadata)
     done(p,nominal_sha256=digest(nominal),truth_sha256=digest(p/'truth.xml'),injected_global_y_mm=({'1':.150,'2':.200} if args.mode in ('l1_l2_y','l1_y_rx_l2_y') else {}))
 
 
@@ -183,9 +185,9 @@ def solve(args,reconstruction,name):
     dimension=len(selected)
     normal=np.zeros((dimension,dimension));rhs=np.zeros(dimension)
     for block in blocks:
-        a,b,_=profile(block,selected);normal+=a;rhs+=b
+        a,b,_=profile(block,selected,require_global_rank=getattr(args,'mode','l1_l2_y') not in ('l1_ry_rz','l1_ry_rz_negative'));normal+=a;rhs+=b
     assert np.linalg.matrix_rank(normal)==dimension
-    if getattr(args,'mode','l1_l2_y') in ('l1_ry','l1_ry_negative','l1_rz','l1_rz_negative'):
+    if getattr(args,'mode','l1_l2_y') in ('l1_ry','l1_ry_negative','l1_rz','l1_rz_negative','l1_ry_rz','l1_ry_rz_negative'):
         # Refuse to run Pede before the actual native design resolves this tilt.
         # Include transverse translations and other rotations as diagnostic nuisance
         # columns; none of these additional columns is enabled in the Mille fit.
@@ -193,10 +195,13 @@ def solve(args,reconstruction,name):
         design=analyze(args.result/reconstruction/'mille.json')
         last=design['prefix_designs'][str(args.events)]
         assert last['rank']==5 and last['diagonal_scaled_condition']<100
-        from validation.telescope_closure.rotation import axis
+        from validation.telescope_closure.rotation import axis,is_coupled
         index=3 if axis(args.mode)=='y' else 4
         write_json(p/'observability.json',design)
-        assert last['sigma'][index]<.001,'Native selected tilt unresolved before Pede'
+        if is_coupled(args.mode):
+            assert max(last['sigma'][3:5])<.0005,'Coupled tilt unresolved before Pede'
+            assert max(design['all_translation_diagnostic']['sigma'][4:6])<.0005
+        else:assert last['sigma'][index]<.001,'Native selected tilt unresolved before Pede'
     text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n700102 0.0 1.0\n700202 0.0 1.0\n\nprintcounts\nend\n'
     if rotation:
         text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n'+''.join(f'{label} 0.0 1.0\n' for label in selected)+'\nprintcounts\nend\n'
@@ -513,23 +518,27 @@ def main():
     parser.add_argument('--result',type=Path,required=True)
     parser.add_argument('--build',type=Path,required=True)
     parser.add_argument('--validation-name',default='validation',help='New validation/regression output stage name; existing reports remain immutable')
-    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_ry_negative','l1_rz_negative','l1_rz','l1_y_rx_l2_y'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
+    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_ry_negative','l1_rz_negative','l1_rz','l1_ry_rz','l1_ry_rz_negative','l1_y_rx_l2_y'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
     parser.add_argument('--beam',type=Path,help='Optional bounded angular study recipe; never changes the baseline cohort')
     parser.add_argument('--events',type=int,default=32)
     parser.add_argument('--chi2-cut',type=float,default=None,help='Explicit alignment capture window; same setting in all closure passes')
-    parser.add_argument('--step',choices=['geometry','data','pilot','nominal','solve','correct','corrected','postsolve','control','controlsolve','check','regressions','all'],required=True)
+    parser.add_argument('--step',choices=['geometry','data','coupled_pose','pilot','nominal','solve','correct','corrected','postsolve','control','controlsolve','check','regressions','all'],required=True)
     args=parser.parse_args()
     if args.mode!='l1_l2_y' and args.step=='regressions':parser.error('Consolidated regression uses the original l1_l2_y baseline')
     args.result=args.result.resolve();args.build=args.build.resolve()
     if not args.validation_name.isidentifier():parser.error('Validation stage name must be an identifier')
     if args.beam:args.beam=args.beam.resolve()
-    if not args.result.is_relative_to(REPO/'result') or not 16<=args.events<=(1024 if args.beam else 64):parser.error('Use result/ and 16..64 baseline or 16..1024 bounded study events')
+    if not args.result.is_relative_to(REPO/'result') or not 16<=args.events<=(4096 if args.beam else 64):parser.error('Use result/ and 16..64 baseline or 16..4096 bounded study events')
     args.result.mkdir(parents=True,exist_ok=True)
     os.chdir(REPO)
     steps=['geometry','data','nominal','solve','correct','corrected','postsolve','control','controlsolve','check'] if args.step=='all' else [args.step]
     for step in steps:
         if step=='geometry':geometry_step(args)
         elif step=='data':data_step(args)
+        elif step=='coupled_pose':
+            from validation.telescope_closure.rotation import coupled_pose_gate,is_coupled
+            if not is_coupled(args.mode):raise ValueError('Coupled pose gate requires the selected Ry/Rz mode')
+            coupled_pose_gate(args)
         elif step=='pilot':reconstruct(args,'pilot',args.result/'geometry/fixtures/nominal.xml','shifted',4,args.chi2_cut)
         elif step=='nominal':reconstruct(args,'nominal',args.result/'geometry/fixtures/nominal.xml','shifted',cut=args.chi2_cut)
         elif step=='solve':solve(args,'nominal','solve')

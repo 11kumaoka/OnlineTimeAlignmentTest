@@ -35,7 +35,7 @@ def records(path):
                 rows.append((value,sigma,local,global_))
             yield rows
 
-def profile(rows,labels):
+def profile(rows,labels,require_global_rank=True):
     r=np.array([row[0]/row[1] for row in rows])
     local=np.array([[row[2].get(k,0.)/row[1] for k in range(1,5)] for row in rows])
     global_=np.array([[row[3].get(k,0.)/row[1] for k in labels] for row in rows])
@@ -44,7 +44,9 @@ def profile(rows,labels):
     projector=np.eye(len(rows))-basis@basis.T
     information=global_.T@projector@global_
     rhs=global_.T@projector@r
-    assert np.linalg.matrix_rank(information)==len(labels)
+    # Some same-sensor global columns constrain only one combination per track.
+    # The bounded coupled caller still requires full rank of the summed design.
+    if require_global_rank:assert np.linalg.matrix_rank(information)==len(labels)
     return information,rhs,float(r@projector@r)
 
 def main():

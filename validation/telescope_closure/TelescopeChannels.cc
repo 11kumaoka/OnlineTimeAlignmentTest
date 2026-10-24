@@ -23,7 +23,7 @@ int main(int argc,char** argv) {
          beam.at("origin_half_z_mm")!=10. || beam.at("slope_half_range")!=.08)
         throw std::runtime_error("Only the declared bounded tilt-study beam is supported");
     }
-    const int count=std::stoi(argv[2]);if(count<0 || count>(beam.is_null()?64:1024))throw std::runtime_error("Expected 0..64 baseline or 0..1024 study events");
+    const int count=std::stoi(argv[2]);if(count<0 || count>(beam.is_null()?64:4096))throw std::runtime_error("Expected 0..64 baseline or 0..4096 study events");
     std::mt19937_64 random(beam.is_null()?0:beam.at("seed").get<uint64_t>());
     std::uniform_real_distribution<double> uniform(-1.,1.);
     auto& detector=dd4hep::Detector::getInstance();detector.fromXML(argv[1]);detector.apply("DD4hepVolumeManager",0,nullptr);
