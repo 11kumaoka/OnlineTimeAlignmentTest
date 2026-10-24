@@ -1790,3 +1790,119 @@ preserved. Generated artifacts remain ignored; the local commit contains only
 maintained source, configuration, tests and documentation. No push, merge,
 production activation, external installation modification or legacy deletion
 is performed.
+
+## Targeted Ry diagnostic before the L1 Y/rotation extension
+
+Starting branch `feature/upstream-acts-geometry`, clean at
+`b37d9e3ce44af3553cdd3957de05e80f2eb68185`. This phase adds a read-only
+analysis, not a numerical model correction or an additional alignment solver.
+No existing fit, covariance, selection, Geometry or result is changed.
+
+### Frozen-design attribution
+
+`validation/telescope_closure/bias.py` reads the six existing three-rotation
+fixtures and verifies immutable input/reconstruction/solver/derivative stages.
+For each actual native reference and original whitening W, it profiles the
+same four local columns A using P=I-QQ^T. With selected whitened rotation
+columns G and H=sum(G^T P G), the original estimate is decomposed as:
+
+```
+r = pixel + exact_finite_geometry + true_ray_minus_native_reference
+error = H^-1 sum G^T P [W pixel
+                       + (W exact_finite_geometry - G injected_vector)
+                       + W reference_difference]
+```
+
+Truth is used solely for this offline attribution: the true physical ray is
+intersected with the actual nominal sensor, and the unquantized local hit is
+computed from the actual displaced DD4hep local coordinates. No Truth is sent
+to reconstruction, Mille, Pede or a correction file. The middle term includes
+finite-pose and native-design linearization effects. The last term tests the
+reference-state/local-profile contribution. Their sum agrees to2e-11 rad; the
+full diagnostic estimate agrees with the existing unrounded Schur solution
+to1e-10 rad. These are analytical checks on the existing official Pede result.
+
+| Seed | Vector | Ry error [mrad] | Pixel contribution [mrad] | Finite-pose/design remainder [mrad] |
+|---:|:---:|---:|---:|---:|
+| 2026102402 | +w | -0.626145714 | -0.627575963 | 0.001430249 |
+| 2026102402 | -w | -0.157313215 | -0.159078833 | 0.001765617 |
+| 2026102403 | +w | -0.871776424 | -0.871450373 | -0.000326051 |
+| 2026102403 | -w | 0.046766279 | 0.047306430 | -0.000540151 |
+| 2026102404 | +w | -0.661892655 | -0.664340290 | 0.002447635 |
+| 2026102404 | -w | 0.564910975 | 0.562746293 | 0.002164682 |
+
+Reference contributions are numerical zero (below1e-10 mrad). In particular,
+the positive Ry deficit is explained sample by sample by the realized pixel
+rounding scores, not by a missing finite SO(3) term or an observed derivative
+defect. Existing nominal/corrected real-surface finite differences remain
+consistent; the existing post-correction updates are much smaller than the
+initial Ry Truth errors. This does **not** show whether the population mean
+of the quantized estimator is zero. Three seeds do not establish unbiasedness
+or nominal coverage, and no errors or steering are rescaled.
+
+### Phase, slope, impact and prefix diagnostics
+
+The output contains all five layers: actual pixel phases,10-bin phase
+histograms, mean/RMS rounding errors, residual correlations with slope and
+impact, equal-count slope/impact/phase splits and prefix estimates. Phase
+histograms are broadly populated; an unweighted nearly uniform phase histogram
+does not force the covariance-weighted alignment score to zero. For positive
+seed2026102402, the Ry prefix errors at64/256/1024/2048/4096 tracks are
+-0.140/+1.372/+0.396/-0.523/-0.626 mrad. The largest-prefix deficit is not
+present at every earlier prefix. The three seeds use independent RNG streams;
+reusing their deterministic prefixes in earlier studies does not create new
+independent evidence. Prefixes within one stream remain correlated.
+
+For that case, lower/upper slope halves give Ry errors -1.335/-0.450 mrad;
+lower/upper impact halves give -1.337/-0.428 mrad. Conditioning on the L1
+sensor-X phase half gives about+5.357/-6.529 mrad: these subsets deliberately
+select one-sided rounding errors and are not unbiased validation cohorts.
+All hits are retained in the full fit. The opposite-vector cases have different
+rounding phases despite sharing rays, explaining why signs cannot be treated
+as independent repetitions or expected to cancel event by event.
+
+No demonstrated numerical or Geometry defect was identified. The exact
+attribution supports a finite-sample pixel-realization explanation for the
+observed offsets, while leaving possible population/discretization bias
+unresolved. A separate preregistered coverage/bias study remains necessary
+for stronger statistical claims. No800-seed campaign or new three-axis-only
+simulation was launched here. New four-parameter robustness samples will use
+fresh declared seeds and will not be presented as a direct coverage test of
+the earlier three-axis scope.
+
+### Evidence, tests and geometry-only preflight
+
+- `result/native_y_rotations_20261024_01_audit/guarded_bias_diagnostic/report.json`
+  contains all six decompositions, subset and prefix statistics, input hashes
+  and actual finite-difference diagnostics. The guarded replay exactly matches
+  the initial read-only report.
+- Three independent tests in `validation/test_native_bias_diagnostics.py`
+  check invariance to local offsets, equality with joint least squares and
+  refusal of local rank defects. All65 tests pass in `audit/diagnostic_tests/`.
+- Actual preflight with Y=+0.150 mm and both previous rotation vectors passes
+  in `audit/geometry_preflight_02/`. The positive-vector sensitive half extents
+  are(0.274999,50.089981,50.089669) mm; adding the Y shift leaves about10.019 um
+  in the module-Y half-envelope. All eight corners, cylindrical layer bounds,
+  centers, rotations, IDs and actual DD4hep/ACTS agreement pass. Envelopes,
+  materials and pitch are unchanged. No smaller displacement is required.
+- The initial geometry preflight failed before conversion because a relative
+  XML path was interpreted from the per-stage directory. Its failure is kept
+  under `audit/geometry_preflight/`; the absolute-path retry is separate.
+
+The maintained additions are the read-only `bias.py`, its independent tests
+and this report. They are committed separately from four-parameter feature
+changes. `audit/` here abbreviates
+`result/native_y_rotations_20261024_01_audit/`.
+
+```bash
+export TESTBENCH_CONTAINER=sweet_mahavira
+runs=()
+for seed in 2 3 4; do
+  for mode in l1_rx_ry_rz l1_rx_ry_rz_negative; do
+    runs+=("result/native_three_rotation_seed${seed}_${mode}_20261024_01")
+  done
+done
+bash environment/run.sh python3 validation/telescope_closure/bias.py \
+  --runs "${runs[@]}" --output result/NEW_DIAGNOSTIC/ry_attribution.json
+bash environment/run.sh python3 -m unittest discover -s validation -p "test_*.py"
+```
