@@ -76,7 +76,7 @@ def calculate(args):
              "note":"Geometry update step, not internal pede iteration. stored ACTS nDoF convention retained.",
              "metric_definition":"Historical pooled Rec mean minus Sim mean; per-hit plots use unique event/layer pairs."}
     if getattr(args,'correction_mode','l2_x') in ('l1_l2_x','l1_l2_xy','l1_l2_xy_rz'):
-        from alignment.align import read_pede
+        from alignment.pede import read_pede
         parameters=read_pede(args.pede)
         applied_by_layer={str(layer):(corrected[layer][0]-nominal[layer][0])*1000 for layer in (1,2)}
         for layer in (1,2):
@@ -98,7 +98,7 @@ def calculate(args):
     if 'rz' in getattr(args,'correction_mode','l2_x'):
         from geometry.placements import placement_transforms
         from correction.scope import layers_for
-        from alignment.align import read_pede
+        from alignment.pede import read_pede
         rotations={}
         for layer in layers_for(args.correction_mode):
             transforms=[placement_transforms(p)[layer] for p in (args.nominal,args.misaligned,args.corrected)]

@@ -82,7 +82,7 @@ original standard Plugin dependencies. No upstream installation was modified.
 Run from the repository root after building the Plugin. Use new result names:
 
 ```bash
-bash environment/run.sh bash localDetEICrecon/build.sh
+bash environment/run.sh bash environment/build.sh
 bash environment/run.sh bash geometry/prepare_geometry.sh --result-dir result/raw_study_001 --geometry-config geometry/scenarios/L2_x200um.json
 bash environment/run.sh bash simulation/simulate.sh --result-dir result/raw_study_001 --config simulation/configs/electron_1GeV.json
 bash environment/run.sh bash digitization/digitize.sh --result-dir result/raw_study_001

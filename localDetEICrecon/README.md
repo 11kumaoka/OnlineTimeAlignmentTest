@@ -1,4 +1,9 @@
-> Current build: `bash environment/run.sh bash localDetEICrecon/build.sh`.
+> Retained endcap capability/reference backend. For current native EICrecon
+> telescope development, use [the telescope guide](../docs/TELESCOPE_ALIGNMENT_USER_GUIDE.md).
+> The [audit](../docs/TELESCOPE_IMPLEMENTATION_AUDIT.md) explains the capabilities
+> not yet replaced; this backend is not interchangeable with the native fixture.
+>
+> Current build: `bash environment/run.sh bash environment/build.sh`.
 > This directory contains only the local C++ Plugin and its build support.
 > Python reconstruction commands live in `reconstruction/`; the external solver
 > lives in `alignment/`. See `docs/WORKFLOW.md` from the repository root.

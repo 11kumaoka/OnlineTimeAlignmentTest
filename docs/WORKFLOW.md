@@ -1,3 +1,9 @@
+> This guide covers the retained endcap/BeamTestReco capability backend.
+> Start new native EICrecon telescope studies with the
+> [Telescope Alignment User Guide](TELESCOPE_ALIGNMENT_USER_GUIDE.md).
+> See the [implementation audit](TELESCOPE_IMPLEMENTATION_AUDIT.md) for the exact
+> unreplaced rotation, RawHit/Geant4 and Controller capabilities.
+
 # Independent Research Workflow
 
 Run commands from the repository root. Docker mounts it at `/work`.
@@ -11,7 +17,7 @@ See `validation/validated_environment.json` for recorded versions.
 
 ```bash
 bash environment/run.sh python3 environment/setup_dependencies.py
-bash environment/run.sh bash localDetEICrecon/build.sh
+bash environment/run.sh bash environment/build.sh
 ```
 
 The first command is only for a new checkout without `external/`. The setup
@@ -25,8 +31,8 @@ Use a **new** `TESTBENCH_BUILD_DIR` after moving sources; old CMake caches embed
 source paths. Pass the chosen directory as `--build-dir` to both reconstruction
 commands. `MILLEPEDE_PREFIX` selects a complete dependency installation;
 `BUILD_JOBS` sets compilation concurrency. Disabling Mille support is unsupported.
-`environment/build.sh` is the build implementation delegated to by
-`localDetEICrecon/build.sh`; both configure `localDetEICrecon/CMakeLists.txt`.
+`environment/build.sh` is the single build entry for this retained backend;
+it configures `localDetEICrecon/CMakeLists.txt`.
 
 ## Ownership and configuration
 

@@ -157,10 +157,11 @@ and links the imported `Mille2` target. This supplies the implementation of
 `spawnMilleRecord`, record methods, and binary I/O. Disabling `ENABLE_MILLEPEDE`
 is explicitly rejected by this backend.
 
-The separate [alignment CMake file](../localDetEICrecon/alignment/CMakeLists.txt)
-can build a static `BeamTestMilleWriter` library linked publicly to `Mille2`.
-The normal Plugin build compiles the writer source directly; it does **not**
-require a prior build of that separate static target.
+The former standalone writer CMake entry was removed during the consolidation
+because no maintained workflow used it. The normal Plugin build and the telescope
+legacy-equivalence executable still compile the same
+[writer source](../localDetEICrecon/alignment/src/BeamTestMilleWriter.cc) directly.
+No writer mathematics or legacy alignment capability was removed.
 
 `pede` is a different executable with upstream reader interfaces and solver
 code. It does not load `BeamTestReco.so` or call JANA. Its only connection to

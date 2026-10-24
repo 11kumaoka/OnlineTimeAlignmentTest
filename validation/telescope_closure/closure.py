@@ -16,7 +16,7 @@ sys.path.insert(0,str(REPO))
 from research_common import execute,stage,done,require,write_json,digest
 from geometry.transforms import matvec,transpose
 from validation.telescope_geometry.prepare import prepare
-from alignment.align import read_pede
+from alignment.pede import read_pede
 from validation.telescope_alignment.check import records,profile
 
 LABELS=[700102,700202]

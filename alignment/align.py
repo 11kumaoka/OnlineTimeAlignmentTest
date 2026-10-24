@@ -6,14 +6,8 @@ from pathlib import Path
 from correction.scope import SO3_MODES,parameter_spec
 from research_common import REPO, cli_parser, run, require, stage, done, prefix, execute, digest
 
-def read_pede(path):
-    out={}
-    for line in path.read_text().splitlines():
-        fields=line.split()
-        if len(fields)>1:
-            try:out[int(fields[0])]=float(fields[1])
-            except ValueError:pass
-    return out
+# Preserve the historical import path for external callers.
+from alignment.pede import read_pede
 
 def align(a):
     if any(digest(a.steering)==digest(REPO/f'alignment/pede_{mode}.txt') for mode in ('l1_rx_ry','l1_l2_rx_ry')):

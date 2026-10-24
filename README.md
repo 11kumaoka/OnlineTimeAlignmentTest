@@ -6,6 +6,10 @@ For the **experimental EICrecon-style telescope alignment**, start with the
 [reproduction record](docs/BARREL_ALIGNMENT_VALIDATION.md).
 The [telescope naming validation](docs/TELESCOPE_RENAME_VALIDATION.md) records the current source moves and equivalent closure results.
 The original endcap/BeamTestReco workflow below remains separately supported.
+It retains rotation/SO(3), Geant4/RawHit and sequential Controller capabilities
+that the native two-Global-Y fixture does not yet replace. See the
+[implementation audit](docs/TELESCOPE_IMPLEMENTATION_AUDIT.md) for the migration boundary
+and the single active EICrecon-based development entry.
 
 Independent DD4hep/EICrecon research tasks: Detector Geometry → Simulation →
 Digitization → saved RawHits → Hit Reconstruction / Track Fitting → Mille Binary → Millepede-II →
@@ -22,7 +26,7 @@ Run from the repository root, mounted at `/work` inside the EIC Docker image:
 ```bash
 # Only on a new checkout without external/:
 bash environment/run.sh python3 environment/setup_dependencies.py
-bash environment/run.sh bash localDetEICrecon/build.sh
+bash environment/run.sh bash environment/build.sh
 ```
 
 Skip dependency installation when `external/install/` already exists. The pinned

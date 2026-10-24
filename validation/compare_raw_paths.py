@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 import awkward as ak
 import uproot
-from alignment.align import read_pede
+from alignment.pede import read_pede
 from digitization.contract import RAW_COLLECTIONS
 from research_common import digest, write_json
 

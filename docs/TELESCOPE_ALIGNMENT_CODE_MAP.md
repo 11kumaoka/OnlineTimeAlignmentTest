@@ -69,6 +69,7 @@ Paths below are relative to the repository root. `T/` means
 | `T/alignment/NativeMilleModel.{h,cc}` | `nativeEquation`: real ACTS propagation and transport/alignment derivatives | called inside observer and external derivative tests |
 | `V/telescope_alignment/TelescopeMilleDerivatives.cc` | `main`: analytical/finite-difference gates on actual surfaces | external executable |
 | `V/telescope_alignment/l1_l2_global_y.json` | labels 700102/700202 and explicit supported physical Global Y scope | observer configuration |
+| `alignment/pede.py` | `read_pede`: shared text parser, no legacy stage/scope imports | external Python, both workflows |
 | `V/telescope_closure/closure.py` | `solve`: official Pede execution and independent Schur comparison | external Python/Pede |
 | same | `correct`, `displaced_xml`: Pede text + nominal XML to separate corrected XML, no Truth | external Python |
 | same | `reconstruct`: new OS process for each nominal/corrected/control pass | launches eicrecon |
@@ -132,7 +133,7 @@ Pede profiles four local parameters per track and solves two shared labels.
 Nonzero field, assigned material and observable q/p/time contributions are guarded
 as unsupported. Derivative validation alone does not establish general six-DOF closure.
 
-`correct` reuses `alignment.align.read_pede`; `displaced_xml` reuses
+`correct` reuses `alignment.pede.read_pede`; `displaced_xml` reuses
 `geometry.transforms.matvec/transpose` to map physical Global Y into module axes.
 Only selected module references and sensitive-component translations change; all
 other XML attributes/text are whitelisted. Same channel bytes are decoded again
@@ -154,3 +155,18 @@ this guide and code map provide current paths. Technical names retained include
 official ePIC barrel detector constants. The existing manifest key `barrel_field`
 is retained for output-schema compatibility. None implies that the physical
 beam-test telescope is the ePIC barrel detector.
+
+## Consolidation boundary
+
+The [implementation audit](TELESCOPE_IMPLEMENTATION_AUDIT.md) inventories retained
+modules, dependencies and deleted duplicate build entries. This synthetic-channel
+closure is the active EICrecon-based development workflow. The old endcap backend
+remains a capability/reference implementation: its validated rotations, SO(3),
+Geant4/digitization and sequential Controller lifecycle are not yet replaced by
+this two-Global-Y, material-free fixture. Do not infer that those features are
+available in this native chain. No automatic Geometry activation is provided.
+
+The Pede text parser now lives in `alignment/pede.py`; it has no dependency on the
+legacy solver CLI or correction scopes. `alignment.align.read_pede` remains an
+import-compatible alias for external callers. Pede itself is still the official
+external executable, not Python numerical inference.

@@ -8,7 +8,7 @@ from research_common import digest
 from research_common import cli_parser, run, require, stage, done
 from geometry.prepare import modified_xml, write_shifted_xml
 from correction.scope import layers_for,verify_scope,axes_for,verify_survey,SO3_MODES,parameter_spec
-from alignment.align import read_pede
+from alignment.pede import read_pede
 
 
 def ensure_correction_supported(result, mode="l2_x"):

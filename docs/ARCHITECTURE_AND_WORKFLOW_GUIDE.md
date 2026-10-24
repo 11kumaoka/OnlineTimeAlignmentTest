@@ -35,7 +35,7 @@ No substitute provider or tracking/alignment expansion was added.
 ## Independent workflow and configuration ownership
 
 1. `environment/run.sh` enters the existing fixed Docker environment. Build via
-   `environment/build.sh` (also delegated to by localDetEICrecon/build.sh).
+   `environment/build.sh`.
 2. `geometry.prepare.prepare/write_shifted_xml/verify_positions` reads unchanged
    nominal plus scenario; writes step1 nominal/misaligned XML and placement QA.
 3. `simulation.simulate.simulate` snapshots beam/events/seed JSON and generates

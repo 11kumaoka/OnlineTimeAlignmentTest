@@ -182,3 +182,18 @@ Missing dependencies, incorrect fully qualified JANA parameters or reused output
 names must be repaired rather than bypassing validation. No Geometry activation
 is performed. Historical `BARREL_*` reports refer to the temporary conversion
 representation; their result paths and numerical records remain unchanged.
+
+## Consolidation boundary
+
+The [implementation audit](TELESCOPE_IMPLEMENTATION_AUDIT.md) inventories retained
+modules, dependencies and deleted duplicate build entries. This synthetic-channel
+closure is the active EICrecon-based development workflow. The old endcap backend
+remains a capability/reference implementation: its validated rotations, SO(3),
+Geant4/digitization and sequential Controller lifecycle are not yet replaced by
+this two-Global-Y, material-free fixture. Do not infer that those features are
+available in this native chain. No automatic Geometry activation is provided.
+
+The Pede text parser now lives in `alignment/pede.py`; it has no dependency on the
+legacy solver CLI or correction scopes. `alignment.align.read_pede` remains an
+import-compatible alias for external callers. Pede itself is still the official
+external executable, not Python numerical inference.

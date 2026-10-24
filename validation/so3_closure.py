@@ -13,7 +13,7 @@ import subprocess
 import shutil
 from types import SimpleNamespace
 import numpy as np
-from alignment.align import read_pede
+from alignment.pede import read_pede
 from geometry.prepare import DEFAULT_NOMINAL,write_shifted_xml
 from geometry.placements import placement_transforms
 from geometry.transforms import (RigidTransform,axis_rotation,multiply,rotation_exp,

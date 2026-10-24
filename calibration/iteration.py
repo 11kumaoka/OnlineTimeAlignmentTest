@@ -2,7 +2,7 @@
 import json
 import shutil
 from pathlib import Path
-from alignment.align import read_pede
+from alignment.pede import read_pede
 from calibration.convergence import evaluate
 from correction.scope import layers_for,verify_scope,axes_for,verify_survey,SO3_MODES,parameter_spec
 from calibration.runner import stage as run_stage
