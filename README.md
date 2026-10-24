@@ -5,6 +5,8 @@ For the **experimental EICrecon-style telescope alignment**, start with the
 [source/architecture map](docs/TELESCOPE_ALIGNMENT_CODE_MAP.md) and
 [reproduction record](docs/BARREL_ALIGNMENT_VALIDATION.md).
 The [telescope naming validation](docs/TELESCOPE_RENAME_VALIDATION.md) records the current source moves and equivalent closure results.
+Selected native L1 Global Rx and combined L1 Y/Rx + L2 Y closure are documented in
+the [legacy/native parity report](docs/TELESCOPE_ALIGNMENT_LEGACY_PARITY.md).
 The original endcap/BeamTestReco workflow below remains separately supported.
 It retains rotation/SO(3), Geant4/RawHit and sequential Controller capabilities
 that the native two-Global-Y fixture does not yet replace. See the

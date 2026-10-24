@@ -49,22 +49,26 @@ public:
     app->SetDefaultParameter("TelescopeMille:multipleEvents",multipleEvents,"Write one native Mille record per accepted event and aggregate diagnostics");
     app->SetDefaultParameter("TelescopeMille:output",output,"New official Mille Binary; experimental single-track probe");
     app->SetDefaultParameter("TelescopeMille:report",reportPath,"New native equation JSON audit");
-    app->SetDefaultParameter("TelescopeMille:config",configPath,"Explicit validated L1/L2 Global Y label map JSON");
+    app->SetDefaultParameter("TelescopeMille:config",configPath,"Explicit selected physical Global Y / L1 Global Rx label map JSON");
     app->SetDefaultParameter("TelescopeMille:derivativeGate",gatePath,"Successful derivative gate JSON from this build/fixture");
     for(const auto& path:{output,reportPath}) if(path.empty() || std::filesystem::exists(path))
       throw std::runtime_error("Mille probe requires new explicit output paths");
     config=nlohmann::json::parse(std::ifstream(configPath));gate=nlohmann::json::parse(std::ifstream(gatePath));
     if(!gate.at("passed").get<bool>() || gate.at("model_sha256")!=TELESCOPE_MILLE_MODEL_SHA)throw std::runtime_error("Derivative gate failed");
-    if(config.at("scope")!="experimental_zero_field_material_free" || config.at("parameters").size()!=2)
+    if(config.at("scope")!="experimental_zero_field_material_free")
       throw std::runtime_error("Unsupported experimental alignment scope");
-    std::set<int> layers,labels;
+    std::set<int> labels;
     for(const auto& p:config.at("parameters")) {
       const int layer=p.at("layer"),label=p.at("label");
-      if(p.at("system")!=31 || p.at("axis")!="global_y" || (layer!=1 && layer!=2) || label!=700002+100*layer)
-        throw std::runtime_error("Only explicit L1/L2 physical Global Y labels are validated");
-      layers.insert(layer);labels.insert(label);
+      const bool translation=p.at("axis")=="global_y" && (layer==1 || layer==2) && label==700002+100*layer;
+      const bool rotation=p.at("axis")=="global_rx" && layer==1 && label==700104 &&
+          p.at("unit")=="rad" && p.at("pivot")=="sensitive_surface_center" && p.at("composition")=="left_global_exp";
+      if(p.at("system")!=31 || (!translation && !rotation) || !labels.insert(label).second)
+        throw std::runtime_error("Unsupported or duplicate selected physical alignment parameter");
     }
-    if(layers.size()!=2 || labels.size()!=2)throw std::runtime_error("Duplicate alignment configuration");
+    if(labels!=std::set<int>{700102,700202} && labels!=std::set<int>{700104} &&
+       labels!=std::set<int>{700102,700104,700202})
+      throw std::runtime_error("Only two-Y, L1 Rx, or L1 Y/Rx plus L2 Y scopes are enabled");
   }
   void Process(const std::shared_ptr<const JEvent>& event) override {
     std::lock_guard<std::mutex> guard(mutex);++processed;
@@ -101,6 +105,9 @@ public:
       {"reference_geometry_id",first.referenceSurface().geometryId().value()},
       {"raw_measurement_covariance_used",true},{"smoothed_covariance_used_as_measurement_error",false},
       {"seed_prior_written",false},{"geometry_activated",false}};
+    const auto refPosition=reference.position(context);const auto refDirection=reference.direction();
+    report["reference_position_mm"]={refPosition.x(),refPosition.y(),refPosition.z()};
+    report["reference_direction"]={refDirection.x(),refDirection.y(),refDirection.z()};
     report["event_number"]=event->GetEventNumber();report["run_number"]=event->GetRunNumber();report["accepted"]=true;
     struct Row {double value;std::vector<double> local,global;std::vector<int> labels;};
     std::vector<Row> rows;std::set<int> layers;
@@ -122,6 +129,10 @@ public:
       const auto* surface=geometry->surfaceMap().at(volume->identifier);
       if(surface!=&state.referenceSurface() || measurement.getSurface()!=surface->geometryId().value() || source.geometryId()!=surface->geometryId())
         throw std::runtime_error("Native/EDM/official SurfaceMap association mismatch");
+      for(const auto& parameter:config.at("parameters")) if(parameter.at("layer")==layer && parameter.contains("geometry_id")) {
+        if(parameter.at("geometry_id")!=surface->geometryId().value() || parameter.at("volume_id")!=volume->identifier)
+          throw std::runtime_error("Configured sensor identity differs from actual DD4hep/ACTS surface");
+      }
       bool gateSurface=false;
       for(const auto& entry:gate.at("surfaces")) if(entry.at("layer")==layer && entry.at("geometry_id")==surface->geometryId().value() && entry.at("volume_id")==volume->identifier)gateSurface=true;
       if(!gateSurface)throw std::runtime_error("Surface is not covered by the derivative gate");
@@ -145,7 +156,10 @@ public:
       for(int row=0;row<2;++row) {
         Row data;data.value=whitened[row];
         for(int j=0;j<4;++j)data.local.push_back(local(row,j));
-        if(label) {data.labels.push_back(label);data.global.push_back(global(row,1));}
+        for(const auto& parameter:config.at("parameters")) if(parameter.at("layer")==layer) {
+          const int column=parameter.at("axis")=="global_y"?1:3;
+          data.labels.push_back(parameter.at("label"));data.global.push_back(global(row,column));
+        }
         rows.push_back(std::move(data));
       }
       const Acts::Vector3 center=surface->center(context);

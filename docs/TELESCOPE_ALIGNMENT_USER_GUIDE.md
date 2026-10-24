@@ -197,3 +197,63 @@ The Pede text parser now lives in `alignment/pede.py`; it has no dependency on t
 legacy solver CLI or correction scopes. `alignment.align.read_pede` remains an
 import-compatible alias for external callers. Pede itself is still the official
 external executable, not Python numerical inference.
+
+## Selected native rotation closure
+
+The next validated scope is **L1 physical Global X rotation** (in-plane for this
++X telescope), alone or together with L1/L2 physical Global Y translations.
+See the [legacy/native parity and rotation results](TELESCOPE_ALIGNMENT_LEGACY_PARITY.md).
+This is distinct from legacy +Z-beam Global Rz labels. The original `l1_l2_y`
+default, capture cut 1000, covariance, seed prior and Pede settings are unchanged.
+No native general six-DOF or Controller migration is implied.
+
+Build as above with `TELESCOPE_BUILD_MILLE_PROBE=ON`, then use **new** result names:
+
+```bash
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/telescope_closure_manual_01 --result result/telescope_rx_manual_01 \
+  --events 32 --chi2-cut 1000 --mode l1_rx --step all
+# Run the combined case only after the single-rotation gates pass.
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/telescope_closure_manual_01 --result result/telescope_y_rx_manual_01 \
+  --events 32 --chi2-cut 1000 --mode l1_y_rx_l2_y --step all
+```
+
+The fixed fixture injects L1 Rx +1.8 mrad; the combined case additionally injects
+L1 Y +0.150 mm and L2 Y +0.200 mm. This amplitude gives nontrivial pixel changes
+while keeping sensitive corners inside the unchanged module envelope. Truth is
+used only to make channels and evaluate closure. Pede solves label 700104 in rad;
+Y labels 700102/700202 remain mm. The physical pivot is the current sensitive
+center, with `Rnew=Exp([dx,0,0]) Rcurrent`. All other pose components stay fixed.
+
+The real DD4hep constructor's selected chart maps decreasing component XML `y`
+to increasing Global Rx. Correction composes SO(3) first and serializes that
+one-axis subgroup; it is not an additive Euler implementation of arbitrary
+rotations. Fresh actual DD4hep and ACTS matrices verify the result independently.
+Selected rotations are restricted to the proven chart and sensor; no new geometry
+provider, navigator, fitter, derivative model, material map or numerical solver
+is introduced.
+
+Each `solve` runs `physical_derivatives/`: actual native references are frozen and
+compared against real sensor geometries reloaded in fresh processes at ±1e-4,
+±1e-5 and ±1e-6 rad. `postsolve` repeats this for corrected Geometry in
+`corrected_physical_derivatives/`. Rank, conditioning and original-error sensitivity
+are checked without adding fit constraints. Numerical sensitivity guards are
+explicit engineering gates (scaled condition <100, angular sigma <1 mrad,
+translation sigma <0.02 mm), not uncertainty-coverage certification.
+
+The new modes share all existing step names except that `regressions` must run
+with the original `l1_l2_y` baseline. Rotation-mode `check` writes
+`validation/report.json` and `validation/rotation.root` (9 ROOT histograms).
+To rerun checks on completed outputs, supply a fresh `--validation-name`.
+The report includes units, actual IDs, full relative orientation error,
+initial-fit nominal errors/correlations, center biases, per-layer residuals,
+Pede chi2/NDF and rejection diagnostics. Read JSON or open `rotation.root` with
+ROOT/TBrowser as for the original diagnostics. GUI operation is not part of the
+batch validation claim.
+
+Geometric recovery uses a predeclared five-initial-nominal-error tolerance;
+actual XML-to-DD4hep/ACTS pose serialization is checked at 1e-9 mm / 2e-12 matrix
+entry precision. Remaining Pede increments must be below 2e-5 mm/rad per selected
+parameter. Successive fits reuse the same channels: their uncertainties are not
+combined as independent measurements. No Pede error rescaling is applied.

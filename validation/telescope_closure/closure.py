@@ -23,12 +23,13 @@ LABELS=[700102,700202]
 MODULE_TO_GLOBAL=((0.,0.,1.),(-1.,0.,0.),(0.,-1.,0.))
 
 
-def displaced_xml(nominal,output,shifts):
-    """Apply only physical Global Y translations via the validated barrel module frame."""
+def displaced_xml(nominal,output,shifts,rotations=None):
+    """Apply selected physical Y shifts and optional center-preserving L1 Global Rx."""
     if output.exists():raise ValueError('Geometry output must be new')
     root=ET.parse(nominal).getroot()
     detector=root.find("./detectors/detector[@name='SiMAPS']")
-    for layer,delta in shifts.items():
+    for layer in sorted(set(shifts)|set(rotations or {})):
+        delta=shifts.get(layer,0.)
         if int(layer) not in (1,2) or not math.isfinite(delta):raise ValueError('Only finite L1/L2 Global Y supported')
         placement=detector.find(f"./layer[@id='{int(layer)}']")
         original=detector.find(f"./module[@name='{placement.get('module')}']")
@@ -37,6 +38,9 @@ def displaced_xml(nominal,output,shifts):
         position=component.find('position')
         offset=matvec(transpose(MODULE_TO_GLOBAL),(0.,delta,0.))
         for axis,value in zip('xyz',offset):
+            # Rotation fixtures preserve untouched XML attributes exactly.
+            # The original translation-only serialization remains unchanged.
+            if rotations is not None and value==0:continue
             current=float(position.get(axis,'0').replace('*mm',''))
             position.set(axis,f'{current+value:.17g}*mm')
         # Reject changes to sensor shape, material, rotation, or segmentation.
@@ -44,6 +48,10 @@ def displaced_xml(nominal,output,shifts):
         comparison=copy.deepcopy(component)
         comparison.remove(comparison.find('position'));original_component.remove(original_component.find('position'))
         assert ET.tostring(comparison)==ET.tostring(original_component)
+        if rotations and layer in rotations:
+            from validation.telescope_closure.rotation import rotate_component
+            if layer!=1:raise ValueError('Only L1 Global Rx is enabled')
+            rotate_component(component,rotations[layer])
         detector.append(module);placement.set('module',module.get('name'))
     ET.indent(root);ET.ElementTree(root).write(output,encoding='unicode')
 
@@ -101,8 +109,14 @@ def geometry_step(args):
     p=stage(args.result,'geometry')
     prepare(p/'fixtures',initialize_metadata=True)
     nominal=p/'fixtures/nominal.xml'
-    displaced_xml(nominal,p/'truth.xml',{1:.150,2:.200})
-    done(p,nominal_sha256=digest(nominal),truth_sha256=digest(p/'truth.xml'),injected_global_y_mm={'1':.150,'2':.200})
+    if getattr(args,'mode','l1_l2_y')=='l1_l2_y':
+        displaced_xml(nominal,p/'truth.xml',{1:.150,2:.200})
+    else:
+        from validation.telescope_closure.rotation import INJECTED_RX_RAD
+        shifts={1:.150,2:.200} if args.mode=='l1_y_rx_l2_y' else {}
+        displaced_xml(nominal,p/'truth.xml',shifts,rotations={1:INJECTED_RX_RAD})
+        write_json(p/'rotation_fixture.json',{'mode':args.mode,'injected_global_y_mm':shifts,'injected_global_rx_rad':{'1':INJECTED_RX_RAD}})
+    done(p,nominal_sha256=digest(nominal),truth_sha256=digest(p/'truth.xml'),injected_global_y_mm=({'1':.150,'2':.200} if args.mode!='l1_rx' else {}))
 
 
 def data_step(args):
@@ -117,11 +131,18 @@ def data_step(args):
 
 def reconstruct(args,name,geometry,input_name,limit=None,cut=None):
     require(args.result,'data')
+    mode_record=args.result/'geometry/rotation_fixture.json'
+    expected_mode=json.loads(mode_record.read_text())['mode'] if mode_record.exists() else 'l1_l2_y'
+    if getattr(args,'mode','l1_l2_y')!=expected_mode:raise ValueError('Mode must match immutable fixture metadata')
     if json.loads((args.result/'data/complete.json').read_text())['events']!=args.events:
         raise ValueError('Event count must match immutable input metadata')
     if name in ('corrected','control') and (args.result/'nominal/complete.json').exists():
         initial=json.loads((args.result/'nominal/complete.json').read_text())['measurement_selector_chi2_cut']
         if (cut or 15.)!=initial:raise ValueError('Closure passes must use the same measurement-selection cut')
+    config='l1_l2_global_y'
+    if getattr(args,'mode','l1_l2_y')!='l1_l2_y':
+        from validation.telescope_closure.rotation import config_name
+        config=config_name(args.mode)
     p=stage(args.result,name);env=environment(args.build)
     gate=stage(p,'gate')
     execute([args.build/'TelescopeMilleDerivatives',geometry,'geometry-center',gate/'derivatives.json'],gate,env=env)
@@ -133,7 +154,7 @@ def reconstruct(args,name,geometry,input_name,limit=None,cut=None):
       '-Pacts:MaterialMap=','-PTelescopeTracking:channelInput=true','-PTelescopeAudit:multipleEvents=true',
       '-PTelescopeMille:multipleEvents=true',f'-PTelescopeAudit:output={p}/audit.json',
       f'-PTelescopeMille:output={p}/mille.dat',f'-PTelescopeMille:report={p}/mille.json',
-      f'-PTelescopeMille:config={REPO}/validation/telescope_alignment/l1_l2_global_y.json',
+      f'-PTelescopeMille:config={REPO}/validation/telescope_alignment/{config}.json',
       f'-PTelescopeMille:derivativeGate={gate}/derivatives.json',f'-Ppodio:output_file={p}/reco.root',
       '-Ppodio:output_collections=EventHeader,TelescopeChannels,TelescopeHits,TelescopeHitAssociations,TelescopeMeasurements,TelescopeSeeds,TelescopeSeedParameters,TelescopeTrajectories,TelescopeTrackParameters,TelescopeTracks,TelescopeTrackLinks,TelescopeTrackAssociations']
     if cut is not None:command.append(f'-PTelescopeTracking:TelescopeCKF:Chi2CutOff={cut}')
@@ -148,31 +169,63 @@ def reconstruct(args,name,geometry,input_name,limit=None,cut=None):
 
 
 def solve(args,reconstruction,name):
+    rotation=getattr(args,'mode','l1_l2_y')!='l1_l2_y'
+    selected=LABELS
+    if rotation:
+        from validation.telescope_closure.rotation import labels,physical_derivatives
+        selected=labels(args.mode)
+        if name in ('solve','postsolve'):physical_derivatives(args,reconstruction)
     require(args.result,reconstruction);p=stage(args.result,name)
     binary=args.result/reconstruction/'mille.dat'
     blocks=list(records(binary));assert len(blocks)==args.events and all(len(b)==10 for b in blocks)
     import numpy as np
-    normal=np.zeros((2,2));rhs=np.zeros(2)
+    dimension=len(selected)
+    normal=np.zeros((dimension,dimension));rhs=np.zeros(dimension)
     for block in blocks:
-        a,b,_=profile(block,LABELS);normal+=a;rhs+=b
-    assert np.linalg.matrix_rank(normal)==2
+        a,b,_=profile(block,selected);normal+=a;rhs+=b
+    assert np.linalg.matrix_rank(normal)==dimension
     text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n700102 0.0 1.0\n700202 0.0 1.0\n\nprintcounts\nend\n'
+    if rotation:
+        text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n'+''.join(f'{label} 0.0 1.0\n' for label in selected)+'\nprintcounts\nend\n'
     (p/'pede.txt').write_text(text)
     execute([REPO/'external/install/bin/pede','pede.txt'],p,env=environment(args.build))
     status=(p/'millepede.end').read_text().strip()
     if status.split()[0] not in ('0','1'):raise ValueError('Pede failed: '+status)
     parameters=read_pede(p/'millepede.res')
     expected=np.linalg.solve(normal,rhs)
-    assert np.allclose([parameters[k] for k in LABELS],expected,atol=6e-6)
+    if rotation:
+        from decimal import Decimal
+        printed={int(row.split()[0]):row.split() for row in (p/'millepede.res').read_text().splitlines() if row.split() and row.split()[0].isdigit()}
+        for k,value in zip(selected,expected):
+            precision=10.**Decimal(printed[k][1]).as_tuple().exponent
+            assert abs(parameters[k]-value)<.51*precision+1e-10,'Pede/independent solution beyond printed precision'
+    else:
+        assert np.allclose([parameters[k] for k in selected],expected,atol=6e-6)
     log=(p/'millepede.log').read_text();assert 'No rank defect of the symmetric matrix' in log
     covariance=np.linalg.inv(normal)
-    write_json(p/'independent.json',{'parameters_mm':parameters,'schur_solution_mm':expected.tolist(),
-      'nominal_sigma_mm':np.sqrt(np.diag(covariance)).tolist(),'rank':2,'condition':float(np.linalg.cond(normal)),
-      'normal':normal.tolist(),'status':status,'records':len(blocks)})
+    if rotation:
+        sigma=np.sqrt(np.diag(covariance))
+        reported=np.array([float(printed[k][4]) for k in selected])
+        assert np.allclose(reported,sigma,rtol=5e-5,atol=0),'Pede nominal errors differ from unscaled information'
+        correlation=covariance/np.outer(sigma,sigma)
+        scaled=normal/np.sqrt(np.outer(np.diag(normal),np.diag(normal)))
+        assert np.linalg.cond(scaled)<100,'Insufficient selected information'
+        assert all(v<(.001 if k==700104 else .02) for k,v in zip(selected,sigma)),'Insufficient angular/linear sensitivity'
+        write_json(p/'independent.json',{'parameters':parameters,'schur_solution':expected.tolist(),
+          'parameter_units':{k:('rad' if k==700104 else 'mm') for k in selected},'nominal_sigma':sigma.tolist(),'pede_reported_sigma':reported.tolist(),
+          'rank':dimension,'condition':float(np.linalg.cond(normal)),'condition_diagonal_scaled':float(np.linalg.cond(scaled)),
+          'correlation':correlation.tolist(),'normal':normal.tolist(),'status':status,'records':len(blocks)})
+    else:
+        write_json(p/'independent.json',{'parameters_mm':parameters,'schur_solution_mm':expected.tolist(),
+          'nominal_sigma_mm':np.sqrt(np.diag(covariance)).tolist(),'rank':2,'condition':float(np.linalg.cond(normal)),
+          'normal':normal.tolist(),'status':status,'records':len(blocks)})
     done(p,records=len(blocks),pede_status=status)
 
 
 def correct(args):
+    if getattr(args,'mode','l1_l2_y')!='l1_l2_y':
+        from validation.telescope_closure.rotation import correct as rotation_correct
+        return rotation_correct(args)
     require(args.result,'solve');p=stage(args.result,'correction')
     parameters=read_pede(args.result/'solve/millepede.res')
     shifts={1:parameters[700102],2:parameters[700202]}
@@ -195,6 +248,9 @@ def correct(args):
 
 
 def check(args):
+    if getattr(args,'mode','l1_l2_y')!='l1_l2_y':
+        from validation.telescope_closure.rotation import check as rotation_check
+        return rotation_check(args)
     import numpy as np
     import ROOT
     from podio import reading
@@ -444,10 +500,13 @@ def main():
     parser.add_argument('--result',type=Path,required=True)
     parser.add_argument('--build',type=Path,required=True)
     parser.add_argument('--validation-name',default='validation',help='New validation/regression output stage name; existing reports remain immutable')
+    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_y_rx_l2_y'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
     parser.add_argument('--events',type=int,default=32)
     parser.add_argument('--chi2-cut',type=float,default=None,help='Explicit alignment capture window; same setting in all closure passes')
     parser.add_argument('--step',choices=['geometry','data','pilot','nominal','solve','correct','corrected','postsolve','control','controlsolve','check','regressions','all'],required=True)
-    args=parser.parse_args();args.result=args.result.resolve();args.build=args.build.resolve()
+    args=parser.parse_args()
+    if args.mode!='l1_l2_y' and args.step=='regressions':parser.error('Consolidated regression uses the original l1_l2_y baseline')
+    args.result=args.result.resolve();args.build=args.build.resolve()
     if not args.validation_name.isidentifier():parser.error('Validation stage name must be an identifier')
     if not args.result.is_relative_to(REPO/'result') or not 16<=args.events<=64:parser.error('Use result/ and 16..64 deterministic events')
     args.result.mkdir(parents=True,exist_ok=True)

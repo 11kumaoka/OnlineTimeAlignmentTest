@@ -35,10 +35,17 @@ int main(int argc,char** argv) {
       const auto center=world(context,{0,0,0});const auto* surface=provider->surfaceMap().at(context->identifier);
       nlohmann::json rotation=nlohmann::json::array();
       for(int i=0;i<3;++i) {nlohmann::json row=nlohmann::json::array();for(int j=0;j<3;++j)row.push_back(surface->localToGlobalTransform(gctx).linear()(i,j));rotation.push_back(row);}
+      nlohmann::json ddRotation=nlohmann::json::array();
+      Acts::RotationMatrix3 native;
+      for(int j=0;j<3;++j) {
+        dd4hep::Position axis(j==0?dd4hep::mm:0,j==1?dd4hep::mm:0,j==2?dd4hep::mm:0);
+        native.col(j)=(world(context,axis)-center).normalized();
+      }
+      for(int i=0;i<3;++i) {auto row=nlohmann::json::array();for(int j=0;j<3;++j)row.push_back(native(i,j));ddRotation.push_back(row);}
       // ACTS centers and native DD4hep centers must describe the same sensor.
       if((center-surface->center(gctx)).norm()>1e-8)throw std::runtime_error("DD4hep/ACTS center mismatch");
       report["sensors"].push_back({{"layer",layer},{"volume_id",context->identifier},{"geometry_id",surface->geometryId().value()},
-        {"center_mm",{center.x(),center.y(),center.z()}},{"acts_rotation",rotation}});
+        {"center_mm",{center.x(),center.y(),center.z()}},{"acts_rotation",rotation},{"dd4hep_rotation",ddRotation}});
     }
     auto fraction=[](double x){return x-std::floor(x);};
     for(int event=0;event<count;++event) {

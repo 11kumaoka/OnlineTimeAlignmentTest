@@ -69,6 +69,8 @@ Paths below are relative to the repository root. `T/` means
 | `T/alignment/NativeMilleModel.{h,cc}` | `nativeEquation`: real ACTS propagation and transport/alignment derivatives | called inside observer and external derivative tests |
 | `V/telescope_alignment/TelescopeMilleDerivatives.cc` | `main`: analytical/finite-difference gates on actual surfaces | external executable |
 | `V/telescope_alignment/l1_l2_global_y.json` | labels 700102/700202 and explicit supported physical Global Y scope | observer configuration |
+| `V/telescope_alignment/l1_global_rx.json`, `l1_y_rx_l2_y.json` | selected physical labels, rad unit, current-center pivot, Global left composition and actual L1 IDs | observer configuration |
+| `V/telescope_closure/rotation.py` | `rotate_component`, `pose_checks`, `physical_derivatives`, `correct`, `check`: restricted SO(3) serialization and actual-Geometry/native-row validation | external selected-mode helpers |
 | `alignment/pede.py` | `read_pede`: shared text parser, no legacy stage/scope imports | external Python, both workflows |
 | `V/telescope_closure/closure.py` | `solve`: official Pede execution and independent Schur comparison | external Python/Pede |
 | same | `correct`, `displaced_xml`: Pede text + nominal XML to separate corrected XML, no Truth | external Python |
@@ -123,19 +125,22 @@ The earliest accepted smoothed state supplies the common bound reference.
 `nativeEquation` repropagates with ACTS, takes transport derivatives for four local
 parameters (loc0,loc1,phi,theta), and uses Surface::alignmentToBoundDerivative
 including path correction. Local right rotation increments map to Global left
-increments through R^T, but only the two Global Y translations are enabled here.
+increments through R^T, and the enabled scopes are two Global Y translations, L1 Global Rx alone,
+or L1 Y/Rx plus L2 Y. Other columns remain unsupported fit parameters.
 
 The equation is measured-minus-prediction = A*localDelta + G*alignmentDelta.
 Whitening uses the original calibrated covariance C=L L^T and W=L^-1 for residual
 and both Jacobians; official Mille receives scalar sigma=1. Smoothed covariance
 is not substituted for measurement errors, and no seed-prior equations are added.
-Pede profiles four local parameters per track and solves two shared labels.
+Pede profiles four local parameters per track and solves one, two or three shared
+labels in the selected explicit scope.
 Nonzero field, assigned material and observable q/p/time contributions are guarded
 as unsupported. Derivative validation alone does not establish general six-DOF closure.
 
 `correct` reuses `alignment.pede.read_pede`; `displaced_xml` reuses
 `geometry.transforms.matvec/transpose` to map physical Global Y into module axes.
-Only selected module references and sensitive-component translations change; all
+Only selected module references, sensitive-component translations and the selected
+L1 rotation serialization change; all
 other XML attributes/text are whitelisted. Same channel bytes are decoded again
 in a fresh process. No Controller registry or Geometry activation is involved.
 The historical writer remains an independent straight-line equivalence reference.
@@ -163,10 +168,34 @@ modules, dependencies and deleted duplicate build entries. This synthetic-channe
 closure is the active EICrecon-based development workflow. The old endcap backend
 remains a capability/reference implementation: its validated rotations, SO(3),
 Geant4/digitization and sequential Controller lifecycle are not yet replaced by
-this two-Global-Y, material-free fixture. Do not infer that those features are
+these selected material-free native fixtures. Do not infer that those features are
 available in this native chain. No automatic Geometry activation is provided.
 
 The Pede text parser now lives in `alignment/pede.py`; it has no dependency on the
 legacy solver CLI or correction scopes. `alignment.align.read_pede` remains an
 import-compatible alias for external callers. Pede itself is still the official
 external executable, not Python numerical inference.
+
+## Native rotation milestone
+
+The [parity report](TELESCOPE_ALIGNMENT_LEGACY_PARITY.md) distinguishes the legacy
+fixed-ordered Rx/Ry failure, later SO(3) controlled results, incomplete three-layer
+claims and the new native tests. `TelescopeMilleProcessor::Init` accepts only the
+three explicit label sets; `Process` selects column 1 (Y) or column 3 (Rx) from
+the **unchanged** `NativeMilleModel` after its original whitening. Config parameters
+and decoded Mille labels are authoritative for a multi-parameter sensor; the old
+scalar equation `label` field remains for the original Y-only comparison.
+
+`TelescopeChannels::main` now also reports actual DD4hep basis columns.
+`closure.py::displaced_xml` permits a selected L1 rotation and preserves untouched
+XML attributes in rotation fixtures. `geometry_step` generates test Truth;
+`rotation.correct` reads Pede and nominal XML only. The same native reconstruction
+is then restarted with corrected Geometry. `rotation.physical_derivatives` is an
+independent finite-difference validator of actual sensor poses and frozen native
+references; it is never an inference model. Existing generic mathematical gates,
+standalone CKF and legacy-equivalence tests remain independent.
+
+The selected one-axis chart uses a full SO(3) target matrix before XML
+serialization. General native Ry/Rz, extra translations, multi-layer six-DOF,
+sequential Controller operation and original Geant4/RawHit compatibility remain
+unrestored. The retained legacy implementation is unchanged.

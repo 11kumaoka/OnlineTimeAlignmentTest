@@ -2,7 +2,9 @@
 > [code and upstream map](../../../docs/TELESCOPE_ALIGNMENT_CODE_MAP.md), and
 > [reproduction record](../../../docs/BARREL_ALIGNMENT_VALIDATION.md).
 > The earlier reports below describe their historical milestones; the current
-> validated channel closure remains limited to L1/L2 Global Y, zero field and no ACTS material.
+> original validated channel closure uses L1/L2 Global Y, zero field and no ACTS material.
+> The selected native L1 Global Rx and combined Y/Rx milestone is described in the
+> [parity report](../../../docs/TELESCOPE_ALIGNMENT_LEGACY_PARITY.md); no general six-DOF scope is implied.
 
 # Experimental EICrecon telescope factory chain
 
