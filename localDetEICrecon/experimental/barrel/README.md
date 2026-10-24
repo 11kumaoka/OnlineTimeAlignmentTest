@@ -17,3 +17,9 @@ than duplicated. Local classes use `eicrecon::telescope` to avoid symbol clashes
 The optional `TELESCOPE_BUILD_MILLE_PROBE=ON` targets add a separate native-state
 Mille observer and mathematical tests. See [the native Mille integration report](../../../docs/BARREL_NATIVE_MILLE_INTEGRATION.md).
 This does not enable alignment in the production plugin or activate Geometry.
+
+The [channel-based alignment closure](../../../docs/BARREL_CHANNEL_ALIGNMENT_CLOSURE.md)
+reconstructs 32 immutable five-SiMAPS channel events through nominal and corrected
+DD4hep Geometry, using the installed official TrackerHitReconstruction factory.
+`TelescopeTracking:channelInput=true` and the explicit multi-event observer modes
+select this workflow; the original one-event benchmark remains the default.

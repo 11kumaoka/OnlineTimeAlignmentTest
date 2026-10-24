@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <set>
+#include <mutex>
 namespace eicrecon::telescope {
 namespace {
 template<class Derived> nlohmann::json matrix(const Eigen::MatrixBase<Derived>& m) {
@@ -37,9 +38,15 @@ void save(const std::string& name,const nlohmann::json& report) {
 class TelescopeMilleProcessor : public JEventProcessor {
   std::string output,reportPath,configPath,gatePath;
   nlohmann::json config,gate;
+  bool multipleEvents=false;
+  std::unique_ptr<Mille::MilleRecord> record;
+  nlohmann::json events=nlohmann::json::array();
+  std::size_t processed=0,rejected=0;
+  std::mutex mutex;
 public:
   void Init() override {
     auto* app=GetApplication();
+    app->SetDefaultParameter("TelescopeMille:multipleEvents",multipleEvents,"Write one native Mille record per accepted event and aggregate diagnostics");
     app->SetDefaultParameter("TelescopeMille:output",output,"New official Mille Binary; experimental single-track probe");
     app->SetDefaultParameter("TelescopeMille:report",reportPath,"New native equation JSON audit");
     app->SetDefaultParameter("TelescopeMille:config",configPath,"Explicit validated L1/L2 Global Y label map JSON");
@@ -60,14 +67,22 @@ public:
     if(layers.size()!=2 || labels.size()!=2)throw std::runtime_error("Duplicate alignment configuration");
   }
   void Process(const std::shared_ptr<const JEvent>& event) override {
+    std::lock_guard<std::mutex> guard(mutex);++processed;
     const auto states=event->Get<Acts::ConstVectorMultiTrajectory>("TelescopeActsStates");
     const auto tracks=event->Get<Acts::ConstVectorTrackContainer>("TelescopeActsTracks");
     const auto* measurements=event->GetCollection<edm4eic::Measurement2D>("TelescopeMeasurements");
     if(states.size()!=1 || tracks.size()!=1)throw std::runtime_error("Expected one ACTS container pair");
     ActsExamples::ConstTrackContainer container(std::make_shared<Acts::ConstVectorTrackContainer>(*tracks[0]),
         std::make_shared<Acts::ConstVectorMultiTrajectory>(*states[0]));
+    if(multipleEvents && container.size()==0) {
+      ++rejected;events.push_back({{"event_number",event->GetEventNumber()},{"accepted",false}});return;
+    }
     if(container.size()!=1)throw std::runtime_error("This probe requires exactly one accepted track");
     const auto track=container.getTrack(0);
+    if(multipleEvents && (track.nMeasurements()!=5 || track.nOutliers()!=0)) {
+      ++rejected;events.push_back({{"event_number",event->GetEventNumber()},{"accepted",false},
+        {"reason","Incomplete SiMAPS track or outliers"},{"measurements",track.nMeasurements()},{"outliers",track.nOutliers()}});return;
+    }
     if(track.nMeasurements()!=5 || track.nOutliers()!=0)throw std::runtime_error("Expected five accepted SiMAPS measurements");
     auto geometry=GetApplication()->GetService<ACTSGeo_service>()->actsGeoProvider();
     requireDeterministicGeometry(*geometry);
@@ -86,6 +101,7 @@ public:
       {"reference_geometry_id",first.referenceSurface().geometryId().value()},
       {"raw_measurement_covariance_used",true},{"smoothed_covariance_used_as_measurement_error",false},
       {"seed_prior_written",false},{"geometry_activated",false}};
+    report["event_number"]=event->GetEventNumber();report["run_number"]=event->GetRunNumber();report["accepted"]=true;
     struct Row {double value;std::vector<double> local,global;std::vector<int> labels;};
     std::vector<Row> rows;std::set<int> layers;
     for(const auto& [path,index]:indices) {
@@ -141,14 +157,21 @@ public:
         {"center_mm",{center.x(),center.y(),center.z()}},{"rotation",matrix(surface->localToGlobalTransform(context).linear())}});
     }
     if(rows.size()!=10 || layers.size()!=5)throw std::runtime_error("Incomplete native Mille equations");
-    reserve(output);
-    auto record=Mille::spawnMilleRecord(output,true,false);
+    if(!record) {reserve(output);record=Mille::spawnMilleRecord(output,true,false);}
     if(!record)throw std::runtime_error("Cannot create official Mille record");
     const std::vector<unsigned int> localIndices{1,2,3,4};
     for(const auto& row:rows)record->addData(row.value,1.,localIndices,row.local,row.labels,row.global);
-    record->writeRecord();record->flushOutputFile();record.reset();
+    record->writeRecord();record->flushOutputFile();if(!multipleEvents)record.reset();
     report["records"]=1;report["scalar_measurements"]=rows.size();report["double_precision"]=true;
-    report["passed"]=true;save(reportPath,report);
+    report["passed"]=true;
+    if(multipleEvents)events.push_back(report);else save(reportPath,report);
+  }
+  void Finish() override {
+    if(!multipleEvents)return;
+    record.reset();
+    save(reportPath,{{"passed",rejected==0},{"processed",processed},{"accepted",processed-rejected},
+      {"rejected",rejected},{"records",processed-rejected},{"events",events},
+      {"model_sha256",TELESCOPE_MILLE_MODEL_SHA}});
   }
 };
 }

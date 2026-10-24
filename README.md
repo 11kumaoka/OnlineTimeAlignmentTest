@@ -174,3 +174,9 @@ now runs the installed EICrecon services, adapted official measurement/CKF
 modules, and unchanged ActsToTracks through real JANA factories. It reproduces
 one synthetic, material-free radial track; it does not replace the production
 alignment workflow or claim RawHit, material, or alignment closure validation.
+
+The experimental [channel-based alignment closure](docs/BARREL_CHANNEL_ALIGNMENT_CLOSURE.md)
+now reconstructs 32 quantized-channel events with nominal Geometry, solves L1/L2
+Global Y corrections with official Millepede-II, and reconstructs the identical
+input with corrected DD4hep Geometry. This validated scope is zero-field and
+material-free; production activation remains a separate step.

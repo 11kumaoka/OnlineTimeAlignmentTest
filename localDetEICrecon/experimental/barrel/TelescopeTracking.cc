@@ -4,6 +4,8 @@
 #include "factories/tracking/TrackerMeasurementFromHits_factory.h"
 #include "factories/tracking/CKFTracking_factory.h"
 #include <factories/tracking/ActsToTracks_factory.h>
+#include <factories/tracking/TrackerHitReconstruction_factory.h>
+#include <factories/meta/CollectionCollector_factory.h>
 #include <extensions/jana/JOmniFactoryGeneratorT.h>
 #include <JANA/JApplication.h>
 #include "FactoryAudit.h"
@@ -11,8 +13,18 @@ extern "C" void InitPlugin(JApplication* app) {
   InitJANAPlugin(app);
   using namespace eicrecon;
   app->Add(new telescope::FactoryAudit);
-  app->Add(new JOmniFactoryGeneratorT<telescope::SyntheticTrackerHits_factory>(
-      "TelescopeSyntheticHits", {}, {"TelescopeHits", "TelescopeHitAssociations"}, app));
+  bool channelInput=false;
+  app->SetDefaultParameter("TelescopeTracking:channelInput",channelInput,
+      "Decode immutable TelescopeChannels with the installed official TrackerHitReconstruction");
+  if(channelInput) {
+    app->Add(new JOmniFactoryGeneratorT<TrackerHitReconstruction_factory>(
+        "TelescopeHitReconstruction", {"TelescopeChannels"}, {"TelescopeHits"}, app));
+    app->Add(new JOmniFactoryGeneratorT<CollectionCollector_factory<edm4eic::MCRecoTrackerHitAssociation,true>>(
+        "TelescopeHitAssociations", {}, {"TelescopeHitAssociations"}, app));
+  } else {
+    app->Add(new JOmniFactoryGeneratorT<telescope::SyntheticTrackerHits_factory>(
+        "TelescopeSyntheticHits", {}, {"TelescopeHits", "TelescopeHitAssociations"}, app));
+  }
   app->Add(new JOmniFactoryGeneratorT<telescope::TrackerMeasurementFromHits_factory>(
       "TelescopeMeasurements", {"TelescopeHits"}, {"TelescopeMeasurements"}, app));
   app->Add(new JOmniFactoryGeneratorT<telescope::TelescopeSeed_factory>(

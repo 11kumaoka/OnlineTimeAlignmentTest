@@ -12,7 +12,7 @@
 using namespace eicrecon::telescope;
 int main(int argc,char** argv) {
   if(argc!=4 || std::filesystem::exists(argv[3])) {
-    std::cerr<<"Usage: BarrelMilleDerivatives BARREL_XML NATIVE_AUDIT NEW_REPORT_JSON\n";return 64;
+    std::cerr<<"Usage: BarrelMilleDerivatives BARREL_XML NATIVE_AUDIT_OR_geometry-center NEW_REPORT_JSON\n";return 64;
   }
   try {
     auto& detector=dd4hep::Detector::getInstance();detector.fromXML(argv[1]);
@@ -22,14 +22,21 @@ int main(int argc,char** argv) {
     requireDeterministicGeometry(*provider);
     const auto& context=provider->getActsGeometryContext();
     const auto converter=algorithms::GeoSvc::instance().cellIDPositionConverter();
-    const auto input=nlohmann::json::parse(std::ifstream(argv[2]));
+    const bool geometryOnly=std::string(argv[2])=="geometry-center";
+    const auto input=geometryOnly?nlohmann::json::object():nlohmann::json::parse(std::ifstream(argv[2]));
     const auto* first=provider->surfaceMap().at(converter->findContext(31ULL|(1ULL<<22)|(1ULL<<28))->identifier);
-    Acts::Vector3 point;bool found=false;
-    for(const auto& state:input.at("smoothed_states")) if(state.at("geometry_id").get<uint64_t>()==first->geometryId().value()) {
-      for(int i=0;i<3;++i) point[i]=state.at("position_mm").at(i).get<double>();found=true;
+    Acts::Vector3 point,direction;
+    if(geometryOnly) {
+      direction=Acts::Vector3(1.,.003,-.002).normalized();
+      point=first->localToGlobal(context,Acts::Vector2(2.,3.),direction);
+    } else {
+      bool found=false;
+      for(const auto& state:input.at("smoothed_states")) if(state.at("geometry_id").get<uint64_t>()==first->geometryId().value()) {
+        for(int i=0;i<3;++i)point[i]=state.at("position_mm").at(i).get<double>();found=true;
+      }
+      if(!found)throw std::runtime_error("No native L0 smoothed state");
+      for(int i=0;i<3;++i)direction[i]=input.at("edm").at("momentum_GeV").at(i).get<double>();direction.normalize();
     }
-    if(!found)throw std::runtime_error("No native L0 smoothed state");
-    Acts::Vector3 direction;for(int i=0;i<3;++i)direction[i]=input.at("edm").at("momentum_GeV").at(i).get<double>();direction.normalize();
     Acts::BoundVector parameters=Acts::BoundVector::Zero();
     parameters.head<2>()=first->globalToLocal(context,point,direction).value();
     parameters[Acts::eBoundPhi]=std::atan2(direction.y(),direction.x());

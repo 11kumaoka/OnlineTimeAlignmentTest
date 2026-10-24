@@ -41,6 +41,12 @@
       "local": "extensions/edm4eic/EDM4eicToActs.h",
       "sha256": "ac4bb3f43004e2dfef5c6d8e3d116cc2181eb660dcb90637b867c046e2593e74",
       "reason": "Required pinned CKF header is not installed; copied unchanged"
+    },
+    {
+      "upstream": "src/algorithms/meta/CollectionCollector.h",
+      "local": "upstream_support/algorithms/meta/CollectionCollector.h",
+      "sha256": "38fd816ba2005e3b86bf4c6a13516370db64c3bd7d6ead5e516bee649435217d",
+      "reason": "Header required by installed official collector factory is missing from installed include tree; copied unchanged"
     }
   ],
   "reviewed_sources": [
@@ -143,6 +149,22 @@
     {
       "upstream": "src/services/geometry/dd4hep/DD4hep_service.h",
       "sha256": "b1578956632b6456e145fb2ea212119b1339ad50e480cecf6f1edb998b54db12"
+    },
+    {
+      "upstream": "src/factories/tracking/TrackerHitReconstruction_factory.h",
+      "sha256": "f9b59c94fccc26317d4b5c5ef72945622291cbe8b8f945a106809af2688bdd64"
+    },
+    {
+      "upstream": "src/algorithms/tracking/TrackerHitReconstruction.cc",
+      "sha256": "3ec90a925d0be6d58c4172ec1159449e6379b2718a549d01778a24c345b0c683"
+    },
+    {
+      "upstream": "src/algorithms/tracking/TrackerHitReconstruction.h",
+      "sha256": "f212063e23a0b2404aa733b9a1d2056cad478040fe7dcf4cb8633f687702f6e9"
+    },
+    {
+      "upstream": "src/factories/meta/CollectionCollector_factory.h",
+      "sha256": "34fbfdc3042d5dbccdc61b796bed9be9b4bb305684d5e0426f990dbe451bc6c2"
     }
   ],
   "directly_reused": [
@@ -156,6 +178,9 @@
     "JOmniFactory",
     "JOmniFactoryGeneratorT",
     "JEventSourcePODIO",
-    "JEventProcessorPODIO"
+    "JEventProcessorPODIO",
+    "TrackerHitReconstruction",
+    "TrackerHitReconstruction_factory",
+    "CollectionCollector_factory"
   ]
 }

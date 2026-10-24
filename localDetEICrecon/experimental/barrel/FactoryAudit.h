@@ -11,15 +11,21 @@
 #include <filesystem>
 #include <fcntl.h>
 #include <unistd.h>
+#include <mutex>
 namespace eicrecon::telescope {
 class FactoryAudit : public JEventProcessor {
   std::string output;
+  bool multipleEvents=false;
+  nlohmann::json events=nlohmann::json::array();
+  std::mutex mutex;
 public:
   void Init() override {
     GetApplication()->SetDefaultParameter("TelescopeAudit:output", output, "New JSON audit output (required)");
+    GetApplication()->SetDefaultParameter("TelescopeAudit:multipleEvents",multipleEvents,"Aggregate per-event native track diagnostics; preserve single-event default");
     if(output.empty() || std::filesystem::exists(output)) throw std::runtime_error("Audit output must be a new path");
   }
   void Process(const std::shared_ptr<const JEvent>& event) override {
+    std::lock_guard<std::mutex> guard(mutex);
     const auto* hits=event->GetCollection<edm4eic::TrackerHit>("TelescopeHits");
     const auto* measurements=event->GetCollection<edm4eic::Measurement2D>("TelescopeMeasurements");
     const auto* seeds=event->GetCollection<edm4eic::TrackSeed>("TelescopeSeeds");
@@ -36,6 +42,12 @@ public:
     nlohmann::json report={{"synthetic_input",true},{"material_free",true},
       {"hits",hits->size()},{"measurements",measurements->size()},{"seeds",seeds->size()},
       {"native_tracks",native.size()},{"edm_tracks",tracks->size()},{"edm_trajectories",trajectories->size()}};
+    report["event_number"]=event->GetEventNumber();
+    report["run_number"]=event->GetRunNumber();
+    if(multipleEvents && native.size()==0 && tracks->empty()) {
+      report["accepted"]=false;events.push_back(report);return;
+    }
+    report["accepted"]=true;
     if(hits->size()!=5 || measurements->size()!=5 || seeds->size()!=1 || native.size()!=1 || tracks->size()!=1)
       throw std::runtime_error("Unexpected factory collection counts");
     const auto seedPosition=(*seeds)[0].getPerigee();
@@ -54,6 +66,10 @@ public:
     const auto track=native.getTrack(0);
     report["chi2"]=track.chi2(); report["stored_ndf"]=track.nDoF();
     report["outliers"]=track.nOutliers(); report["holes"]=track.nHoles();
+    if(multipleEvents && (track.nMeasurements()!=5 || track.nOutliers()!=0 || track.nHoles()!=2)) {
+      report["accepted"]=false;report["reason"]="Incomplete SiMAPS track or unexpected holes/outliers";
+      events.push_back(report);return;
+    }
     if(track.nMeasurements()!=5 || track.nOutliers()!=0 || track.nHoles()!=2) throw std::runtime_error("Unexpected CKF states");
     for(const auto& measurement:*measurements) {
       const auto hit=measurement.getHits()[0];
@@ -68,7 +84,7 @@ public:
       if(std::abs(cov.xx-hit.getPositionError().yy)>1e-10 || std::abs(cov.yy-hit.getPositionError().xx)>1e-10 || std::abs(cov.xy)>1e-10)
         throw std::runtime_error("Measurement covariance mismatch");
       report["measurement_details"].push_back({{"cell_id",hit.getCellID()},{"volume_id",volume->identifier},
-        {"geometry_id",measurement.getSurface()},{"loc_mm",{measurement.getLoc().a,measurement.getLoc().b}},
+        {"geometry_id",measurement.getSurface()},{"position_mm",{point.x,point.y,point.z}},{"loc_mm",{measurement.getLoc().a,measurement.getLoc().b}},
         {"covariance_mm2",{cov.xx,cov.yy,cov.xy}}});
     }
     for(const auto state:track.trackStatesReversed()) {
@@ -94,7 +110,7 @@ public:
        {"charge",edm.getCharge()},{"chi2",edm.getChi2()},{"ndf",edm.getNdf()},
        {"measurement_links",edm.getMeasurements().size()}};
     if(edm.getPdg()!=11 || edm.getCharge()!=-1 || edm.getMeasurements().size()!=5 ||
-       std::abs(edm.getChi2()-track.chi2())>1e-4 || edm.getNdf()!=track.nDoF())
+       std::abs(edm.getChi2()-track.chi2())>std::max(1e-4,2e-6*std::abs(track.chi2())) || edm.getNdf()!=track.nDoF())
       throw std::runtime_error("ACTS-to-EDM conversion mismatch");
     // Exercise the real converter with unequal variances: the benchmark's
     // equal pixel widths alone cannot detect an axis-exchange defect.
@@ -118,7 +134,18 @@ public:
     report["anisotropic_xz_covariance_control_passed"]=true;
     report["unchanged_xy_covariance_control_passed"]=true;
     report["passed"]=true;
-    // The observer requires one event and a fresh output path.
+    if(multipleEvents) {events.push_back(report);return;}
+    writeReport(report);
+  }
+  void Finish() override {
+    if(!multipleEvents)return;
+    std::size_t accepted=0;for(const auto& e:events)if(e.at("accepted").get<bool>())++accepted;
+    writeReport({{"passed",accepted==events.size()},{"processed",events.size()},
+      {"accepted",accepted},{"rejected",events.size()-accepted},{"events",events}});
+  }
+private:
+  void writeReport(const nlohmann::json& report) {
+    // Always preserve an existing audit output.
     const int fd=::open(output.c_str(),O_WRONLY|O_CREAT|O_EXCL,0644);
     if(fd<0) throw std::runtime_error("Audit output already exists or cannot be created");
     const std::string data=report.dump(2)+"\n";

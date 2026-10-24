@@ -16,7 +16,7 @@ target_link_libraries(TestbenchBarrelMetadata PRIVATE DD4hep::DDCore DD4hep::DDR
 dd4hep_generate_rootmap(TestbenchBarrelMetadata)
 add_library(TelescopeTracking SHARED TelescopeTracking.cc algorithms/tracking/TrackerMeasurementFromHits.cc algorithms/tracking/CKFTracking.cc)
 set_target_properties(TelescopeTracking PROPERTIES PREFIX "")
-target_include_directories(TelescopeTracking PRIVATE ${EICRECON_INCLUDE_DIR})
+target_include_directories(TelescopeTracking PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/upstream_support ${EICRECON_INCLUDE_DIR})
 target_compile_definitions(TelescopeTracking PRIVATE Acts_VERSION_MAJOR=${Acts_VERSION_MAJOR} Acts_VERSION_MINOR=${Acts_VERSION_MINOR} USE_MODERN_PODIO_GLUE=1)
 target_link_libraries(TelescopeTracking PRIVATE EICrecon::algorithms_tracking_library
   JANA::jana2_shared_lib DD4hep::DDCore DD4hep::DDRec Acts::Core Acts::PluginDD4hep
@@ -41,6 +41,8 @@ if(TELESCOPE_BUILD_MILLE_PROBE)
   set_target_properties(TelescopeMille PROPERTIES PREFIX "")
   target_compile_definitions(TelescopeMille PRIVATE USE_MODERN_PODIO_GLUE=1 Acts_VERSION_MAJOR=${Acts_VERSION_MAJOR} Acts_VERSION_MINOR=${Acts_VERSION_MINOR})
   target_link_libraries(TelescopeMille PRIVATE NativeMilleModel JANA::jana2_shared_lib Mille2 nlohmann_json::nlohmann_json)
+  add_executable(BarrelChannels ../../../validation/barrel_closure/BarrelChannels.cc)
+  target_link_libraries(BarrelChannels PRIVATE NativeMilleModel nlohmann_json::nlohmann_json spdlog::spdlog)
   add_executable(BarrelMilleFixture ../../../validation/barrel_alignment/BarrelMilleFixture.cc)
   target_link_libraries(BarrelMilleFixture PRIVATE NativeMilleModel Mille2 nlohmann_json::nlohmann_json spdlog::spdlog)
   add_executable(LegacyBarrelCrosscheck ../../../validation/barrel_alignment/LegacyBarrelCrosscheck.cc ../../alignment/src/BeamTestMilleWriter.cc)

@@ -23,7 +23,8 @@ def main():
     frame.put(headers, 'EventHeader')
     writer = root_io.Writer(str(args.output))
     writer.write_frame(frame, 'events')
-    writer.finish()
+    # Pinned podio 1.7 exposes finalization only on the underlying C++ ROOTWriter.
+    writer._writer.finish()
 
 if __name__ == '__main__':
     main()
