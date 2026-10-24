@@ -21,3 +21,31 @@ target_compile_definitions(TelescopeTracking PRIVATE Acts_VERSION_MAJOR=${Acts_V
 target_link_libraries(TelescopeTracking PRIVATE EICrecon::algorithms_tracking_library
   JANA::jana2_shared_lib DD4hep::DDCore DD4hep::DDRec Acts::Core Acts::PluginDD4hep
   ${ACTS_EXAMPLES_FRAMEWORK} EDM4EIC::edm4eic algorithms::core nlohmann_json::nlohmann_json spdlog::spdlog)
+
+# Opt-in alignment mathematics validation; reconstruction targets are unchanged.
+option(TELESCOPE_BUILD_MILLE_PROBE "Build the isolated native-state Mille prototype" OFF)
+if(TELESCOPE_BUILD_MILLE_PROBE)
+  set(Mille_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../external/install/cmake" CACHE PATH "Formal Mille installation" FORCE)
+  find_package(Mille CONFIG REQUIRED NO_DEFAULT_PATH PATHS "${Mille_DIR}")
+  add_library(NativeMilleModel STATIC alignment/NativeMilleModel.cc)
+  set_target_properties(NativeMilleModel PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS alignment/NativeMilleModel.cc alignment/NativeMilleModel.h)
+  file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/alignment/NativeMilleModel.cc" _model_cc_sha)
+  file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/alignment/NativeMilleModel.h" _model_h_sha)
+  string(SHA256 _model_sha "${_model_cc_sha}${_model_h_sha}")
+  target_compile_definitions(NativeMilleModel PUBLIC TELESCOPE_MILLE_MODEL_SHA="${_model_sha}")
+  target_include_directories(NativeMilleModel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${EICRECON_INCLUDE_DIR})
+  target_link_libraries(NativeMilleModel PUBLIC EICrecon::algorithms_tracking_library Acts::Core
+    ${ACTS_EXAMPLES_FRAMEWORK} DD4hep::DDCore DD4hep::DDRec EDM4EIC::edm4eic)
+  add_library(TelescopeMille SHARED alignment/TelescopeMille.cc)
+  set_target_properties(TelescopeMille PROPERTIES PREFIX "")
+  target_compile_definitions(TelescopeMille PRIVATE USE_MODERN_PODIO_GLUE=1 Acts_VERSION_MAJOR=${Acts_VERSION_MAJOR} Acts_VERSION_MINOR=${Acts_VERSION_MINOR})
+  target_link_libraries(TelescopeMille PRIVATE NativeMilleModel JANA::jana2_shared_lib Mille2 nlohmann_json::nlohmann_json)
+  add_executable(BarrelMilleFixture ../../../validation/barrel_alignment/BarrelMilleFixture.cc)
+  target_link_libraries(BarrelMilleFixture PRIVATE NativeMilleModel Mille2 nlohmann_json::nlohmann_json spdlog::spdlog)
+  add_executable(LegacyBarrelCrosscheck ../../../validation/barrel_alignment/LegacyBarrelCrosscheck.cc ../../alignment/src/BeamTestMilleWriter.cc)
+  target_include_directories(LegacyBarrelCrosscheck PRIVATE ../../alignment/src)
+  target_link_libraries(LegacyBarrelCrosscheck PRIVATE NativeMilleModel Mille2 nlohmann_json::nlohmann_json)
+  add_executable(BarrelMilleDerivatives ../../../validation/barrel_alignment/BarrelMilleDerivatives.cc)
+  target_link_libraries(BarrelMilleDerivatives PRIVATE NativeMilleModel nlohmann_json::nlohmann_json spdlog::spdlog)
+endif()

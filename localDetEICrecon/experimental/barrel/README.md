@@ -13,3 +13,7 @@ are copied from EICrecon revision
 reproducible unified diffs, including an empty diff for the unchanged,
 non-installed covariance-unit helper. Installed components are linked rather
 than duplicated. Local classes use `eicrecon::telescope` to avoid symbol clashes.
+
+The optional `TELESCOPE_BUILD_MILLE_PROBE=ON` targets add a separate native-state
+Mille observer and mathematical tests. See [the native Mille integration report](../../../docs/BARREL_NATIVE_MILLE_INTEGRATION.md).
+This does not enable alignment in the production plugin or activate Geometry.
