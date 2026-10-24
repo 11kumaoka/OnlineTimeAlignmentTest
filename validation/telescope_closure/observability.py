@@ -40,7 +40,12 @@ def analyze(native):
             'information':joint.tolist(),'covariance_rad2':joint_cov.tolist(),
             'correlation':(joint_cov/np.outer(joint_sigma,joint_sigma)).tolist(),
             'diagonal_scaled_condition':float(np.linalg.cond(joint/np.sqrt(np.outer(joint.diagonal(),joint.diagonal()))))}
-        result[str(count)]={'selected_Ry_Rz':joint_report,'rank':int(np.linalg.matrix_rank(h)),'diagonal_scaled_condition':float(np.linalg.cond(scaled)),
+        rotation_h=h[2:,2:];rotation_cov=np.linalg.inv(rotation_h);rotation_sigma=np.sqrt(rotation_cov.diagonal())
+        rotation_report={'rank':int(np.linalg.matrix_rank(rotation_h)),'sigma_rad':rotation_sigma.tolist(),
+            'information':rotation_h.tolist(),'covariance_rad2':rotation_cov.tolist(),
+            'correlation':(rotation_cov/np.outer(rotation_sigma,rotation_sigma)).tolist(),
+            'diagonal_scaled_condition':float(np.linalg.cond(rotation_h/np.sqrt(np.outer(rotation_h.diagonal(),rotation_h.diagonal()))))}
+        result[str(count)]={'selected_Rx_Ry_Rz':rotation_report,'selected_Ry_Rz':joint_report,'rank':int(np.linalg.matrix_rank(h)),'diagonal_scaled_condition':float(np.linalg.cond(scaled)),
             'sigma':sigma.tolist(),'single_parameter_sigma':(1/np.sqrt(h.diagonal())).tolist(),
             'correlation':(cov/np.outer(sigma,sigma)).tolist(),'information':h.tolist(),
             'worst_case_independent_pixel_bound':(sum(np.abs(cov@b).sum(axis=1) for b in responses[:count])*np.sqrt(3)).tolist(),
@@ -62,6 +67,7 @@ def analyze(native):
         'correlation':(full_cov/np.outer(full_sigma,full_sigma)).tolist(),
         'scope':'Additional longitudinal-translation correlation diagnostic only; no six-DOF Pede mode enabled'}
     return {'source':str(native),'source_sha256':digest(native),'model_sha256':data['model_sha256'],
+        'individual_Rx_Ry_Rz_information_ranks':{str(k):sum(int(np.linalg.matrix_rank(h[2:,2:],tol=1e-9*max(1.,np.linalg.norm(h)))==k) for h in contributions) for k in (0,1,2,3)},
         'individual_Ry_Rz_information_ranks':{str(k):sum(int(np.linalg.matrix_rank(h[np.ix_([3,4],[3,4])],tol=1e-9*max(1.,np.linalg.norm(h)))==k) for h in contributions) for k in (0,1,2)},
         'parameters':names,'accepted_tracks':len(contributions),'prefix_designs':result,'slope_position_subsets':subsets,
         'slopes_min':slopes.min(axis=0).tolist(),'slopes_max':slopes.max(axis=0).tolist(),

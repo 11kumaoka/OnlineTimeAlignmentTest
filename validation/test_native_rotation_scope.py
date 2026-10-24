@@ -116,3 +116,56 @@ class NativeRotationScope(unittest.TestCase):
                 rows.append((0.,1.,{1+j:1.,3+j:float(layer)},{700105:value,700106:2*value}))
         normal=profile(rows,[700105,700106],require_global_rank=False)[0]
         self.assertEqual(np.linalg.matrix_rank(4096*normal),1)
+
+    def test_three_axis_target_and_noncommuting_inverse(self):
+        import numpy as np
+        from validation.telescope_closure.rotation import component_matrix
+        from validation.telescope_closure.closure import MODULE_TO_GLOBAL
+        from geometry.transforms import rotation_exp
+        parent=np.array(MODULE_TO_GLOBAL);component=self.component()
+        start=parent@component_matrix(component)
+        a=np.array([.0018,.0025,-.0025]);b=np.array([-.0007,-.001,.0015])
+        rotate_component(component,a,'xyz');rotate_component(component,b,'xyz')
+        self.assertTrue(np.allclose(parent@component_matrix(component),np.array(rotation_exp(b))@rotation_exp(a)@start,atol=5e-13,rtol=0))
+        rotate_component(component,-b,'xyz');rotate_component(component,-a,'xyz')
+        self.assertTrue(np.allclose(parent@component_matrix(component),start,atol=5e-13,rtol=0))
+
+    def test_three_axis_nominal_derivative_charts(self):
+        import numpy as np
+        from validation.telescope_closure.rotation import component_matrix
+        from validation.telescope_closure.closure import MODULE_TO_GLOBAL
+        from geometry.transforms import rotation_exp
+        parent=np.array(MODULE_TO_GLOBAL)
+        for index in range(3):
+            for sign in (-1.,1.):
+                component=self.component();start=parent@component_matrix(component)
+                delta=np.zeros(3);delta[index]=sign*1e-6
+                rotate_component(component,delta,'xyz')
+                self.assertTrue(np.allclose(parent@component_matrix(component),np.array(rotation_exp(delta))@start,atol=5e-13,rtol=0))
+
+    def test_three_axis_invalid_and_ambiguous_updates_are_atomic(self):
+        for increment in ([math.nan,0.,0.],[0.,0.],[.02,0.,0.],[0.,.002,1e-7]):
+            component=self.component();before=ET.tostring(component)
+            with self.assertRaises(ValueError):rotate_component(component,increment,'xyz')
+            self.assertEqual(ET.tostring(component),before)
+
+    def test_three_axis_old_coupled_scope_stays_restricted(self):
+        component=self.component();rotate_component(component,[.0018,.0025,-.0025],'xyz')
+        before=ET.tostring(component)
+        with self.assertRaises(ValueError):rotate_component(component,[.001,-.001],'yz')
+        self.assertEqual(ET.tostring(component),before)
+
+    def test_three_partial_tracks_can_provide_rank_three(self):
+        import numpy as np
+        from validation.telescope_alignment.check import profile
+        labels=[700104,700105,700106];matrices=[]
+        for selected in range(3):
+            rows=[]
+            for layer in range(5):
+                for j in range(2):
+                    rows.append((0.,1.,{1+j:1.,3+j:float(layer)},
+                        {k:(1. if layer==1 and index==selected else 0.) for index,k in enumerate(labels)}))
+            matrices.append(profile(rows,labels,require_global_rank=False)[0])
+        self.assertTrue(all(np.linalg.matrix_rank(m)==1 for m in matrices))
+        self.assertEqual(np.linalg.matrix_rank(sum(matrices)),3)
+        self.assertEqual(np.linalg.matrix_rank(4096*matrices[0]),1)

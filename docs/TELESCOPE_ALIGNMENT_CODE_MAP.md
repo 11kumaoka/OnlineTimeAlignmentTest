@@ -15,7 +15,7 @@ Official source comparisons use pinned EICrecon Git objects at
 | `validation/telescope_one_track/` | independent standalone native CKF reference; not the event-processing path |
 | `validation/telescope_factories/` | one-event PODIO fixture, EDM read-back, upstream patch regeneration |
 | `validation/telescope_alignment/` | derivative gate, native/legacy comparison, mathematical Mille fixture and label map |
-| `validation/telescope_closure/` | offline channels, bounded two-translation XML correction, stage driver and final validation |
+| `validation/telescope_closure/` | offline channels, bounded selected translation/SO(3) XML correction, stage driver and final validation |
 | `localDetEICrecon/alignment/` | preserved historical BeamTestMilleWriter, used only for independent equivalence checks here |
 | `geometry/`, `reconstruction/`, `alignment/`, `calibration/` | original stages and Python Controller; not replaced or activated |
 | `environment/` | fixed Docker bridge and external dependency setup |
@@ -125,8 +125,9 @@ The earliest accepted smoothed state supplies the common bound reference.
 `nativeEquation` repropagates with ACTS, takes transport derivatives for four local
 parameters (loc0,loc1,phi,theta), and uses Surface::alignmentToBoundDerivative
 including path correction. Local right rotation increments map to Global left
-increments through R^T, and the enabled scopes are two Global Y translations, L1 Global Rx alone,
-or L1 Y/Rx plus L2 Y. Other columns remain unsupported fit parameters.
+increments through R^T. Enabled scopes are two Global Y translations, separate
+L1 Rx/Ry/Rz, L1 Y/Rx plus L2 Y, coupled L1 Ry/Rz, and bounded L1 Rx/Ry/Rz.
+Translations plus coupled tilts and other-layer rotations remain unsupported.
 
 The equation is measured-minus-prediction = A*localDelta + G*alignmentDelta.
 Whitening uses the original calibrated covariance C=L L^T and W=L^-1 for residual
@@ -180,8 +181,8 @@ external executable, not Python numerical inference.
 
 The [parity report](TELESCOPE_ALIGNMENT_LEGACY_PARITY.md) distinguishes the legacy
 fixed-ordered Rx/Ry failure, later SO(3) controlled results, incomplete three-layer
-claims and the new native tests. `TelescopeMilleProcessor::Init` accepts only the
-three explicit label sets; `Process` selects column 1 (Y) or column 3 (Rx) from
+claims and the native tests. `TelescopeMilleProcessor::Init` accepts only the
+explicit label sets; `Process` selects column 1 (Y) or columns 3/4/5 (Rx/Ry/Rz) from
 the **unchanged** `NativeMilleModel` after its original whitening. Config parameters
 and decoded Mille labels are authoritative for a multi-parameter sensor; the old
 scalar equation `label` field remains for the original Y-only comparison.
@@ -195,7 +196,19 @@ independent finite-difference validator of actual sensor poses and frozen native
 references; it is never an inference model. Existing generic mathematical gates,
 standalone CKF and legacy-equivalence tests remain independent.
 
-The selected one-axis chart uses a full SO(3) target matrix before XML
-serialization. General native Ry/Rz, extra translations, multi-layer six-DOF,
-sequential Controller operation and original Geant4/RawHit compatibility remain
-unrestored. The retained legacy implementation is unchanged.
+Single-axis routes retain their restricted charts; coupled routes compute a
+full SO(3) target matrix before XML serialization. Arbitrary Survey Geometry,
+extra translations combined with tilts, multi-layer six-DOF, sequential Controller
+operation and original Geant4/RawHit compatibility remain unrestored. The retained legacy implementation is unchanged.
+
+## Bounded three-rotation extension
+
+`rotation.py` routes `l1_rx_ry_rz` and its negative fixture through the same
+native channel/CKF/Mille chain. `TelescopeMille::Init` admits exactly labels
+700104/700105/700106 for this scope; `NativeMilleModel` still supplies physical
+Global rotation columns 3/4/5 without modification. Translations and other
+sensor poses remain fixed. The XML serializer computes the full left-Global
+target matrix before extracting the verified DD4hep component chart. It is
+restricted to this telescope mounting and bounded poses, not arbitrary Survey
+Geometry. See the [three-axis validation](TELESCOPE_ALIGNMENT_LEGACY_PARITY.md#three-axis-native-so3-milestone)
+for prospective gates, actual results, regressions and remaining legacy gaps.

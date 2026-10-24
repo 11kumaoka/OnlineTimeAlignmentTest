@@ -240,7 +240,9 @@ compared against real sensor geometries reloaded in fresh processes at ±1e-4,
 `corrected_physical_derivatives/`. Rank, conditioning and original-error sensitivity
 are checked without adding fit constraints. Numerical sensitivity guards are
 explicit engineering gates (scaled condition <100, angular sigma <1 mrad,
-translation sigma <0.02 mm), not uncertainty-coverage certification.
+translation sigma <0.02 mm for the earlier scopes). Coupled rotations require
+selected and nuisance-marginalized angular sigma <0.5 mrad before Pede. These
+are not uncertainty-coverage certification.
 
 The new modes share all existing step names except that `regressions` must run
 with the original `l1_l2_y` baseline. Rotation-mode `check` writes
@@ -254,6 +256,20 @@ batch validation claim.
 
 Geometric recovery uses a predeclared five-initial-nominal-error tolerance;
 actual XML-to-DD4hep/ACTS pose serialization is checked at 1e-9 mm / 2e-12 matrix
-entry precision. Remaining Pede increments must be below 2e-5 mm/rad per selected
-parameter. Successive fits reuse the same channels: their uncertainties are not
+entry precision. Remaining Y and single-Rx increments must be below 2e-5 mm/rad;
+signed tilts and coupled rotations require each update below one quarter its
+initial nominal sigma. See the parity report for the exact scope-specific gates. Successive fits reuse the same channels: their uncertainties are not
 combined as independent measurements. No Pede error rescaling is applied.
+
+## Selected native SO(3) study
+
+The bounded three-axis L1 study uses `--mode l1_rx_ry_rz` or
+`l1_rx_ry_rz_negative`, the existing explicit broad-angle beam recipe, 4096
+channels/events and the same capture window. It does not change the default
+32-track translation workflow above. Its Truth is one physical rotation vector,
+not an ordered Euler product. Fit inputs contain immutable channels only.
+See the [three-axis milestone](TELESCOPE_ALIGNMENT_LEGACY_PARITY.md#three-axis-native-so3-milestone)
+for exact fresh build/stage commands, mathematical scope and validation evidence.
+The historical fixed-ordered Rx/Ry case is separate and has not been resolved
+by changing its parameter definition. No general six-DOF, native Controller or
+Geant4 migration is implied by this selected scope.

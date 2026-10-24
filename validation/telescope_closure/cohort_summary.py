@@ -10,12 +10,13 @@ import json
 import statistics
 import math
 import sys
+import numpy as np
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from research_common import REPO, write_json, digest
 from alignment.pede import read_pede
-from validation.telescope_closure.rotation import rotation_label,labels,is_coupled
+from validation.telescope_closure.rotation import rotation_label,labels,is_coupled,is_three
 
 
 def read_run(run):
@@ -24,8 +25,8 @@ def read_run(run):
     coupled = is_coupled(mode)
     selected = labels(mode)
     label = None if coupled else rotation_label(mode)
-    if not coupled and selected != [label]:raise ValueError('Cohort summary requires a single rotation or coupled Ry/Rz scope')
-    injection = fixture['injected_rotation_vector_rad'][1:] if coupled else next(v['1'] for k, v in fixture.items() if k.startswith('injected_global_r'))
+    if not coupled and selected != [label]:raise ValueError('Cohort summary requires a selected single or coupled rotation scope')
+    injection = fixture['injected_rotation_vector_rad'][(0 if is_three(mode) else 1):] if coupled else next(v['1'] for k, v in fixture.items() if k.startswith('injected_global_r'))
     truth = json.loads((run/'data/shifted/channels_truth.json').read_text())
     recipe = dict(truth['beam_recipe'])
     seed = recipe.pop('seed')
@@ -51,7 +52,7 @@ def read_run(run):
                 pede_reported_sigma_rad=solution['pede_reported_sigma'],
                 truth_minus_fit_rad=[a-b for a,b in zip(injection,value)],
                 pull=[(b-a)/s for a,b,s in zip(injection,value,sigma)],
-                correlation=solution['correlation'])
+                correlation=solution['correlation'],covariance_rad2=np.linalg.inv(solution['normal']).tolist())
         else:
             value = parameters[label]
             sigma = solution['nominal_sigma'][0]
@@ -89,7 +90,7 @@ def main():
     groups = {}
     for item in items:
         if is_coupled(item['mode']):
-            for index,parameter in enumerate(('Ry','Rz')):
+            for index,parameter in enumerate(('Rx','Ry','Rz') if is_three(item['mode']) else ('Ry','Rz')):
                 row=dict(item)
                 for key in ('injected_rad','fitted_rad','nominal_sigma_rad','pede_reported_sigma_rad',
                             'truth_minus_fit_rad','pull','post_update_rad'):

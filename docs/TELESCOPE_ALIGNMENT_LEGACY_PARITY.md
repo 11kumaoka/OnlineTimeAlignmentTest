@@ -1,6 +1,7 @@
 # Legacy/native telescope alignment parity
 
-Latest scope: [coupled native Ry/Rz SO(3)](#coupled-native-ryrz-so3-milestone).
+Latest scope: [three-axis native SO(3)](#three-axis-native-so3-milestone).
+Previous coupled baseline: [Ry/Rz](#coupled-native-ryrz-so3-milestone).
 Previous signed baseline: [single-axis Ry/Rz](#signed-single-axis-ryrz-completion).
 
 Baseline: clean `feature/upstream-acts-geometry` at
@@ -1321,3 +1322,471 @@ All audit paths in this section are below
 `result/native_coupled_tilt_20261024_01_audit/` unless fully specified.
 The large single-axis uncertainty design above is prospective only, not an
 executed or passing test. No push, merge or Geometry activation is performed.
+
+## Three-axis native SO(3) milestone
+
+Starting commit `34a9da9d8848b2b8b1a54eb0f0b2572d3517e959`, branch
+`feature/upstream-acts-geometry`, initially clean. This extension admits only
+SiMAPS L1 physical Global Rx/Ry/Rz, labels 700104/700105/700106 in radians,
+using original ACTS derivative columns 3/4/5. All L1 translations and other
+sensor poses, including reference L0/L2/L3/L4, remain fixed. This is not a
+six-DOF or multiple-aligned-sensor fit. NativeMilleModel, official geometry
+services, CKF/Navigator/filter/smoother, seed, electron hypothesis, covariance,
+Cholesky whitening and capture window remain unchanged.
+
+### Contract, constructor and prospective gates
+
+Truth is one active left-Global rotation vector about the sensitive center:
+
+```
+w = (+0.0018, +0.0025, -0.0025) rad, or its exact negative
+Dtruth = Exp(w) Dnominal
+Dnew = Exp([dRx,dRy,dRz]) Dcurrent
+```
+
+
+The prospectively fixed positive-vector matrix `Exp(w)` is
+
+```
+[0.9999937500081979, 0.002502243438720573, 0.002497743444623082]
+[-0.002497743444623082, 0.9999952550062239, -0.001803120273904751]
+[-0.002502243438720573, 0.001796870282102681, 0.9999952550062239]
+```
+
+The opposite-vector matrix is its transpose; both multiply the actual nominal
+sensitive basis on the left.
+
+All three components are nonzero; the magnitude is about 3.967 mrad.
+No independent Euler-angle additions are used. Full current matrices retain
+all cross-axis commutators. The target is computed first, then serialized
+through the same pinned `SiTrackerBarrel_geo.cpp` component constructor
+`RotationZYX(z,y,x)`, lines 58–64, with its actual module placement at line128.
+Source: `result/barrel_geometry_20261023_01/source/SiTrackerBarrel_geo.cpp`.
+The verified fixed telescope mapping remains `D=M Rx(xml_x) Ry(xml_y) Rz(xml_z)`,
+with `M=[[0,0,1],[-1,0,0],[0,-1,0]]`. The nonsingular extraction and 5e-13
+matrix-before-mutation requirement are unchanged. The explicit full-vector
+entry permits three finite components and a current/increment norm up to
+10 mrad, while the old two-axis entry still refuses free Rx. Near-singular
+mixed charts remain refused; only exact validated one-axis charts are used,
+including pure Rx for the nominal finite-difference probes. Actual module
+and cylindrical layer containment impose stricter physical bounds.
+
+Before any three-parameter Pede fit, the selected fixture's sensitive half
+extents were checked as approximately (0.274999,50.089981,50.089669) mm,
+within the unchanged module half extents (0.325,50.25,50.25) mm. All eight
+actual DD4hep corners, positions, pivots, VolumeID and ACTS GeometryIdentifier
+are checked after reload; unrelated XML/material/segmentation changes are
+forbidden. L1 IDs remain VolumeID 272631839 and GID 216173056991691039.
+
+Prospective plan and matrix are recorded in
+`result/native_three_rotation_20261024_01_audit/prospective_plan.json`:
+4096 events, seeds 2026102402/03/04 with unchanged broad beam recipes and
+paired opposite vectors. Signs share rays within a seed and are not independent.
+These seeds reuse prior-study ray prefixes; independence is across the three
+seeds within this study, not from all historical studies. The initial fit gates
+are rank 3, diagonal-scaled condition<100, all marginal sigma<0.5 mrad,
+including independently marginalized six-column diagnostic rotations; each
+error<5 nominal sigma, joint squared Mahalanobis error<25, orientation distance
+below both the original vector norm and 5*sqrt(max eigenvalue of initial
+covariance), and each remaining update<one quarter its initial sigma.
+The original actual-surface derivative tolerance2e-5 mm/rad and all existing
+scientific assertions are retained. No steering/errors are rescaled.
+
+### Information and mathematical rank
+
+A read-only calculation from previous actual 4096-track native states, performed
+before enabling the new fit, found selected rank 3, normalized condition 1.062803,
+conditional sigma=(0.0194247,0.4443931,0.3866550) mrad and correlation
+
+```
+[ 1,          0.0266260,  0.0002066 ]
+[ 0.0266260,  1,         -0.0147529 ]
+[ 0.0002066, -0.0147529,  1         ]
+```
+
+Full six-column diagnostic sigmas were approximately
+(0.0194279,0.4612499,0.3951432) mrad for Rx/Ry/Rz, with normalized condition 1.7415.
+This diagnostic does not enable free translations. Original calibrated rows
+are whitened and QR-profiled over exactly four local parameters. Local rank 4
+remains mandatory. The explicit coupled caller permits partial per-track
+global rank; the summed selected design must be full rank. No pseudo-data or
+tight survey priors supply missing information. Track-prefix, slope/impact
+splits and pixel-response bounds remain diagnostic outputs. Repeated copies
+of the same rank-deficient track cannot create a missing global direction.
+
+### Changed responsibilities and reproduction commands
+
+Exactly ten maintained files are changed or added:
+
+| File | Responsibility |
+|---|---|
+| `localDetEICrecon/experimental/telescope/alignment/TelescopeMille.cc` | Additional exact three-label whitelist |
+| `validation/telescope_closure/rotation.py` | Bounded full-vector routing, matrix serialization and real Geometry gates |
+| `validation/telescope_closure/closure.py` | Mode selection, provenance and before-Pede observability guards |
+| `validation/telescope_closure/observability.py` | Selected three-rotation information/rank diagnostics |
+| `validation/telescope_closure/cohort_summary.py` | Three-component covariance, marginal statistics and ROOT plots |
+| `validation/telescope_alignment/l1_global_rx_ry_rz.json` | New exact L1 parameter scope |
+| `validation/test_native_rotation_scope.py` | Five additional matrix, refusal and rank tests |
+| `docs/TELESCOPE_ALIGNMENT_LEGACY_PARITY.md` | Scientific report, evidence, limits and commands |
+| `docs/TELESCOPE_ALIGNMENT_CODE_MAP.md` | Current source flow and supported scopes |
+| `docs/TELESCOPE_ALIGNMENT_USER_GUIDE.md` | Scope-specific operation and gate descriptions |
+
+
+- `rotation.py::is_three/axis/injected_rotation/injected_vector/labels/config_name`
+  provide the exact three-axis scope and vector provenance.
+- `rotate_component/rotate_coupled_component/component_matrix` reuse target-first
+  SO(3) serialization, with an explicit full-vector entry and unchanged old
+  two-axis/single-axis refusal boundaries.
+- `pose_checks/coupled_pose_gate/coupled_physical_derivatives` verify actual
+  poses, three-column physical perturbations and inverse/noncommuting chains.
+- `correct/check` compose all selected Pede increments simultaneously and
+  score individual, joint-covariance and full orientation errors separately.
+- `closure.py::geometry_step/solve/main` route the new modes and enforce
+  actual selected/nuisance sensitivity before Pede.
+- `TelescopeMille.cc::Init` adds only the exact three-label set; native numerical
+  derivatives and transport remain untouched.
+- `observability.py::analyze` adds selected three-column prefix matrices and
+  per-track rank counts; six-column omitted-translation diagnostics stay read-only.
+- `cohort_summary.py::read_run/main` retains joint covariance and separates
+  marginal plots without treating axes/signs as independent seed cohorts.
+- `l1_global_rx_ry_rz.json` declares labels, units, center pivot, composition and
+  fixed references. Five new unit tests cover matrix chains, one-axis probes,
+  atomic refusals, old-scope protection and accumulated rank 3.
+- The Code Map and User Guide link to this bounded scientific scope.
+
+Run in the repository root with unused output names. Command/exit/log records
+are retained by every stage; directories are never reused or overwritten.
+
+```bash
+export TESTBENCH_CONTAINER=sweet_mahavira
+bash environment/run.sh cmake -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_three_rotation_20261024_01 \
+  -DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON
+bash environment/run.sh cmake --build /work/build/native_three_rotation_20261024_01 -j2
+
+for seed in 2 3 4; do
+  beam=validation/telescope_alignment/tilt_beam_seed${seed}.json
+  if [[ $seed == 2 ]]; then beam=validation/telescope_alignment/tilt_beam_validation.json; fi
+  for mode in l1_rx_ry_rz l1_rx_ry_rz_negative; do
+    bash environment/run.sh python3 validation/telescope_closure/closure.py \
+      --build build/native_three_rotation_20261024_01 \
+      --result result/native_three_rotation_seed${seed}_${mode}_20261024_01 \
+      --events 4096 --beam "$beam" --chi2-cut 1000 --mode "$mode" --step all
+  done
+done
+# Independent manual steps, in order, in a NEW result directory:
+# geometry data coupled_pose nominal solve correct corrected postsolve control controlsolve check
+# Replace --step all by a single stage name each time, retaining identical arguments.
+# solve performs the real nominal DD4hep finite differences before Pede;
+# postsolve performs the independent corrected-pose finite differences.
+# Coupled pose checks are also automatically required by the first derivative gate.
+
+for mode in l1_l2_y l1_rx l1_rx_negative l1_y_rx_l2_y l1_ry l1_ry_negative l1_rz_negative l1_rz l1_ry_rz l1_ry_rz_negative; do
+  extra=(--events 32)
+  if [[ $mode == l1_ry || $mode == l1_ry_negative || $mode == l1_rz || $mode == l1_rz_negative ]]; then
+    extra=(--events 1024 --beam validation/telescope_alignment/tilt_beam_validation.json)
+  elif [[ $mode == l1_ry_rz || $mode == l1_ry_rz_negative ]]; then
+    extra=(--events 4096 --beam validation/telescope_alignment/tilt_beam_validation.json)
+  fi
+  bash environment/run.sh python3 validation/telescope_closure/closure.py \
+    --build build/native_three_rotation_20261024_01 \
+    --result result/native_three_rotation_regression_${mode}_20261024_01 \
+    --chi2-cut 1000 --mode "$mode" --step all "${extra[@]}"
+done
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/native_three_rotation_20261024_01 \
+  --result result/native_three_rotation_regression_l1_l2_y_20261024_01 \
+  --events 32 --chi2-cut 1000 --step regressions --validation-name three_axis_final
+bash environment/run.sh python3 -m unittest discover -s validation -p 'test_*.py'
+bash environment/run.sh python3 validation/check_safety.py
+python3 validation/verify_preservation.py
+python3 validation/telescope_factories/upstream_diff.py \
+  --source /Users/tkumaoka/eic/EICrecon \
+  --output result/native_three_rotation_20261024_01_audit/upstream_diffs
+```
+
+The external checkout is read only. It is available on the host, not under
+`/EICrecon` in this container. The initial container-side patch reproduction
+failed for that path and is retained under `audit/upstream_reproduction/`;
+the host invocation succeeded, reproducing all nine patches byte-for-byte.
+This was an environment/path failure, not a Geometry or fit result.
+
+For the new positive pilot's actual nominal design, the selected uncertainties
+in mrad versus track count are:
+
+| Tracks | Rx | Ry | Rz | Diagonal-scaled condition |
+|---:|---:|---:|---:|---:|
+| 16 | 0.34498 | 8.80260 | 7.30122 | 3.90536 |
+| 64 | 0.15800 | 3.66835 | 3.15684 | 1.41958 |
+| 256 | 0.07691 | 1.68501 | 1.61209 | 1.20260 |
+| 1024 | 0.03948 | 0.91215 | 0.79977 | 1.03518 |
+| 2048 | 0.02757 | 0.63859 | 0.54591 | 1.04700 |
+| 4096 | 0.01942 | 0.44438 | 0.38666 | 1.06285 |
+
+Rank is three for every accumulated prefix, but full rank alone is insufficient:
+the smaller samples would fail the declared0.5 mrad sensitivity threshold.
+Using the diagnostic rank cutoff1e-9 times the full per-track information norm,
+4092 tracks have selected rank 2 and four have numerical rank 1; no track is
+required to constrain all three rotations alone. The matrix raw condition is
+about 524, reflecting different angular sensitivities; the normalized condition
+is 1.063. Local track rank 4 is never relaxed.
+
+The median slope magnitude is 0.06256. Equal2048-track lower/upper-slope halves
+have five-column nuisance-marginalized Ry/Rz errors approximately
+(1.0011,0.8352)/(0.5263,0.4529) mrad. The lower/upper-impact halves, split at
+8.9001 mm, give approximately(0.9650,0.9053)/(0.5467,0.4523) mrad. Wider slopes
+and larger impacts provide appreciably more tilt information; these splits are
+diagnostics, not cohort selection or changes to the beam.
+
+The retained five-column worst-case independent-pixel response bound for
+Rx/Ry/Rz is approximately(4.316,91.293,77.749) mrad. It is an adversarial
+absolute-error bound, not a standard deviation, and is much larger than the
+formal stochastic errors. Actual quantized channels are used throughout,
+with original calibrated covariance near1e-4 mm2 per coordinate; neither pitch
+nor errors are adjusted. This bound and the small exploratory seed count do
+not establish nominal uncertainty coverage.
+
+### First complete three-axis result
+
+The positive pilot accepted all 4096 tracks before and after correction. The
+initial Pede result was(1.8029,1.8739,-2.2391) mrad with nominal sigmas
+(0.01942436,0.44438430,0.38665617) mrad. The initial covariance, in mrad², is
+
+```
+[0.000377305699029, 0.000229695825417, 1.64522030862e-06]
+[0.000229695825417, 0.197477404924, -0.00254706773857]
+[1.64522030862e-06, -0.00254706773857, 0.149502990253]
+```
+
+The complete information and correlation matrices are in
+`result/native_three_rotation_seed2_l1_rx_ry_rz_20261024_01/solve/independent.json`.
+The joint squared Mahalanobis error is 2.447454. Actual corrected-to-Truth
+orientation distance is 0.678291 mrad, versus the injected 3.967367 mrad;
+all sensor centers are unchanged. Initial and corrected actual-surface
+derivative maxima are 2.647e-8 and 2.648e-8 mm/rad, below the unchanged 2e-5
+threshold. Each gate checks 36864 two-coordinate vectors, at three step sizes
+(1e-4,1e-5,1e-6 rad) for all three axes.
+
+ACTS chi2/stored-NDF is 0.812356724 ->0.601112072; the nominal control is
+0.598045214. Stored NDF is 10 per track, not the statistical fitted-track NDF.
+Pede initial/post/control chi2/NDF are 1.001984599/1.001961623/0.996773735
+with 24573 NDF each. All statuses are 0, rejected local fits zero, and no
+error rescaling is recommended or applied. Post updates are
+(0.37112,36.952,-25.484) urad, evaluated separately from the finite-sample
+Truth error. They are not combined with initial errors as independent fits.
+
+The real forward/nonparallel/inverse chain returns to the original matrix
+exactly at serialized precision. The declared one-vector Truth differs from
+`Rx(1.8 mrad) Ry(2.5 mrad) Rz(-2.5 mrad)` by 4.461202 urad. The pilot actual
+Truth matrices equal the pre-Pede real forward-pose fixture exactly
+(`audit/pilot_truth_preflight_identity.json`). Later cases directly enforce
+their own actual Truth preflight before the pose chain and Pede.
+
+### Capability boundary and remaining legacy/native gaps
+
+| Capability | Native status / retained legacy capability |
+|---|---|
+| Two Global Y translations; signed L1 Rx/Ry/Rz; Y/Rx plus L2 Y | Preserved existing native scopes; original scientific baselines retained |
+| Coupled L1 Ry/Rz | Previous two-parameter scope retained with its stricter Rx restriction |
+| L1 Rx/Ry/Rz rotation-vector fit | Implemented three-label scope, actual derivative and complete corrected-Geometry reconstruction validation; bounded physical fixtures only |
+| Full physical SO(3) matrix composition | All current cross-axis terms retained; actual forward/nonparallel/inverse tests and center/ID/envelope checks |
+| Original fixed-ordered Rx/Ry failure | **Not independently resolved or rerun here**. A free three-component rotation vector is a different model; its success does not repair or relabel the old two-coordinate failure |
+| L1 translations plus full rotation / arbitrary six-DOF | Unsupported native fit; full-six-column information is diagnostic only |
+| Other aligned sensors / multi-layer rotations | Unsupported native scope; reference poses fixed |
+| Arbitrary Survey Geometry | Unsupported; fixed telescope mounting, small current-pose bounds and explicit singular-chart refusals |
+| Controller iteration, convergence/recovery and version chains | Legacy implementation retained; not migrated into the native closure driver |
+| Original Geant4/RawHit input | Legacy retained; radial synthetic channels are not a silent reinterpretation of old endcap data |
+| Nonzero field / assigned ACTS material / six local parameters | Outside this guarded zero-field, material-free, four-local-parameter model |
+| Bias / nominal uncertainty coverage | Not validated by this small exploratory cohort; no 800-seed campaign launched |
+
+This restores another bounded portion of the legacy SO(3) capability without
+claiming complete legacy/native parity. A small remaining Pede update is a
+same-data self-consistency diagnostic, not evidence of exact Truth recovery.
+The initial joint Mahalanobis calculation uses the initial rotation-vector
+coordinates and initial covariance about the same nominal base; the full
+matrix distance is evaluated independently. No successive-fit covariance sum
+is interpreted as independent information. No legacy scientific code, historical
+outputs, installed library or production Geometry is changed or removed.
+
+The next steps remain separately gated translation-plus-rotation and multi-layer
+studies, then Controller and original Geant4 migration. They were not enabled
+as part of this milestone.
+
+### Warnings and unsuccessful technical invocations
+
+Two audit commands initially failed, with their outputs retained:
+
+1. `audit/upstream_reproduction/`: exit1, the host EICrecon checkout was not
+   mounted at the attempted container path. Host-side patch reproduction and
+   nine-file byte-identity checks succeeded without modifying that checkout.
+2. `audit/official_binary_inspection/`: exit127, missing `libMille2.so` search
+   environment in the standalone decoder invocation. The retry uses the same
+   `environment(build)` as the workflow and passed in
+   `audit/official_binary_inspection_02/`, decoding 4096 records and 40960 scalar
+   measurements with all three selected labels present. Input files and Pede
+   steering were not changed.
+
+The complete unit suite also emitted SQLite unclosed-connection ResourceWarnings
+from existing test lifetimes; all 62 tests passed and the warnings remain in
+`three_axis_final_regressions/unit_tests/stdout.log`. Fixed-container login
+`stty` messages and CMake developer warnings are likewise retained. These are
+separate from the scientific Pede status/rejection diagnostics. No warning
+was suppressed and no uncertainty or physics assertion was weakened.
+
+### Complete independent-cohort results
+
+All six prospectively specified fixtures passed on their first scientific
+attempt: three independent seeds, with the opposite vectors sharing rays within
+each seed. Each reconstruction pass accepts 4096 tracks, five measurements,
+zero outliers and two holes. There were no failed, sensitivity-refused or
+non-convergent scientific cases in this six-fixture cohort. The technical audit
+command failures above are not extra samples.
+
+Vectors below are ordered (Rx,Ry,Rz). Sigmas and Pulls refer only to the initial
+Pede solve; signs denote +w or -w, not three independently chosen signs.
+
+| Seed | Vector | Initial fit [mrad] | Initial sigma [mrad] | Initial Pulls | Joint error squared | Pose error [mrad] |
+|---:|:---:|---|---|---|---:|---:|
+| 2026102402 | +w | (1.8029, 1.8739, -2.2391) | (0.0194244, 0.444384, 0.386656) | (0.149297, -1.40892, 0.67476) | 2.447454 | 0.678291 |
+| 2026102402 | -w | (-1.7842, -2.6573, 2.8865) | (0.0194246, 0.444382, 0.386644) | (0.813402, -0.353975, 0.999628) | 1.790917 | 0.417582 |
+| 2026102403 | +w | (1.81, 1.6282, -2.8157) | (0.0193338, 0.44366, 0.381496) | (0.517229, -1.96502, -0.827531) | 4.809842 | 0.927254 |
+| 2026102403 | -w | (-1.8225, -2.4532, 2.5729) | (0.0193338, 0.443646, 0.381478) | (-1.16376, 0.10549, 0.191099) | 1.391577 | 0.089504 |
+| 2026102404 | +w | (1.8014, 1.8381, -3.0932) | (0.0194027, 0.453026, 0.381663) | (0.072155, -1.46106, -1.55425) | 4.562079 | 0.888819 |
+| 2026102404 | -w | (-1.8057, -1.9351, 2.0654) | (0.0194029, 0.453024, 0.381659) | (-0.29377, 1.24695, -1.13871) | 2.958153 | 0.712756 |
+
+The full initial 3x3 covariance (rad²) and correlation matrices for **every**
+case are retained in `audit/cohort_summary/output/report.json`, under `runs`,
+and independently in each case
+`solve/independent.json` / `validation/report.json`. They are not replaced
+by diagonal-only errors. The positive-pilot matrix is printed above.
+
+| Seed | Vector | Correlation(Rx,Ry; Rx,Rz; Ry,Rz) | Remaining update [urad] | ACTS chi2/stored-NDF before -> after |
+|---:|:---:|---|---|---|
+| 2026102402 | +w | (0.0266102, 0.000219055, -0.0148237) | (0.37112, 36.952, -25.484) | 0.812356724 -> 0.601112072 |
+| 2026102402 | -w | (0.0265589, 0.000204626, -0.0146767) | (0.5693, -16.818, -13.378) | 0.809954595 -> 0.602310727 |
+| 2026102403 | +w | (0.00783806, -0.0309361, -0.00199485) | (0.39953, 4.6833, -5.7952) | 0.817483394 -> 0.602791965 |
+| 2026102403 | -w | (0.00777319, -0.0309948, -0.00180185) | (0.43046, -20.13, 10.047) | 0.821469318 -> 0.603580658 |
+| 2026102404 | +w | (0.0188798, -0.0111271, -0.00107236) | (0.45611, -19.165, 16.12) | 0.811214184 -> 0.599420619 |
+| 2026102404 | -w | (0.0188124, -0.0110799, -0.000788764) | (0.38223, 18.93, -36.077) | 0.810804396 -> 0.598752370 |
+
+| Seed | Vector | Local residual RMS(u,v) before [um] | After [um] | Pede chi2/NDF(initial; post; control) |
+|---:|:---:|---|---|---|
+| 2026102402 | +w | (8.88632, 9.13793) | (7.77248, 7.73364) | (1.00198, 1.00196, 0.996774) |
+| 2026102402 | -w | (8.85263, 9.14435) | (7.77848, 7.7431) | (1.00396, 1.00396, 0.996774) |
+| 2026102403 | +w | (8.90345, 9.17728) | (7.7901, 7.73763) | (1.00477, 1.00476, 1.00042) |
+| 2026102403 | -w | (8.82944, 9.2915) | (7.77634, 7.76163) | (1.0061, 1.00608, 1.00042) |
+| 2026102404 | +w | (8.78219, 9.22568) | (7.74778, 7.73656) | (0.999126, 0.999143, 0.999844) |
+| 2026102404 | -w | (8.84203, 9.16387) | (7.74808, 7.72761) | (0.998007, 0.998029, 0.999844) |
+
+All 18 Pede fits have status 0, zero rejected local fits and 24573 NDF. No
+error rescaling is applied. The complete chi2 numerators, warning flags,
+per-iteration rejection counts and original-covariance comparisons remain in
+each `validation/report.json`. Sensor center differences remain exactly zero
+in every case; VolumeID/GID and XML whitelist checks pass.
+
+Marginal exploratory statistics (three independent seeds per row) are:
+
+| Vector/axis | N | Mean fit-minus-Truth [mrad] | Sample SD [mrad] | Mean nominal sigma [mrad] | Pull mean | Pull sample SD |
+|---|---:|---:|---:|---:|---:|---:|
+| +w / Rx | 3 | 0.004767 | 0.004594 | 0.019387 | 0.246227 | 0.237843 |
+| +w / Ry | 3 | -0.719933 | 0.132733 | 0.447023 | -1.611666 | 0.307121 |
+| +w / Rz | 3 | -0.216000 | 0.435691 | 0.383272 | -0.569007 | 1.136770 |
+| -w / Rx | 3 | -0.004133 | 0.019198 | 0.019387 | -0.214710 | 0.990951 |
+| -w / Ry | 3 | 0.151467 | 0.372303 | 0.447017 | 0.332823 | 0.824321 |
+| -w / Rz | 3 | 0.008267 | 0.414348 | 0.383261 | 0.017338 | 1.079707 |
+
+The machine-readable summary stores Truth-minus-fit with the opposite sign
+to the mean-error column above. Pull uses (fit-Truth)/initial nominal sigma.
+Each marginal sample SD has only two degrees of freedom; paired signs and
+axes cannot be pooled into 18 independent experiments. This is not evidence
+of calibrated nominal coverage or unbiased estimation. Observed offsets/scatter
+are reported without tuning amplitudes, covariances or steering. Prefix designs
+share tracks and likewise do not constitute independent repeated experiments.
+
+ROOT output `audit/cohort_summary/output/cohorts.root` contains six estimate
+graphs with nominal errors and six Pull histograms. Each case also retains
+`validation/rotation.root` with nine ACTS chi2/local-residual histograms and
+batch read-back validation. Open these with ROOT/TBrowser; a GUI session is
+not part of the batch-test claim.
+
+A diagnostic concern deserves explicit follow-up: **positive-vector Ry is low
+in all three seeds**, with mean fit-minus-Truth -0.719933 mrad, sample SD
+0.132733 mrad, mean nominal sigma 0.447023 mrad and Pull mean/SD
+-1.611666/0.307121. Every individual error and joint error meets the declared
+gates, but passing these gates does not explain that coherent direction.
+There are no rejected tracks, solver warnings, non-convergence or differing
+accepted counts that explain it. Three seeds and correlated axis/sign comparisons
+are insufficient to establish a systematic bias or a calibrated error model;
+this observation should neither be hidden nor presented as proof of unbiasedness.
+A separately planned bias/discretization/linearization study would be informative
+before uncertainty-performance claims. None was launched here, and no settings
+were tuned in response. Full Geometry and derivative validation is stronger
+than the statistical claims supported by this small ensemble.
+
+### Consolidated regression and preservation evidence
+
+- Fresh native build: `build/native_three_rotation_20261024_01`.
+- Fresh unchanged legacy build: `build/native_three_rotation_legacy_20261024_01`.
+- Fresh standalone Geometry/CKF builds are suffixed
+  `_three_axis_final_regressions_geometry` and `_benchmark`.
+- All eight existing modes and both existing coupled Ry/Rz signs passed in
+  `result/native_three_rotation_regression_{mode}_20261024_01/`.
+  All 60 nominal/Truth/corrected XML and nominal/corrected/control Mille artifacts
+  are byte-identical to their preceding baselines. Input channel payloads are
+  identical. Every scientific validation-report field also matches exactly;
+  only the newly generated ROOT container's file checksum is excluded from that
+  report comparison, with immutable payload checks performed independently.
+  Evidence: `audit/baseline_identity.json` and `scientific_report_identity.json`.
+- The old six-case coupled-cohort summary replay preserves every previous
+  marginal statistic exactly (`audit/previous_coupled_summary_replay/`).
+- Native/legacy writer equivalence uses the established mathematical/reference
+  fixture; it is not a claim of original-endcap/radial three-axis input parity.
+- Complete 18-command suite passed in
+  `result/native_three_rotation_regression_l1_l2_y_20261024_01/three_axis_final_regressions/`,
+  including all 57 existing tests plus five new tests, standalone Geometry/CKF,
+  native/legacy writer mathematics, official Pede, safety and preservation.
+- Historical 99-track reference passed after the fresh legacy build in
+  `result/native_three_rotation_legacy_20261024_01/`: correction +198.75 um,
+  L2 residual -199.5713755 -> -0.8213645 um,
+  ACTS chi2/stored-NDF 45.59223485 ->1.981039768.
+- Native 32-track Y baseline remains +149.14/+203.18 um and
+  ACTS 37.16731567382813 ->0.6908491410315036.
+- All nine upstream patches reproduce byte-for-byte; 221 baseline records and
+  2046 relocated files are unchanged, with the electron diff preserved.
+- `audit/final_validation.json` confirms immutable stage checksums for all six
+  cases, all 18 normal Pede fits, paired ray identity, 62 tests and prior baselines.
+  Maintained source/configuration hashes are in `final_source_snapshot.json`.
+  Numerical NativeMilleModel hash remains
+  `1622cc80327fe08dd6c943bb57e537a8fea86a95233389065efa91739028843f`.
+
+Additional exact commands (use new output names for any repeat):
+
+```bash
+bash environment/run.sh env \
+  TESTBENCH_BUILD_DIR=/work/build/native_three_rotation_legacy_20261024_01 \
+  bash environment/build.sh
+bash environment/run.sh bash validation/run_regression.sh \
+  /work/result/native_three_rotation_legacy_20261024_01 \
+  /work/build/native_three_rotation_legacy_20261024_01
+
+runs=()
+for seed in 2 3 4; do
+  for mode in l1_rx_ry_rz l1_rx_ry_rz_negative; do
+    runs+=("result/native_three_rotation_seed${seed}_${mode}_20261024_01")
+  done
+done
+bash environment/run.sh python3 validation/telescope_closure/cohort_summary.py \
+  --runs "${runs[@]}" \
+  --output-dir result/native_three_rotation_20261024_01_audit/cohort_summary/output
+# Full actual decoder argv is in audit/official_binary_inspection_02/command.json;
+# use the workflow environment(build) to resolve external/install/lib/libMille2.so.
+bash environment/run.sh python3 -c 'import subprocess; from pathlib import Path; from validation.telescope_closure.closure import environment; subprocess.run(["/work/external/install/bin/inspectMilleBinary", "/work/result/native_three_rotation_seed2_l1_rx_ry_rz_20261024_01/nominal/mille.dat"], env=environment(Path("/work/build/native_three_rotation_20261024_01")), check=True)'
+```
+
+Here `audit/` abbreviates `result/native_three_rotation_20261024_01_audit/`.
+All six original driver commands, subprocess stdout, exit codes, Geometry XML,
+Mille/Pede files, failed technical invocations and ROOT outputs remain locally
+preserved. Generated artifacts remain ignored; the local commit contains only
+maintained source, configuration, tests and documentation. No push, merge,
+production activation, external installation modification or legacy deletion
+is performed.
