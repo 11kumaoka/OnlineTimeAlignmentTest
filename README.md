@@ -1,5 +1,11 @@
 # Local Detector Alignment Research
 
+For the **experimental EICrecon-style barrel alignment**, start with the
+[32-track alignment user guide](docs/BARREL_ALIGNMENT_USER_GUIDE.md), then the
+[source/architecture map](docs/BARREL_ALIGNMENT_CODE_MAP.md) and
+[reproduction record](docs/BARREL_ALIGNMENT_VALIDATION.md).
+The original endcap/BeamTestReco workflow below remains separately supported.
+
 Independent DD4hep/EICrecon research tasks: Detector Geometry → Simulation →
 Digitization → saved RawHits → Hit Reconstruction / Track Fitting → Mille Binary → Millepede-II →
 Geometry Correction → reconstruction of the same events → Closure Validation.

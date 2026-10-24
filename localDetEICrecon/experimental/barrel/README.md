@@ -1,3 +1,9 @@
+> Start here: [alignment user guide](../../../docs/BARREL_ALIGNMENT_USER_GUIDE.md),
+> [code and upstream map](../../../docs/BARREL_ALIGNMENT_CODE_MAP.md), and
+> [reproduction record](../../../docs/BARREL_ALIGNMENT_VALIDATION.md).
+> The earlier reports below describe their historical milestones; the current
+> validated channel closure remains limited to L1/L2 Global Y, zero field and no ACTS material.
+
 # Experimental EICrecon telescope factory chain
 
 This isolated plugin follows pinned EICrecon source-level module boundaries.

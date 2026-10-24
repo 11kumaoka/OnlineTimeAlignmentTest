@@ -46,7 +46,10 @@ locally as `f0d15a97aed49386021ea6b6d980b19bfcdfe970`
 (`Validate native ACTS measurement equations and Mille integration`).
 Its one-event reconstruction/read-back, derivative evidence, historical writer
 comparison, 16-ray mathematical fixture, 46 tests and preservation checks passed.
-This milestone's changes remain uncommitted. Nothing was pushed or merged.
+At the time of this report these changes were uncommitted. They are now preserved
+in local commit `288e80e934b0acb09ef8eb7001398baea565dcf6`.
+See the [entry-point guide](BARREL_ALIGNMENT_USER_GUIDE.md) and
+[new reproduction record](BARREL_ALIGNMENT_VALIDATION.md). Nothing was pushed or merged.
 
 The fixed Docker environment remains EICrecon
 `195966d41899800eaeca6fbafd63cd53735e6543`, ACTS 45.3.0 and DD4hep 1.36.
