@@ -12,3 +12,8 @@ target_compile_definitions(BarrelGeometryProbe PRIVATE Acts_VERSION_MAJOR=${Acts
 target_link_libraries(BarrelGeometryProbe PRIVATE
   EICrecon::algorithms_tracking_library Acts::Core Acts::PluginDD4hep
   nlohmann_json::nlohmann_json DD4hep::DDCore DD4hep::DDRec fmt::fmt spdlog::spdlog)
+
+# Normal DD4hep XML plugin discovery; no installed library is changed.
+add_library(TestbenchBarrelMetadata SHARED BarrelMetadata.cc)
+target_link_libraries(TestbenchBarrelMetadata PRIVATE DD4hep::DDCore DD4hep::DDRec)
+dd4hep_generate_rootmap(TestbenchBarrelMetadata)

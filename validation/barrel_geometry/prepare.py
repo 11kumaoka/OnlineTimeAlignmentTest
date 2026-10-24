@@ -13,7 +13,7 @@ import xml.etree.ElementTree as E
 REPO = Path(__file__).resolve().parents[2]
 
 
-def prepare(output):
+def prepare(output, initialize_metadata=False):
     output = output.resolve()
     if not output.is_relative_to(REPO / 'result') or output == REPO / 'result':
         raise ValueError('Output must be a new child of result/')
@@ -58,9 +58,18 @@ def prepare(output):
                 E.SubElement(layer, 'rphi_layout', phi0='0', phi_tilt='0', nphi='1',
                              rc=f'{radius}*mm', dr='0')
                 E.SubElement(layer, 'z_layout', dr='0', z0='0', nz='1')
-        # Discovery/axis metadata and real BARREL flags are explicitly applied
-        # process-locally by the diagnostic, rather than relying on stale plugins.
-        root.find('plugins').clear()
+        # Optional normal XML initialization; the default retains the previous
+        # diagnostic-only fixture for reproducible negative controls.
+        plugins=root.find('plugins')
+        plugins.clear()
+        if initialize_metadata:
+            for name, *_ in groups:
+                plugin=E.SubElement(plugins,'plugin',name='TestbenchBarrelMetadata')
+                E.SubElement(plugin,'argument',value=name)
+                E.SubElement(plugin,'argument',value='zXy')
+                plugin=E.SubElement(plugins,'plugin',name='DD4hep_ParametersPlugin')
+                E.SubElement(plugin,'argument',value=name)
+                E.SubElement(plugin,'argument',value='layer_pattern: str=^layer[0-6]$')
         E.indent(root)
         E.ElementTree(root).write(output / (scenario+'.xml'), encoding='unicode')
     manifest = {'canonical_geometry': str(nominal.relative_to(REPO)),
@@ -68,6 +77,7 @@ def prepare(output):
                 'rigid_rotation': [[0,0,1],[-1,0,0],[0,-1,0]],
                 'rigid_translation_mm': [250,0,0],
                 'scenarios': ['nominal','translated','tilted'],
+                'normal_initialization_metadata': initialize_metadata,
                 'barrel_field': 0, 'production_geometry_activated': False}
     (output/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
 
@@ -75,4 +85,6 @@ def prepare(output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', type=Path, required=True)
-    prepare(parser.parse_args().output_dir)
+    parser.add_argument('--initialize-metadata',action='store_true',help='Include normal DD4hep XML metadata plugins')
+    args=parser.parse_args()
+    prepare(args.output_dir,args.initialize_metadata)

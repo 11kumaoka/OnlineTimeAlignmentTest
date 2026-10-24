@@ -80,9 +80,39 @@ def check(report_path, fixture_path):
                       'outside_world_entry_supported':False},indent=2))
 
 
+def check_integration(report_path):
+    report=json.loads(report_path.read_text())
+    assert report['provider']=='official' and report['experimental_metadata']=='none'
+    assert report['original_hierarchy']==report['selected_hierarchy']
+    propagation={row['name']:row for row in report['propagation']}
+    for name in ('inside_annulus','before_first_plane','transformed_gun',
+                 'on_actual_entry_boundary','entry_with_interior_margin'):
+        assert propagation[name]['ok'] and propagation[name]['hits']==list(range(7)),name
+    outside=propagation['outside_inner_boundary']
+    assert not outside['ok'] and not outside['hits']
+    assert outside['error']=='No start volume could be resolved'
+    assert report['entry_transport']['ok'] and not report['entry_transport']['material_aware']
+    assert abs(report['entry_transport']['path_length_mm']-7.975)<1e-9
+    intersections={row['name']:row['hits'] for row in report['sensitive_intersections']}
+    assert intersections['outside_start']==list(range(7)) and not intersections['bounded_miss']
+    surfaces=report['material_inventory']['surfaces']
+    volumes=report['material_inventory']['volumes']
+    assert len(surfaces)==56 and len(volumes)==5
+    assert all(not row['material_assigned'] for row in surfaces+volumes)
+    from collections import Counter
+    roles=Counter(role['role'] for row in surfaces for role in row['roles'])
+    assert roles=={'sensitive':7,'approach':14,'layer_representation':17,'boundary':20}
+    assert all(plane['dd4hep_material']=='Silicon' for plane in report['planes'])
+    print(json.dumps({'integration_passed':True,'diagnostic_metadata_adapter_used':False,
+                     'material_model_complete':False,'material_surface_count':len(surfaces),
+                     'material_roles':dict(roles),'explicit_boundary_transport_passed':True},indent=2))
+
+
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report',type=Path,required=True)
     parser.add_argument('--fixture',type=Path,required=True)
+    parser.add_argument('--integration',action='store_true',help='Check normal initialization, full propagation and material inventory')
     args = parser.parse_args()
     check(args.report,args.fixture)
+    if args.integration:check_integration(args.report)

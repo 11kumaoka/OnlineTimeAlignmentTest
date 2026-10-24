@@ -1,6 +1,15 @@
 // Isolated installed-provider and Navigator audit. No fitting, alignment, or Geometry activation.
 #include <Acts/ActsVersion.hpp>
 #include <Acts/Propagator/Navigator.hpp>
+#include <Acts/Propagator/Propagator.hpp>
+#include <Acts/Propagator/EigenStepper.hpp>
+#include <Acts/Propagator/SurfaceCollector.hpp>
+#include <Acts/Propagator/StandardAborters.hpp>
+#include <Acts/MagneticField/ConstantBField.hpp>
+#include <Acts/EventData/TrackParameters.hpp>
+#include <Acts/Geometry/ApproachDescriptor.hpp>
+#include <Acts/Surfaces/SurfaceArray.hpp>
+#include <map>
 #include <Acts/Geometry/TrackingGeometry.hpp>
 #include <Acts/Geometry/TrackingVolume.hpp>
 #include <Acts/Geometry/VolumeBounds.hpp>
@@ -151,6 +160,7 @@ int main(int argc,char** argv) {
         {"context_element",volume->element.path()},{"local",surfaceInfo(*reference,context)}};
       auto* box=dynamic_cast<TGeoBBox*>(volume->element.volume().solid().ptr());
       if(!box)throw std::runtime_error("Sensitive solid is not a Box");
+      row["dd4hep_material"]=volume->element.volume().material().name();
       row["physical_half_lengths_mm"]={box->GetDX()*10.,box->GetDY()*10.,box->GetDZ()*10.};
       row["physical_component_rotation"]=Json::array();row["physical_world_rotation"]=Json::array();
       for(int j=0;j<9;++j){row["physical_component_rotation"].push_back(volume->element.placement().ptr()->GetMatrix()->GetRotationMatrix()[j]);row["physical_world_rotation"].push_back(volume->element.nominal().worldTransformation().GetRotationMatrix()[j]);}
@@ -210,15 +220,98 @@ int main(int argc,char** argv) {
             {"thickness_mm",l->layerThickness()},{"geometry_id",l->geometryId().value()}});
         }
       });
+      std::map<const Acts::Surface*,std::size_t> materialRows;
+      auto inventorySurface=[&](const Acts::Surface& surface,const std::string& role,const std::string& owner) {
+        if(!materialRows.contains(&surface)) {
+          const std::size_t index=materialRows.size();materialRows[&surface]=index;
+          report["material_inventory"]["surfaces"].push_back({{"geometry_id",surface.geometryId().value()},
+            {"material_assigned",surface.surfaceMaterial()!=nullptr},{"roles",Json::array()},
+            {"bounds_type",int(surface.bounds().type())},{"bounds",surface.bounds().values()}});
+        }
+        report["material_inventory"]["surfaces"][materialRows.at(&surface)]["roles"].push_back({{"role",role},{"owner",owner}});
+      };
+      world->visitVolumes([&](const Acts::TrackingVolume* volume) {
+        report["material_inventory"]["volumes"].push_back({{"name",volume->volumeName()},
+          {"geometry_id",volume->geometryId().value()},{"material_assigned",volume->volumeMaterial()!=nullptr}});
+        for(const auto& boundary:volume->boundarySurfaces())inventorySurface(boundary->surfaceRepresentation(),"boundary",volume->volumeName());
+        if(const auto* layers=volume->confinedLayers())for(const auto& layer:layers->arrayObjects()) {
+          const auto owner=volume->volumeName()+":"+std::to_string(layer->geometryId().value());
+          inventorySurface(layer->surfaceRepresentation(),"layer_representation",owner);
+          if(const auto* approach=layer->approachDescriptor())for(const auto* surface:approach->containedSurfaces())
+            inventorySurface(*surface,"approach",owner);
+          if(const auto* array=layer->surfaceArray())for(const auto* surface:array->surfaces())inventorySurface(*surface,"sensitive",owner);
+        }
+      });
       Acts::Navigator::Config cfg;cfg.trackingGeometry=tg;cfg.resolveSensitive=true;cfg.resolveMaterial=false;cfg.resolvePassive=false;
       Acts::Navigator nav(cfg);
+      for(const auto& ray:std::vector<std::pair<std::string,Acts::Vector3>>{
+          {"outside_start",{240.,0.,0.}},{"bounded_miss",{240.,0.,70.}}}) {
+        Json row={{"name",ray.first},{"hits",Json::array()},{"path_lengths_mm",Json::array()}};
+        for(int i=0;i<7;++i) {
+          const auto intersection=surfaces[i]->intersect(context,ray.second,Acts::Vector3::UnitX(),Acts::BoundaryTolerance::None()).closestForward();
+          if(intersection.isValid() && intersection.pathLength()>=0.) {
+            row["hits"].push_back(i);row["path_lengths_mm"].push_back(intersection.pathLength());
+          }
+        }
+        report["sensitive_intersections"].push_back(row);
+      }
+      using Collector=Acts::SurfaceCollector<>;
+      using Propagator=Acts::Propagator<Acts::EigenStepper<>,Acts::Navigator>;
+      auto field=std::make_shared<Acts::ConstantBField>(Acts::Vector3::Zero());
+      Propagator propagator{Acts::EigenStepper<>(field),Acts::Navigator(cfg)};
+      Acts::MagneticFieldContext mctx;
+      const double entryRadius=world->volumeBounds().values()[0];
+      auto propagateFrom=[&](const std::string& name,const Acts::Vector3& start) {
+        auto seed=Acts::BoundTrackParameters::createCurvilinear(Acts::Vector4(start.x(),start.y(),start.z(),0.),
+          Acts::Vector3::UnitX(),-1.,std::nullopt,Acts::ParticleHypothesis::electron());
+        Propagator::Options<Acts::ActorList<Collector,Acts::EndOfWorldReached>> options(context,mctx);
+        options.maxSteps=1000;options.pathLimit=1000.;
+        auto result=propagator.propagate(seed,options);
+        Json test={{"name",name},{"start_mm",vector(start)},{"ok",result.ok()},{"hits",Json::array()}};
+        if(result.ok()) {
+          test["path_length_mm"]=result.value().pathLength;
+          for(const auto& hit:result.value().template get<Collector::result_type>().collected)
+            for(int i=0;i<7;++i)if(hit.surface==surfaces[i])test["hits"].push_back(i);
+          if(result.value().endParameters)test["end_mm"]=vector(result.value().endParameters->position(context));
+        } else test["error"]=result.error().message();
+        report["propagation"].push_back(test);
+      };
+      propagateFrom("inside_annulus",{entryRadius+.001,0.,0.});
+      propagateFrom("before_first_plane",{249.,0.,0.});
+      propagateFrom("outside_inner_boundary",{240.,0.,0.});
+      propagateFrom("transformed_gun",{-250.,0.,0.});
+      // Use the actual inner world boundary as an entry target, never a fake detector.
+      const Acts::Surface* entrySurface=nullptr;
+      for(const auto& boundary:world->boundarySurfaces()) {
+        const auto& surface=boundary->surfaceRepresentation();
+        const auto* bounds=dynamic_cast<const Acts::CylinderBounds*>(&surface.bounds());
+        if(bounds && std::abs(bounds->values()[0]-entryRadius)<1e-8)entrySurface=&surface;
+      }
+      if(!entrySurface)throw std::runtime_error("No actual inner world Cylinder boundary");
+      using EntryPropagator=Acts::Propagator<Acts::EigenStepper<>>;
+      EntryPropagator entryPropagator{Acts::EigenStepper<>(field)};
+      auto outsideSeed=Acts::BoundTrackParameters::createCurvilinear(Acts::Vector4(240.,0.,0.,0.),
+        Acts::Vector3::UnitX(),-1.,std::nullopt,Acts::ParticleHypothesis::electron());
+      EntryPropagator::Options<> entryOptions(context,mctx);entryOptions.pathLimit=100.;entryOptions.maxSteps=1000;
+      auto entry=entryPropagator.propagate(outsideSeed,*entrySurface,entryOptions);
+      report["entry_transport"]={{"ok",entry.ok()},{"target_geometry_id",entrySurface->geometryId().value()},
+        {"material_aware",false},{"start_mm",{240.,0.,0.}}};
+      if(entry.ok() && entry.value().endParameters) {
+        const Acts::Vector3 position=entry.value().endParameters->position(context);
+        report["entry_transport"]["end_mm"]=vector(position);
+        report["entry_transport"]["path_length_mm"]=entry.value().pathLength;
+        propagateFrom("on_actual_entry_boundary",position);
+        // A documented 1 micron interior seed margin is a numerical convention,
+        // not an added volume or altered tracking boundary.
+        propagateFrom("entry_with_interior_margin",position+Acts::Vector3(.001,0.,0.));
+      } else if(!entry.ok())report["entry_transport"]["error"]=entry.error().message();
       // Straight stepping uses real Navigator targets, including volume boundaries.
       // Starts just inside the annular world; outside-world entry is tested separately.
       const double rmin=world->volumeBounds().values()[0];
       for(const auto& ray : std::vector<std::pair<std::string,Acts::Vector3>>{
           {"central",{rmin+1e-3,0.,0.}}, {"off_axis",{rmin+1e-3,20.,15.}},
           {"z_miss",{rmin+1e-3,0.,51.5}}, {"opposite_phi",{-rmin-1e-3,0.,0.}},
-          {"outside_world",{rmin-10.,0.,0.}}}) {
+          {"outside_world",{rmin-10.,0.,0.}}, {"transformed_gun",{-250.,0.,0.}}}) {
         Acts::Vector3 pos=ray.second,dir=ray.first=="opposite_phi"?Acts::Vector3(-1.,0.,0.):Acts::Vector3(1.,0.,0.);
         Acts::Navigator::Options opts(context);auto state=nav.makeState(opts);
         Json test={{"name",ray.first},{"start",vector(pos)},{"hits",Json::array()},{"steps",Json::array()}};
