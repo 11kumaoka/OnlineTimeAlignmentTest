@@ -70,7 +70,7 @@ Paths below are relative to the repository root. `T/` means
 | `V/telescope_alignment/TelescopeMilleDerivatives.cc` | `main`: analytical/finite-difference gates on actual surfaces | external executable |
 | `V/telescope_alignment/l1_l2_global_y.json` | labels 700102/700202 and explicit supported physical Global Y scope | observer configuration |
 | `V/telescope_alignment/l1_global_rx.json`, `l1_y_rx_l2_y.json` | selected physical labels, rad unit, current-center pivot, Global left composition and actual L1 IDs | observer configuration |
-| `V/telescope_alignment/l1_l2_y_rx_ry_rz_l3_y.json`, `l1_l2_l3_y_rx_ry_rz.json` | explicit selected sensor identities, components, references and containment contract; validated nine-column Scope C and prospective twelve-column Scope D | observer configuration |
+| `V/telescope_alignment/l1_l2_y_rx_ry_rz_l3_y.json`, `l1_l2_l3_y_rx_ry_rz.json` | explicit selected sensor identities, components, references and containment contract; validated experimental nine-column Scope C and twelve-column Scope D closures | observer configuration |
 | `V/telescope_closure/rotation.py` | `rotate_component`, `pose_checks`, `physical_derivatives`, `correct`, `check`: restricted SO(3) serialization and actual-Geometry/native-row validation | external selected-mode helpers |
 | `V/telescope_closure/multi_sensor.py` | `configuration`, `labels`, `aligned_sensors`, `references`: explicit physical selection; `pose_increments`, `xml_identity`, `pose_gate`: shared sensor-isolated updates and validation | external Python |
 | `V/telescope_closure/multi_information.py` | `analyze`: native calibrated information, four-local-parameter profiling, fixed-reference and nuisance diagnostics | external read-only Python |
@@ -610,7 +610,7 @@ Evidence is recorded in
 `result/native_multi_20261024_01_audit/baseline_identity.json` and
 `result/native_multi_20261024_01_audit/final_plugin_full_replay_summary.json`.
 
-## Configured L1/L2/L3 selection: Scope C and prospective Scope D
+## Configured L1/L2/L3 selection: Scope C checkpoint
 
 The three-sensor extension changes selection and validation adapters. It reuses
 the same native measurement equations, four local track parameters, installed
@@ -782,3 +782,210 @@ multi-sensor tests passed. The final 102-test and complete eighteen-command
 regression runs are separate end-of-milestone requirements; this checkpoint
 does not report them as executed. Full closure, regression and prospective
 Scope D status are maintained in the parity report.
+
+## Scope D: validated experimental twelve-parameter closure
+
+The primary `l1_l2_l3_y_rx_ry_rz` cohort has now completed all seventeen native
+closure stages. It uses the same frozen
+`build/native_three_sensor_c_20261024_01` plugin and the same source committed
+for Scope C (`c0852aecbec65c75b32e907bf51b5bf4c5b5d417`). Enabling L3 rotations
+changes the selected JSON and prospective fixture, not the provider, navigator,
+fitter, numerical derivatives, measurement covariance or correction algorithm.
+The table above records the earlier Scope C checkpoint, when this preset was
+still prospective.
+
+`l1_l2_l3_y_rx_ry_rz.json` declares Y/Rx/Ry/Rz for each of L1/L2/L3, actual
+sensor IDs, fixed L0/L4 references, fixed X/Z translations and the existing
+center-pivot/left-Global/unchanged-envelope contract. `Init` consumes this
+declaration directly. The unchanged `Process` branch matches each actual
+measured sensor before selecting its four derivative columns. In particular,
+L3 uses VolumeID 272635935, ACTS GeometryIdentifier 216173331869597983 and labels
+700302/700304/700305/700306. Its fitted rotations do not use L1/L2 identities or
+modify their shared sensitive-component definitions in place.
+
+The primary source and output directory is
+`result/native_three_sensor_scope_d_seed1_positive_20261024_01/`.
+It uses seed 2026102801, 4096 trajectories, the unchanged bounded beam and
+measurement settings, and the three translations from Scope C. L3's added
+physical rotation vector is (+0.8,-0.4,+0.4) mrad. Before new recovery,
+Geometry-only preflight tested both signs: 528 sampled correlated poses and
+38 actual DD4hep/ACTS reloads, under the unchanged module/layer bounds.
+The preflight artifacts are in
+`result/native_three_sensor_20261024_01_audit/geometry_preflight_d/`.
+
+The actual initial data-only selected matrix has rank twelve and
+diagonal-scaled condition 5.209146. Its initial joint error statistic is
+11.240214 against the unchanged squared-Mahalanobis gate of 25. All 4096
+tracks remain accepted in nominal, final and control reconstruction. ACTS
+chi2/stored-NDF improves from 12.360222868341953 to 0.6079249182432249.
+The final Pede chi2/NDF is 24900.263047578333/24564; the statistical denominator
+is `6*N-12`, while ACTS still stores ten measured dimensions per track.
+All four Pede stages end normally with zero rejected local fits and no error
+rescaling. One explicit refinement is recorded; its initial one-step gate also
+passed. Success is evaluated against the original finite Geometry,
+derivative, sensitivity, recovery and post-fit gates.
+
+Actual constructor finite differences cover every selected sensor/component at
+three step sizes in nominal, corrected and refined Geometry: 442368
+two-coordinate derivative vectors for this cohort. Maximum discrepancies are
+3.941e-8 mm/rad and 7.261e-10 mm/mm. The same finite rotation serializer,
+current sensitive-center pivot, real DD4hep/ACTS matrix checks and whole-XML
+whitelist serve all three sensors. Correcting one sensor preserves the other
+sensor definitions and fixed references. There is no separate L3 equation or
+correction implementation.
+
+Independent nominal and refined audits check every accepted event's actual
+CellID/system/layer, unique SourceLink index, configured VolumeID/surface
+identity, calibrated covariance and selected derivative rows. The refined
+audit additionally compares the serialized residuals and all four local
+coefficients. Fixed L0/L4 contribute 16384 scalar rows without free global
+labels in each pass. The official decoder independently finds 4096 records,
+40960 scalar measurements and exactly twelve labels, each occurring 8192
+times, in both binaries. Evidence is in `scope_d_native_association/`,
+`scope_d_refined_association/`, and
+`official_binary_scope_d_{nominal,refined}/` under the milestone audit.
+
+The executed primary invocation was:
+
+```bash
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B validation/telescope_closure/closure.py \
+  --build build/native_three_sensor_c_20261024_01 \
+  --result result/native_three_sensor_scope_d_seed1_positive_20261024_01 \
+  --mode l1_l2_l3_y_rx_ry_rz --events 4096 \
+  --beam validation/telescope_alignment/three_sensor_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+```
+
+This output already exists. Reproduction requires a fresh result directory;
+do not execute the command in place. The immutable channel file and every
+per-stage command, exit status, XML version, Pede result and ROOT diagnostic
+remain in that directory. No candidate is activated.
+
+All four prospectively declared Scope D fixtures have completed all seventeen
+closure stages:
+
+| Seed and rotation sign | Rank | Scaled condition | Initial joint error squared | Nominal ACTS chi2/stored-NDF | Final ACTS chi2/stored-NDF |
+|---|---:|---:|---:|---:|---:|
+| 2026102801 positive | 12 | 5.209146 | 11.240214 | 12.360223 | 0.607925 |
+| 2026102801 negative | 12 | 5.209084 | 3.919582 | 12.503304 | 0.602174 |
+| 2026102802 positive | 12 | 5.067902 | 15.655345 | 12.426350 | 0.612096 |
+| 2026102802 negative | 12 | 5.068258 | 17.420052 | 12.441506 | 0.598861 |
+
+Each retains all 4096 tracks, records one explicit refinement and passes the
+original one-step post-correction gate. All sixteen Pede solves finish normally,
+without warning lines, rejected local fits or error rescaling. Across the four
+fixtures, 1769472 actual-Geometry derivative vectors pass; maximum discrepancies
+are 3.968e-8 mm/rad and 7.261e-10 mm/mm. The smallest fitted module clearance is
+0.117922 mm, under unchanged parent bounds. Geometry is not activated.
+
+Independent nominal/refined native row and official binary audits pass for all
+eight passes, with the same twelve-label counts and fixed-reference exclusions
+described above. Their evidence uses
+`scope_d_{case}_{nominal,refined}_association/` and
+`official_binary_scope_d_{case}_{nominal,refined}/` under the milestone audit.
+`scope_d_all_native_and_official_summary/` verifies their completion hashes,
+one frozen plugin identity and identical RawHit bytes within each fixture.
+`scope_d_four_fixture_summary/summary.json` independently consolidates all
+four scientific closures, real cumulative Geometry matrices, Pede diagnostics,
+ROOT histogram entries and immutable input identities.
+
+The full initial twelve-by-twelve data-only covariance is preserved in each
+run's `solve/observability.json`, under
+`selected.covariance_mixed_units`, with ordered `parameter_definitions`,
+`selected.sigma` and `selected.correlation`. The same covariance and correlation
+are in `validation/report.json` as `nominal_covariance_mixed_units` and
+`correlation`, and in the consolidated audit per run as
+`initial_covariance_mixed_units` and `initial_correlation`. Translation entries
+use mm and rotation entries rad. Pede's printed nominal errors and unchanged
+presigma/inversion metadata remain separately available; corrections from
+successive fits on identical channels are not statistically independent and
+their uncertainties are not combined.
+
+`multi_information.analyze` retains four local parameters per track and fixed
+L0/L4 references. Every recorded prefix and slope/impact subset has full selected
+rank. The read-only eighteen-column diagnostic releases the omitted X/Z
+components on L1/L2/L3, while keeping L0/L4 fixed: it has rank eighteen in all
+four nominal designs. Its largest selected angular error is 0.499646 mrad,
+close to the unchanged 0.5 mrad fixture-design limit. This diagnostic does not
+enable or validate an eighteen-parameter alignment mode. Releasing all five
+sensor poses in the separate thirty-column diagnostic gives rank 21 in the
+nominal/control Geometry (nine null directions) and rank 23 in the
+corrected/refined Geometry (seven null directions), consistently across all
+four fixtures. These null spaces include the six explicit common rigid
+motions, with a maximum profiled/unprofiled norm ratio of 6.75e-16; additional
+Geometry-dependent null directions remain. No all-thirty-parameter fit or new
+gauge constraint is introduced. Maximum
+cross-sensor absolute correlation is 0.316962 for the selected designs.
+
+This is validated experimental support for the declared twelve columns,
+bounded fixtures, beam coverage and material-free native reconstruction.
+Some individual initial tilts have the opposite sign to their injection:
+seed1 positive L1 Ry/L3 Ry; seed2 positive L1 Ry; seed2 negative L1 Rz/L3 Rz.
+These injected weak tilts are only about 1.04–1.33 nominal standard errors
+from zero. Their signs alone do not diagnose a derivative defect; the actual
+Geometry/finite-difference checks and full correlated recovery gates pass.
+For example, seed2 positive L1 Ry initially fits -0.53551 mrad for a +0.5 mrad
+injection, with data-only nominal sigma 0.482662 mrad and an observed pull of
+-2.145. The injection-to-error ratio and the observed pull are different
+quantities.
+These checks and four fixtures do not establish negligible bias or correct
+uncertainty coverage.
+
+The signed pairs share their seed's rays, and C/D primary cohorts reuse seed
+2026102801. Four fixtures therefore represent two independent seeds and 8192
+independent ray draws. Reprocessing and controls are not additional independent
+samples. No ensemble-coverage or material-aware performance claim follows.
+
+### Completed regression and preservation checks
+
+All 23 full historical regression cases and their independent disk-level seal
+pass with exit 0. The seal verifies 80 fresh reconstruction runs, 242048 accepted
+track records including controls/reprocessing, 160 protected artifact comparisons
+and 217 complete stage hash sets. Saved fixture inputs are reused byte-for-byte;
+these counts do not represent new independent simulations. Every original
+scientific report field is exact, with zero excluded. Six Scope B diagnostic
+fields absent from the original Scope A report are checked independently against
+the actual channels and unchanged solver/covariance settings. Evidence is in
+`full_regression_summary.json` and
+`full_regression_independent_seal/report.json` under the milestone audit root.
+
+The separate eighteen-command suite passes in
+`result/native_three_sensor_regression_l1_l2_y_20261024_01/three_sensor_complete_regressions/`.
+It includes 102 passing unit tests, fresh Geometry/standalone CKF builds, actual
+one-event JANA reconstruction, native/legacy mathematical comparison, and the
+existing safety/preservation checks. The earlier 28 targeted tests remain a
+separate successful C checkpoint.
+
+The historical electron regression in
+`result/native_three_sensor_legacy_20261024_01/` reproduces 99 tracks,
+L2 +198.75 micrometers, Rec-Sim -199.571376 to -0.821365 micrometers and
+ACTS chi2/stored-NDF 45.592235 to 1.981040. It reuses the unchanged legacy build;
+a fresh legacy compilation is not claimed. The expected negative-containment
+test still refuses its 2.311987-micrometer physical overflow, reproduces the
+original Pede bytes and does not reconstruct or activate that Geometry. Its
+new evidence is in `result/native_three_sensor_expected_refusal_20261024_01/`.
+All nine copied-official-source patches also reproduce byte-identically from
+the read-only pinned upstream source; their receipts are in
+`upstream_diffs/` and `upstream_diff_driver/` under the milestone audit root.
+
+Final frozen preservation also passes in `final_preservation_v2/`: 8091 unique
+historical files (5048876842 bytes) and 186 strict protected source files retain
+their frozen hashes. `TelescopeMille::Process`/`Finish` remain byte-identical to
+the Scope B authority; its prefix differs only by the required map include.
+`FactoryAudit`, `NativeMilleModel`, the frozen C plugin, formal Mille2 library
+and nine installed ACTS libraries retain their identities. Canonical safety
+passes, and canonical preservation verifies 221 baseline records and 2046
+relocated files, including the electron-hypothesis change.
+
+The original `final_preservation/` audit-wrapper failure remains preserved.
+Its suffix hash included the `Process` marker, whereas the frozen baseline
+excludes that marker. `final_preservation_marker_diagnosis/` proves exact
+current/Git-authority equality under both conventions; the fresh v2 audit
+retains full-suffix equality and repeats every baseline hash check using the
+baseline convention. No scientific assertion or source is changed for this
+diagnostic correction.
+
+All required technical checks are complete. Only the authorized local Scope D
+commit remains pending at this documentation checkpoint; this record does not
+claim a commit SHA or push. No candidate Geometry is activated.

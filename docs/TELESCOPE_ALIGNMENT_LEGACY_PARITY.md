@@ -3770,3 +3770,433 @@ references including FactoryAudit/NativeMilleModel. D remains a target requiring
 its own actual preflight, pre-Pede observability and full closure before a
 separate scientific milestone commit. No general six-DOF, automatic Controller,
 material-aware performance or uncertainty-coverage capability is claimed.
+
+## Scope D: configured twelve-parameter validation (2026-10-24)
+
+The generic configuration engine was introduced in the Scope C commit
+`c0852aecbec65c75b32e907bf51b5bf4c5b5d417`. Scope D enables the existing
+L3 rotation columns in addition to C's nine columns; no numerical fitter,
+Mille derivative or correction algorithm changes are needed between C and D.
+The Scope D scientific status is established separately by the evidence below.
+
+The prospective declaration is
+`result/native_three_sensor_20261024_01_audit/prospective_study_plan.json`.
+All four signed fixtures use 4096 tracks, the original broad-angle recipe,
+1 GeV electrons, zero field, original measurement errors and no assigned ACTS
+material. They comprise **two independent seeds**, 2026102801/2026102802;
+positive/negative rotations within a seed share rays. Scope C also shares
+seed1 rays with D. They are not five independent samples and do not establish
+bias or nominal-error coverage. Truth constructs the validation fixtures and
+checks recovery; it does not enter alignment inference or choose corrections.
+
+Y injections stay (+0.080,-0.060,+0.050) mm. Positive active left-Global
+rotation vectors on L1/L2/L3 are (+1,+0.5,-0.5), (-1.2,+0.6,+0.6),
+(+0.8,-0.4,+0.4) mrad. Negative fixtures reverse rotations only. Every update
+uses the current sensitive-center pivot and numerical SO(3) composition,
+followed by a fresh real DD4hep/ACTS reload. L0/L4 and all Global X/Z remain
+fixed. Each fixture requests the same predeclared maximum of one explicit
+additional correction; no automatic Controller or Geometry activation runs.
+
+D's preflight uses C's measured native information at the same actual N=4096,
+not a target-N forecast. It samples 264 marginal directions per sign lifted
+into the full covariance, with radius five nominal sigmas and the unchanged
+10% engineering margin. There are 528 sampled poses and 38 real DD4hep/ACTS
+reloads, including each sensor's worst module and cylindrical layer boundary.
+Minimum sampled module clearance is 79.984789 micrometers. This is a sampled
+engineering check, not exhaustive containment or a coverage statement. Actual
+new-cohort information and all-corner containment are required again before
+Pede and every reconstruction. No statistics increase was justified or used.
+
+All four prospectively declared Scope D fixtures have passed their 17-stage
+scientific validation. The final consolidated historical regressions and
+preservation seal are recorded separately below. No Scope D commit is made
+before those required checks complete.
+
+### Primary Scope D cohort: completed
+
+Run: `result/native_three_sensor_scope_d_seed1_positive_20261024_01`. All four
+nominal/first-corrected/refined/control reconstructions accept 4096 tracks.
+The final cumulative values below come from actual reloaded Geometry matrices;
+uncertainties belong to the initial fit only and are never combined across
+successive fits to the same RawHits.
+
+| Parameter | Injected | Initial Pede | Initial data-only sigma | Final cumulative | Unit |
+|---|---:|---:|---:|---:|---|
+| L1 Y | +0.08 | +0.080001 | 0.000204217375654 | +0.0800013842 | mm |
+| L1 Rx | +0.001 | +0.00098512 | 2.05206755812e-05 | +0.000984962676242 | rad |
+| L1 Ry | +0.0005 | -0.00010036 | 0.000472982529771 | -0.000143419360728 | rad |
+| L1 Rz | -0.0005 | -0.00016701 | 0.00041380270781 | -0.000171761583425 | rad |
+| L2 Y | -0.06 | -0.059916 | 0.000205847526099 | -0.059916019133 | mm |
+| L2 Rx | -0.0012 | -0.001225 | 1.69701965199e-05 | -0.00122500014938 | rad |
+| L2 Ry | +0.0006 | +0.00087684 | 0.000363963601324 | +0.000815049255815 | rad |
+| L2 Rz | +0.0006 | +0.00059141 | 0.000352658531217 | +0.000589328957486 | rad |
+| L3 Y | +0.05 | +0.050144 | 0.000223510397514 | +0.0501457376 | mm |
+| L3 Rx | +0.0008 | +0.00078102 | 1.4779770762e-05 | +0.000780979027379 | rad |
+| L3 Ry | -0.0004 | +0.00013395 | 0.000300486852796 | +0.000121583245144 | rad |
+| L3 Rz | +0.0004 | +0.00055354 | 0.000315663237132 | +0.000549021926274 | rad |
+
+The complete initial data-only 12x12 covariance is in the table order above.
+Entries have mixed mm/rad product units; full precision is retained in
+`validation/report.json` and the independent audit. Rounded values here are
+for inspection, not a replacement uncertainty model.
+
+```text
+4.1704736519e-08 5.4176532223e-11 -3.5028369275e-10 -1.8615276594e-08 1.3251311357e-08 1.4131453688e-11 -9.0232869756e-11 -4.8487467405e-09 1.0118829207e-08 8.6514523008e-12 -5.5537725639e-11 -2.9962539763e-09
+5.4176532223e-11 4.2109812631e-10 -1.7198307728e-10 3.6083071222e-11 1.1738817770e-11 1.0563846614e-10 -3.3050679280e-11 9.8265528192e-12 5.6416346855e-12 6.3227112740e-11 -1.5534016878e-11 6.8926467185e-12
+-3.5028369275e-10 -1.7198307728e-10 2.2371247347e-07 1.1808225230e-09 -8.3685783962e-11 -3.6690786816e-11 5.1641577379e-08 7.0129641764e-11 -3.2882332516e-11 -1.9057360745e-11 2.9190313797e-08 -4.9049887483e-11
+-1.8615276594e-08 3.6083071222e-11 1.1808225230e-09 1.7123268099e-07 -9.5883548546e-09 4.0286343569e-12 3.6720147737e-10 4.4603688706e-08 -8.8540731143e-09 6.0855650093e-13 2.5323866181e-10 2.7564373054e-08
+1.3251311357e-08 1.1738817770e-11 -8.3685783962e-11 -9.5883548546e-09 4.2373204001e-08 3.5751684082e-11 -2.7133362960e-10 -2.6734661807e-08 1.4580649930e-08 1.0057308842e-11 -7.9480695056e-11 -7.3855515013e-09
+1.4131453688e-11 1.0563846614e-10 -3.6690786816e-11 4.0286343569e-12 3.5751684082e-11 2.8798756993e-10 -8.2886652025e-11 9.3040492313e-12 8.5024640369e-12 7.7113657024e-11 -1.7263288340e-11 3.3491474852e-12
+-9.0232869756e-11 -3.3050679280e-11 5.1641577379e-08 3.6720147737e-10 -2.7133362960e-10 -8.2886652025e-11 1.3246950309e-07 4.5032173140e-10 -6.2861171740e-11 -1.8922451134e-11 3.3509327472e-08 2.3017994308e-11
+-4.8487467405e-09 9.8265528192e-12 7.0129641764e-11 4.4603688706e-08 -2.6734661807e-08 9.3040492313e-12 4.5032173140e-10 1.2436803964e-07 -1.1036177823e-08 2.2020799928e-13 1.6661173435e-10 3.4358198072e-08
+1.0118829207e-08 5.6416346855e-12 -3.2882332516e-11 -8.8540731143e-09 1.4580649930e-08 8.5024640369e-12 -6.2861171740e-11 -1.1036177823e-08 4.9956897797e-08 2.7007773139e-11 -2.1502039578e-10 -3.2005959637e-08
+8.6514523008e-12 6.3227112740e-11 -1.9057360745e-11 6.0855650093e-13 1.0057308842e-11 7.7113657024e-11 -1.8922451134e-11 2.2020799928e-13 2.7007773139e-11 2.1844162378e-10 -4.3099633533e-11 3.5948566273e-13
+-5.5537725639e-11 -1.5534016878e-11 2.9190313797e-08 2.5323866181e-10 -7.9480695056e-11 -1.7263288340e-11 3.3509327472e-08 1.6661173435e-10 -2.1502039578e-10 -4.3099633533e-11 9.0292348703e-08 2.0714994685e-10
+-2.9962539763e-09 6.8926467185e-12 -4.9049887483e-11 2.7564373054e-08 -7.3855515013e-09 3.3491474852e-12 2.3017994308e-11 3.4358198072e-08 -3.2005959637e-08 3.5948566273e-13 2.0714994685e-10 9.9643279277e-08
+```
+
+The initial joint squared Mahalanobis error is 11.2402136353 (<25). Final Y
+biases on L1/L2/L3 are +0.0013842/+0.083980867/+0.1457376 micrometers;
+orientation distances are 0.722464538/0.216760362/0.542787612 mrad. Each
+position and orientation improves and all unchanged recovery/containment gates
+pass. L1 Ry and L3 Ry have opposite initial signs to the injected weak tilts.
+Their nominal uncertainties are about 0.473 and 0.300 mrad; this outcome must
+not be described as precise component-sign recovery or uncertainty coverage.
+
+ACTS chi2/stored-NDF improves 12.360222868342 to 0.607924918243; the control
+is 0.602733343804. Official Pede chi2/NDF for initial/post/refined/control is
+1.013661774717/1.013689525569/1.013689262644/1.004292063443, with NDF=24564.
+All four solves exit normally without rejected local fits or error scaling.
+The first one-step post-update gate already passes; the prospectively fixed
+one-extra protocol is applied anyway. Final Y proposals are
+[-3.838e-8,-1.5972e-8,-1.4841e-8] mm, and the largest final angular proposal
+is 3.5852e-7 rad. Numerical convergence is distinct from Truth accuracy.
+
+Both nominal and refined official decoders read 4096 records/40960 scalar
+measurements with exactly 12 selected labels, each 8192 times. Independent
+audit verifies all actual SourceLink/CellID/VolumeContext/SurfaceMap identities,
+calibrated covariances, whitening, residuals and local/global coefficients.
+Fixed L0/L4 scalar rows have no selected global columns. Evidence is under
+`result/native_three_sensor_20261024_01_audit/official_binary_scope_d_*` and
+`scope_d_*association/`. The primary success does not replace the remaining
+prospective cohort checks.
+
+The primary measured selected information has rank 12 and scaled condition
+5.209146–5.209571 across all four solves. The full nuisance design has rank 18 and
+condition 5.767454–5.771657; the limiting selected uncertainty after profiling
+X/Z is approximately 0.4912 mrad, below the unchanged 0.5 mrad gate. All nine
+prefixes 16–4096 and eight slope/impact subsets have selected rank 12. Every
+track retains local rank 4 and individual selected-design rank 6; full global
+rank is an ensemble requirement, not a per-track assertion.
+
+The maximum absolute cross-sensor correlation is 0.316909. Fixed-reference
+principal information agrees exactly with the selected information, and six
+released common rigid motions have norm ratios at most 4.63e-16. Releasing
+all 30 pose parameters gives rank 21 nominal/control and 23 corrected/refined: respectively
+nine and seven null directions at the recorded scaled tolerance, including
+the six rigid directions. This does not establish support for fitting 30 free
+pose parameters. The selected 12-parameter and fixed-reference 18-parameter
+information tests pass without additional constraints, altered errors or
+changed steering.
+
+Three real-Geometry finite-difference gates check 442368 two-component vectors,
+with maximum errors 3.94055e-8 mm/rad and 7.26001e-10 mm/mm against 2e-5. Minimum
+actual fitted module clearance is 120.764210 micrometers; every corner also
+passes its cylindrical layer mother. The input ROOT SHA and channel payload
+SHA are identical across nominal, first-corrected and refined reconstruction.
+Nine ROOT histograms reopen successfully with 4096 track and 20480 residual
+entries. Full evidence is in
+`result/native_three_sensor_20261024_01_audit/scope_d_primary_summary/` and each
+solve's `observability.json`, including covariance, cross-correlations,
+weak/null vectors, prefix/subset designs and the full Geometry version chain.
+
+### Additional prospective Scope D fixtures
+
+All three additional fixtures have now passed all 17 stages. The following
+tables preserve every selected parameter. All initial errors are data-only;
+final cumulative values are actual matrix-derived poses, not sums of rotation
+vectors or statistically independent estimates from successive iterations.
+
+
+#### Seed1 negative, paired with the primary
+
+Run: `result/native_three_sensor_scope_d_seed1_negative_20261024_01`. Initial joint squared Mahalanobis error: 3.91958228415.
+
+| Parameter | Injected | Initial Pede | Initial data-only sigma | Final cumulative | Unit |
+|---|---:|---:|---:|---:|---|
+| L1 Y | +0.08 | +0.079986 | 0.000204217341522 | +0.07998575921 | mm |
+| L1 Rx | -0.001 | -0.0010095 | 2.05206658104e-05 | -0.0010095630167 | rad |
+| L1 Ry | -0.0005 | -0.0004815 | 0.000472978041293 | -0.000442002658812 | rad |
+| L1 Rz | +0.0005 | +0.00056371 | 0.000413793621714 | +0.00056308657303 | rad |
+| L2 Y | -0.06 | -0.060096 | 0.000205847062762 | -0.060097774 | mm |
+| L2 Rx | +0.0012 | +0.0012037 | 1.69701342033e-05 | +0.00120343331565 | rad |
+| L2 Ry | -0.0006 | -0.00073621 | 0.000363957134681 | -0.00067736719664 | rad |
+| L2 Rz | -0.0006 | -0.00070554 | 0.000352649175405 | -0.000697433118634 | rad |
+| L3 Y | +0.05 | +0.050096 | 0.000223509447693 | +0.0500948724 | mm |
+| L3 Rx | -0.0008 | -0.00078598 | 1.47796803528e-05 | -0.00078607917631 | rad |
+| L3 Ry | +0.0004 | +0.00027563 | 0.000300479959545 | +0.000291130127414 | rad |
+| L3 Rz | -0.0004 | -0.00018897 | 0.000315654505532 | -0.000186769221877 | rad |
+
+Final center-Y biases (L1/L2/L3): -0.01424079, -0.097774, +0.0948724 micrometers;
+orientation distances: 0.0862267804, 0.124461567, 0.23982035 mrad.
+ACTS chi2/stored-NDF: 12.503304477 to 0.602173555517; control 0.602733343804.
+The initial one-step gate passed: true. The fixed one-extra protocol was applied.
+The full initial covariance/correlation, all four solver diagnostics, immutable
+input hashes, Geometry chain and exact matrices are retained in this run's
+`validation/report.json` and `solve/observability.json`.
+
+
+#### Seed2 positive, second independent ray sample
+
+Run: `result/native_three_sensor_scope_d_seed2_positive_20261024_01`. Initial joint squared Mahalanobis error: 15.655344872.
+
+| Parameter | Injected | Initial Pede | Initial data-only sigma | Final cumulative | Unit |
+|---|---:|---:|---:|---:|---|
+| L1 Y | +0.08 | +0.080053 | 0.000203569834048 | +0.0800540269 | mm |
+| L1 Rx | +0.001 | +0.00095888 | 2.06041242636e-05 | +0.00095887872725 | rad |
+| L1 Ry | +0.0005 | -0.00053551 | 0.000482661622539 | -0.00057968206787 | rad |
+| L1 Rz | -0.0005 | -0.00033483 | 0.000418201431765 | -0.000345384822574 | rad |
+| L2 Y | -0.06 | -0.060042 | 0.000204794108381 | -0.0600405473 | mm |
+| L2 Rx | -0.0012 | -0.0012121 | 1.71414435525e-05 | -0.00121192696369 | rad |
+| L2 Ry | +0.0006 | +0.00018255 | 0.000374245228944 | +0.00011408704836 | rad |
+| L2 Rz | +0.0006 | +0.00030988 | 0.000356621686557 | +0.000303126522679 | rad |
+| L3 Y | +0.05 | +0.049735 | 0.000222197921994 | +0.0497390831 | mm |
+| L3 Rx | +0.0008 | +0.0007879 | 1.49771287441e-05 | +0.000788051268487 | rad |
+| L3 Ry | -0.0004 | -0.00027395 | 0.00030921279785 | -0.000289483386053 | rad |
+| L3 Rz | +0.0004 | +0.00093166 | 0.000319225765164 | +0.00091817809639 | rad |
+
+Final center-Y biases (L1/L2/L3): +0.0540269, -0.0405473, -0.2609169 micrometers;
+orientation distances: 1.09147151, 0.569550234, 0.529967181 mrad.
+ACTS chi2/stored-NDF: 12.4263497354 to 0.612096303624; control 0.602088559909.
+The initial one-step gate passed: true. The fixed one-extra protocol was applied.
+The full initial covariance/correlation, all four solver diagnostics, immutable
+input hashes, Geometry chain and exact matrices are retained in this run's
+`validation/report.json` and `solve/observability.json`.
+
+#### Seed2 negative, paired with seed2 positive
+
+Run: `result/native_three_sensor_scope_d_seed2_negative_20261024_01`. Initial joint squared Mahalanobis error: 17.4200521789.
+
+| Parameter | Injected | Initial Pede | Initial data-only sigma | Final cumulative | Unit |
+|---|---:|---:|---:|---:|---|
+| L1 Y | +0.08 | +0.080188 | 0.000203571381421 | +0.0801878923 | mm |
+| L1 Rx | -0.001 | -0.0010383 | 2.06041899936e-05 | -0.00103824782306 | rad |
+| L1 Ry | -0.0005 | -0.0006523 | 0.000482642490687 | -0.000602626048706 | rad |
+| L1 Rz | +0.0005 | -5.4797e-05 | 0.000418214006883 | -5.27570285683e-05 | rad |
+| L2 Y | -0.06 | -0.060238 | 0.000204796956 | -0.0602393434 | mm |
+| L2 Rx | +0.0012 | +0.0011797 | 1.71413731078e-05 | +0.0011796787756 | rad |
+| L2 Ry | -0.0006 | -0.0011189 | 0.000374233335842 | -0.00104744990543 | rad |
+| L2 Rz | -0.0006 | -0.00055564 | 0.000356621981494 | -0.000550417037857 | rad |
+| L3 Y | +0.05 | +0.04966 | 0.000222201108904 | +0.0496587762 | mm |
+| L3 Rx | -0.0008 | -0.00082179 | 1.49769985915e-05 | -0.000821738693615 | rad |
+| L3 Ry | +0.0004 | +0.00022085 | 0.00030920467064 | +0.000237557836029 | rad |
+| L3 Rz | -0.0004 | +0.00028049 | 0.000319218509344 | +0.000283310370996 | rad |
+
+Final center-Y biases are +0.1878923/-0.2393434/-0.3412238 micrometers and
+orientation errors are 0.563502704/0.450647099/0.702689874 mrad. The weak L1/L3
+Rz cumulative estimates retain signs opposite to Truth. No sign was corrected
+by hand. The full initial covariance is retained in this run's
+`validation/report.json` and in the consolidated independent summary.
+
+### Scope D consolidated scientific result
+
+| Seed/sign | Initial joint error squared | ACTS nominal/final/control chi2 per stored NDF | Max final update / initial sigma | Minimum fitted module clearance [mm] | Opposite-sign initial rotations |
+|---|---:|---|---:|---:|---|
+| 2026102801/positive | 11.240213635 | 12.360222868/0.607924918/0.602733344 | 0.0008664032236 | 0.120764210 | L1 Ry, L3 Ry |
+| 2026102801/negative | 3.919582284 | 12.503304477/0.602173556/0.602733344 | 0.0009567060701 | 0.119561649 | none |
+| 2026102802/positive | 15.655344872 | 12.426349735/0.612096304/0.602088560 | 0.001245627102 | 0.122024380 | L1 Ry |
+| 2026102802/negative | 17.420052179 | 12.441506306/0.598861434/0.602088560 | 0.001298414528 | 0.117921785 | L1 Rz, L3 Rz |
+
+All 68 stages and 16 official Pede solves pass, with no solver warnings,
+rejected local fits or error scaling. Every reconstruction accepts 4096 tracks.
+The four fixtures contain **two independent seeds and 8192 distinct ray draws**;
+their 16 reconstruction passes include control and same-input reprocessing and
+are not independent samples. C shares seed1 rays. All first one-step gates
+already pass; the same predeclared single additional correction is applied
+in every case. Final cumulative uncertainties are not combined from refits.
+
+All selected matrices have rank 12; the full fixed-reference nuisance design
+has rank 18, all local designs have rank 4, and every recorded prefix and
+slope/impact subset retains selected rank 12. Across the four cases, maximum
+selected Y sigma with X/Z nuisance columns is 0.223528034 micrometers, and
+maximum angular sigma is **0.499646454 mrad versus the fixed 0.5 mrad gate**.
+That narrow sensitivity margin is a limitation, not a guarantee for future
+cohorts. Maximum cross-sensor absolute correlation is 0.316961385; six rigid
+gauge ratios are at most 6.75e-16. The released-all-30 nulls remain diagnostic.
+
+Actual DD4hep/ACTS finite differences check 1769472 two-component vectors,
+with maxima 3.96748163212e-8 mm/rad and 7.26000815021e-10 mm/mm. Every actual
+Geometry update preserves all sensor IDs, independent sensitive-center poses,
+unchanged mothers/materials and all eight corners. Minimum fitted module
+clearance is 117.921785 micrometers. All eight nominal/refined official binary
+and actual sensor-association audits pass; all 36 ROOT keys reopen with
+correct entries. Immutable RawHit file and channel hashes match all three
+alignment passes within every fixture. No candidate Geometry is activated.
+
+Full covariance matrices/correlations for all four cases, the 48 initial
+fit/error/final-pose entries, actual matrices/corners, solver diagnostics and
+exact commands are in
+`result/native_three_sensor_20261024_01_audit/scope_d_four_fixture_summary/`.
+The separate `scope_d_pre_pede_gate_audit/` verifies actual information
+hashes and pre-Pede ordering; `scope_d_all_native_and_official_summary/` seals
+all eight independent binary/association audits.
+
+C and D establish bounded experimental geometry/derivative/observability and
+reconstruction closure for their declared Y/SO(3) scopes. They do not establish
+precise recovery of every weak tilt, ensemble bias or uncertainty coverage,
+material-aware physics, arbitrary sensor selections, X/Z fitting, unconstrained
+six-DOF alignment, an automatic Controller, or production Geometry activation.
+Original Geant4/RawHit compatibility and a bounded native Controller remain
+subsequent milestones. The existing legacy capabilities remain preserved.
+
+### Regression and preservation receipts
+
+The fresh C configure/build succeeds with installed ACTS 45.3.0 and the formal
+`external/install/lib/libMille2.so`; D reuses that same frozen binary because
+no numerical source changes follow C. The build receipt records the actual
+library realpaths and SHA identities. No external installation is modified.
+
+The complete 18-command suite passes in
+`result/native_three_sensor_regression_l1_l2_y_20261024_01/three_sensor_complete_regressions/`.
+It includes fresh standalone Geometry/CKF builds, actual one-event JANA,
+independent native/legacy mathematical comparison, safety/preservation and
+**102 passing unit tests (91 existing plus 11 new)**. Existing SQLite resource
+warnings remain visible; they are not scientific solver warnings. The earlier
+28 targeted tests passed before the C commit. No scientific assertion is
+weakened: three old capability-boundary assertions move from newly supported
+L3 labels to unsupported L4 labels, with new explicit bounded-scope checks.
+
+The separate 23-case full historical campaign and its independent disk-level
+seal both pass with exit 0: 80 fresh reconstruction runs and 242048 accepted
+track records including control/reprocessing, from 65664 reused fixture
+events. These are not independent Simulation samples. All 160 protected
+artifact comparisons and 217 complete stage hash sets pass. Every original
+scientific report field remains exact, with zero excluded. The campaign
+reuses only byte-verified saved Geometry and immutable data inputs; every
+reconstruction, derivative gate, Pede solve, physical correction and validation
+runs freshly. Evidence is in `full_regression_summary.json` and
+`full_regression_independent_seal/report.json` under the milestone audit root.
+
+All historical scientific report fields must remain exact. Scope A's older
+report predates six diagnostic fields added by the existing Scope B commit
+`4f31408`; those fields are checked independently against actual RawHit channel
+counts, unchanged presigmas/regularization and inv(H+I). No old field is dropped
+from the comparison. Native derivative-gate paths change with the new result
+directory: each path must first match its actual executed command argument,
+then only that verified path is normalized for exact equation comparison.
+Geometry XML and complete official Mille Binary bytes must match exactly.
+
+The preserved historical electron 99-track regression passes in
+`result/native_three_sensor_legacy_20261024_01`: 99 tracks, L2 +198.75 micrometers,
+mean Rec-Sim −199.57137554842703→−0.8213645075978979 micrometers, and ACTS
+chi2/stored-NDF 45.59223484848485→1.9810397677951388. This check reuses the
+unchanged legacy build; it is not reported as a fresh legacy compilation.
+
+The original negative physical-containment case is still refused. Its Pede
+bytes are reproduced exactly, and the actual minimum clearance is
+−0.002311986569327462 mm (2.311986569 micrometers overflow). It is not reconstructed
+or activated. The earlier failed output remains untouched; the new expected
+refusal evidence is in `result/native_three_sensor_expected_refusal_20261024_01`.
+
+All nine copied-official-source patches reproduce byte-identically from the
+pinned upstream `195966d41899800eaeca6fbafd63cd53735e6543` source. The separate checkout is read only. Evidence
+is in `result/native_three_sensor_20261024_01_audit/upstream_diffs/` and
+`upstream_diff_driver/`. NativeMilleModel, FactoryAudit's validated float
+serialization, the copied tracking algorithms, SO(3) numerical functions,
+Controller and existing Geometry/measurement settings remain protected.
+The final frozen-manifest check completed after all historical cases; its receipt follows.
+
+Executed validation commands (existing outputs must be given fresh names when
+repeating a check; structured `command.json`/`exit.json` files retain exact argv):
+
+```sh
+export TESTBENCH_CONTAINER=sweet_mahavira
+# Complete eighteen-command suite, using a completed original two-Y closure.
+bash environment/run.sh python3 -B validation/telescope_closure/closure.py \
+  --build build/native_three_sensor_c_20261024_01 \
+  --result result/native_three_sensor_regression_l1_l2_y_20261024_01 \
+  --mode l1_l2_y --events 32 --chi2-cut 1000 \
+  --validation-name three_sensor_complete --step regressions
+# Unit tests can also be run independently.
+bash environment/run.sh python3 -B -m unittest discover -s validation -p 'test_*.py'
+# Historical external-reference regression; the old build is intentionally retained.
+bash environment/run.sh bash validation/run_regression.sh \
+  /work/result/native_three_sensor_legacy_20261024_01 \
+  /work/build/native_three_rotation_legacy_20261024_01
+# Expected physical refusal; no reconstruction of the refused candidate.
+bash environment/run.sh python3 -B validation/telescope_closure/containment.py \
+  --step expected-refusal \
+  --original-run result/native_y_rotations_seed2_negative_20261024_01 \
+  --build /work/build/native_three_sensor_c_20261024_01 \
+  --output-dir result/native_three_sensor_expected_refusal_20261024_01
+bash environment/run.sh python3 -B validation/check_safety.py
+bash environment/run.sh python3 -B validation/verify_preservation.py
+# Host-side read-only upstream comparison; adapt the checkout path if needed.
+python3 -B validation/telescope_factories/upstream_diff.py \
+  --source /Users/tkumaoka/eic/EICrecon \
+  --output result/native_three_sensor_20261024_01_audit/upstream_diffs
+```
+
+The full historical campaign's per-case stage commands, preserved input
+provenance and exact comparisons are under
+`result/native_three_sensor_20261024_01_audit/full_regression_case_*/`.
+Its local reference inventory is
+`preservation_baseline/regression_cases.json` under the same audit root.
+These historical datasets are not Git assets. Existing guide recipes can
+regenerate native synthetic inputs in fresh directories; the historical
+Geant4 reference requires its preserved local ROOT file. No generated ROOT,
+Mille Binary, Pede log, build installation or archive is added to Git.
+
+The historical input is
+`results/reference/physical_alignment_L2_x200um/sim_electron_L2x200um_100.edm4hep.root`,
+SHA256 `947fee1308b8aa27516c12711c9cdb5e4b4160da2371b7094491418e276ee7a0`.
+Its metrics are maintained in `validation/reference_metrics.json`, and the
+protected artifact hashes are in `validation/preserved_files.json`. The ROOT
+dataset remains local; it is not copied into the source commit.
+
+The first broad final preservation wrapper stopped at an audit-boundary bug:
+it included the exact `  void Process(` marker in its suffix hash, whereas
+the frozen baseline excludes that marker with `split(marker,1)[1]`. Current
+and Git `4f31408` source bytes agree in both conventions. The original frozen
+hash excluding the marker is
+`89f06a3d15c8027d60e7a98b4cede43f544f2bacc5c8464fe50d2b1d6db2f5d5`;
+including it gives
+`5c462814ec8f48cc2290401a12eb9fad5dbed6c06f861091313cf61077aa0cad`.
+No source, data, test or baseline is changed to resolve this wrapper error.
+The failed `final_preservation/` and separate
+`final_preservation_marker_diagnosis/` remain intact. A fresh
+`final_preservation_v2/` repeats every disk hash and both source comparisons,
+retaining the stronger full-suffix equality and the baseline's exact hash
+definition. Its completed result is recorded below.
+
+#### Final preservation receipt, completed 2026-10-25
+
+`final_preservation_v2/` completes with exit 0 and zero mismatches. It rehashes
+8091 unique protected historical files (5048876842 bytes), including both
+frozen historical manifests and Scope A/B snapshots. All 186 protected source
+files pinned to Git `4f31408` remain unchanged. The complete TelescopeMille
+Process/Finish suffix is byte-identical, both marker conventions match their
+proper hashes, and the pre-Init prefix matches except for the authorized map
+include. FactoryAudit's float serialization, NativeMilleModel, installed/copied
+tracking, existing Geometry/material/error settings and Controller are preserved.
+
+The frozen C-built TelescopeMille plugin, formal external/install Mille2 and
+all nine actually loaded installed ACTS libraries retain their recorded SHA
+identities. The separate canonical final safety and preservation commands
+both exit 0 in `final_canonical_safety/` and `final_canonical_preservation/`.
+The latter verifies 221 baseline records and 2046 relocated files unchanged,
+including the electron-hypothesis protection. These counts overlap the broad
+union and must not be added as independent datasets.
+
+The first broad audit's marker-boundary failure is retained as diagnostic
+history; no scientific assertion, baseline, source or data was changed to pass
+v2. The corrected audit repeats all comparisons from disk without trusting a
+cache. Final post-C changes are confined to the three technical documents.
+The C implementation/configuration/tests are already committed; D's separate
+local milestone commit records its completed twelve-parameter validation.
+No push, merge, Controller change or Geometry activation is performed.
+
+The next priorities remain a bounded native Calibration Controller with
+Geometry versioning/rollback, actual Geant4/RawHit input compatibility, and a
+separate bias/uncertainty-coverage study for weak tilts. X/Z translations and
+other unvalidated scopes are not enabled by these diagnostic rank results.

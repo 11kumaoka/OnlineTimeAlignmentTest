@@ -564,8 +564,9 @@ and eight selected global parameters. Their denominators must not be confused.
 
 Scope C, `l1_l2_y_rx_ry_rz_l3_y`, has passed nine-parameter native closure:
 L1/L2 Y/Rx/Ry/Rz plus L3 Y, with L0/L4 fixed and every Global X/Z fixed.
-The twelve-parameter preset `l1_l2_l3_y_rx_ry_rz` is prospective at this
-checkpoint; its presence is not a claim of validated Scope D closure.
+Scope D, `l1_l2_l3_y_rx_ry_rz`, has now also passed the four prospectively
+fixed signed fixtures described below. Both scopes remain experimental
+zero-field tests with no assigned ACTS material.
 
 The corresponding JSON files in `validation/telescope_alignment/` explicitly
 declare `aligned_sensors`, component lists, actual VolumeID/GeometryIdentifier,
@@ -576,8 +577,8 @@ are 700302 (Y), 700304/700305/700306 (Rx/Ry/Rz); only Y is free in C.
 The processor still verifies these declarations against actual native sensor
 associations. No Truth injection values are passed in the alignment JSON.
 
-The physical fixtures retain L1/L2 values and add L3 Y=+0.050 mm. Scope D's
-prospective L3 rotation vector is (+0.8,-0.4,+0.4) mrad. New beam JSON files
+The physical fixtures retain L1/L2 values and add L3 Y=+0.050 mm. For the positive Scope D fixture,
+L3's rotation vector is (+0.8,-0.4,+0.4) mrad. New beam JSON files
 `three_sensor_beam_seed1.json` and `three_sensor_beam_seed2.json` declare seeds
 2026102801/2026102802 with the unchanged bounded recipe. The initial N=4096,
 strict sensitivity/containment gates, chi2 cut 1000 and one explicit additional
@@ -627,3 +628,87 @@ same nine TBrowser histograms. C recovered Y=(80.007625,-59.906822,50.174805) um
 with ACTS chi2/stored-NDF 12.237088→0.604573. The parity report records the weak
 tilt components as well as the successful closure gates; numerical convergence
 does not establish exact Truth/sign recovery or uncertainty coverage.
+
+### Scope D reproduction and cohort accounting
+
+All four prospectively fixed Scope D fixtures have passed full closure and
+independent audits. See the parity report for the final regression and
+preservation status. Scope D is a bounded experimental capability; the preset does not
+license arbitrary unvalidated sensor/component selections.
+
+The primary twelve-parameter command uses the same build as C:
+
+```sh
+bash environment/run.sh python3 -B validation/telescope_closure/multi_preflight.py \
+  --build build/native_three_sensor_c_20261024_01 \
+  --prior-run result/native_three_sensor_scope_c_seed1_positive_20261024_01 \
+  --output-dir result/native_three_sensor_20261024_01_audit/geometry_preflight_d \
+  --mode l1_l2_l3_y_rx_ry_rz
+bash environment/run.sh python3 -B validation/telescope_closure/closure.py \
+  --build build/native_three_sensor_c_20261024_01 \
+  --result result/native_three_sensor_scope_d_seed1_positive_20261024_01 \
+  --mode l1_l2_l3_y_rx_ry_rz --events 4096 \
+  --beam validation/telescope_alignment/three_sensor_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+```
+
+The prospective cohort table fixes the other commands by substituting the
+listed result path, mode and beam file. Run these only after the primary
+cohort's full validation succeeds; never replace a failed seed. These paths
+are execution records, so choose fresh names when reproducing the experiment.
+
+| Fixture | Result directory under `result/` | Mode | Beam JSON under `validation/telescope_alignment/` |
+|---|---|---|---|
+| seed1 positive, primary | `native_three_sensor_scope_d_seed1_positive_20261024_01` | `l1_l2_l3_y_rx_ry_rz` | `three_sensor_beam_seed1.json` |
+| seed1 negative, paired | `native_three_sensor_scope_d_seed1_negative_20261024_01` | `l1_l2_l3_y_rx_ry_rz_negative` | `three_sensor_beam_seed1.json` |
+| seed2 positive | `native_three_sensor_scope_d_seed2_positive_20261024_01` | `l1_l2_l3_y_rx_ry_rz` | `three_sensor_beam_seed2.json` |
+| seed2 negative, paired | `native_three_sensor_scope_d_seed2_negative_20261024_01` | `l1_l2_l3_y_rx_ry_rz_negative` | `three_sensor_beam_seed2.json` |
+
+The seeds are 2026102801 and 2026102802. There are two independent ray samples,
+not four: signed pairs share the same rays, and C shares seed1 rays with D.
+Each fixture has its own immutable shifted RawHit ROOT file. Identity is
+required across alignment iterations within that fixture, not between
+different physical injections. Only rotations change sign; Y stays
+(+0.080,-0.060,+0.050) mm on L1/L2/L3. No Truth collection is supplied to
+the alignment reconstruction.
+
+Each closure can also run stage by stage using the existing `--step` interface:
+`geometry`, `data`, `nominal`, `solve`, `correct`, `corrected`, `postsolve`,
+`refine`, `refined`, `refinesolve`, `control`, `controlsolve`, `check`.
+Keep all other arguments identical, including `--refine-once`. Every stage
+refuses to reuse its own output directory; a failed stage remains evidence
+and must be investigated before a new run. `solve` checks the actual native
+information matrix and real-Geometry derivatives before executing Pede.
+
+The ROOT output remains `validation/rotation.root` inside each run. The final
+`corrected_*` histograms use the refined reconstruction when refinement was
+requested; the report separately retains the first corrected pass. ACTS
+stored NDF counts ten calibrated coordinates per track. The Pede model has
+four local parameters per track and twelve selected global parameters, giving
+statistical NDF `6*N-12`. Neither denominator is changed to force a ratio of one.
+
+The four Scope D fixtures accept 4096 tracks each in every reconstruction.
+Their ACTS chi2/stored-NDF changes are 12.360223→0.607925 (seed1 positive),
+12.503304→0.602174 (seed1 negative), 12.426350→0.612096 (seed2 positive), and
+12.441506→0.598861 (seed2 negative). Sixteen Pede solves finish normally,
+without rejected local fits or error scaling. The parity report contains all
+48 parameter estimates and the complete primary 12x12 covariance; every run's
+`validation/report.json` retains its full initial covariance and actual final
+Geometry matrices. Independent consolidated evidence is under
+`result/native_three_sensor_20261024_01_audit/scope_d_four_fixture_summary/`.
+
+The limiting nuisance-profiled sigma is 0.499646454 mrad, close to the unchanged
+0.5 mrad sensitivity bound. Some weak Ry/Rz estimates have signs opposite to
+Truth. These two independent seeds validate the declared technical closure,
+not component-sign precision, bias or uncertainty coverage. No general six-DOF
+fit or automatic Controller is enabled. No Geometry is activated.
+
+The final regression receipt passes all 23 historical cases and an independent
+artifact/field seal, the separate 18-command suite with 102 unit tests, the
+historical 99-track reference, expected containment refusal and nine pinned
+upstream patch reproductions. Final safety and frozen preservation checks
+also pass. The parity report retains the resolved audit-wrapper marker-boundary
+incident and both its failed and corrected receipts. Existing data, numerical
+tracking/alignment sources, measurement settings and installed libraries are
+preserved; only the three technical documents change after the C implementation
+commit. All generated outputs stay local under `result/`.
