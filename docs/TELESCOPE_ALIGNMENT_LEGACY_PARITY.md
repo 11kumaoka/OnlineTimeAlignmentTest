@@ -2679,3 +2679,143 @@ retains its fixed-positive ordered comparator for value stability. It is not
 cited as a like-signed order test. New contained fixtures compare their own
 signed vector with its corresponding ordered product; actual pivot, inverse,
 constructor, derivative and closure checks provide the physical validation.
+
+
+## Native multi-sensor milestone: L1 four parameters plus L2 Y
+
+This milestone starts from `9f75da6dfe161d65896edf80e996779fbb748803` on
+`feature/upstream-acts-geometry`. Scope A selects five simultaneous global
+parameters: L1 Y/Rx/Ry/Rz and L2 Y. Scope B is a later validation gate, not implied
+by the read-only eight-column sensitivity diagnostic.
+
+The existing NativeMilleModel equations, four local track parameters,
+calibrated-covariance whitening, electron hypothesis, CKF selection, official
+Pede steering method and detector envelopes remain unchanged. No provider,
+fitter, navigator, solver, activation policy or Controller is added.
+
+### Selection, associations and physical correction
+
+The actual native SourceLink points to an EDM measurement and its RawHit-derived
+CellID. The DD4hep converter and official ACTS SurfaceMap resolve the physical
+surface. The existing C++ processor verifies these associations before selecting
+global columns by sensor. New configuration entries carry the actual distinct
+IDs, not a reused L1 identity:
+
+| Sensor | DD4hep VolumeID | ACTS GeometryIdentifier | Enabled labels in Scope A |
+|---|---:|---:|---|
+| L1 | 272631839 | 216173056991691039 | 700102, 700104, 700105, 700106 |
+| L2 | 272633887 | 216173194430644511 | 700202 |
+
+Columns 1/3/4/5 of the existing six-column ACTS physical derivative correspond to
+Y/Rx/Ry/Rz. Fixed L0/L3/L4 contribute measurements and four-local-parameter
+constraints, but no free global labels. Both sensors' X/Z translations are fixed.
+
+`closure.displaced_xml` now permits a selected L2 component rotation using the
+same existing matrix serializer. Shared module templates are cloned per sensor;
+references and all unrelated XML are checked independently. Each simultaneous
+Pede result updates each selected physical center by world Y and each selected
+orientation by `Exp(dw_global) R_current`, about its current sensitive center.
+Actual DD4hep and ACTS matrices, all seven surface identities, module boxes and
+layer envelopes are checked after every reload. At most one extra explicitly
+requested correction uses the same immutable channel bytes. Initial unscaled
+nominal errors are never summed across these dependent fits.
+
+### Prospective fixture and observability
+
+The fixture was fixed before inspecting new recovery: L1 Y +80 um, L2 Y -60 um,
+L1 rotation vector (+1.0,+0.5,-0.5) mrad; negative reverses rotations only.
+The 4096-event cohort uses seed 2026102701 and the unchanged bounded broad-angle
+recipe. Before generating its data, both signs passed 252 correlated joint
+5-sigma sampled error directions with a 10% design-only engineering margin and
+fourteen real DD4hep/ACTS constructor reloads. The smallest module clearance was
+90.703 um. Sampling is an engineering preflight, not proof over a continuum or
+statistical coverage.
+
+`multi_information.analyze` profiles the four locals separately for every actual
+native track. It records accumulated rank, dimensionless condition, complete
+mixed-unit covariance/correlation, cross-sensor correlations, sample-size
+prefixes, slope/impact subsets, and omitted-X/Z diagnostics. Per-track full
+global rank is deliberately not required. A separate thirty-column diagnostic
+releases reference sensors to verify common rigid gauge directions; it does not
+add parameters or constraints to Pede. Six common rigid directions are null;
+the nominal parallel-plane diagnostic has rank 21/30, including three additional
+unclassified null directions outside this selected scope. With references fixed,
+the prior five-column design has rank 5 and condition 2.0342; the eight-column
+read-only design has rank 8 and condition 3.2761. Neither establishes uncertainty
+coverage or unrestricted six-DOF support.
+
+Every solve independently profiles the decoded official Mille records, compares
+their information with the native rows, checks sensitivity before Pede, and
+compares the result and nominal errors with official unscaled Pede output.
+Y errors must be below 1 um; angular errors below 0.5 mrad; scaled condition below
+100. Recovery retains the existing five-sigma marginal and joint squared-error
+<25 gates. Final post-fit updates retain the 20 nm Y and quarter-initial-sigma
+angular gates. No gate, measurement error or steering setting is relaxed.
+
+### Reproduction and evidence
+
+The executable fresh-build, prospective-preflight and complete-closure commands
+are in the multi-sensor section of `TELESCOPE_ALIGNMENT_USER_GUIDE.md`.
+Independent stages remain available through `closure.py --step`.
+The audit root is `result/native_multi_20261024_01_audit/`; the Scope A cohort is
+`result/native_multi_scope_a_seed1_positive_20261024_01/`. All old results and
+partial failures remain untouched. `protected_manifest.json` records 3347 files
+from the protected six contained fixtures and original refused case.
+
+The fixed container build succeeded. All 84 tests (74 existing plus ten new)
+passed. Nine official upstream patches reproduced exactly. Safety/preservation
+checks passed, including 221 baseline records and 2046 relocated files.
+The 18-command consolidated suite and historical 99-track regression use fresh
+output directories; the historical test reuses its unchanged existing legacy
+plugin build, rather than claiming a new legacy compilation. The original
+expected physical-containment refusal remains a separate negative regression.
+The first four old native modes already reproduce all six protected XML/Mille
+artifacts and scientific reports exactly, except independently regenerated ROOT
+container metadata hashes. Final cohort recovery and remaining regression
+results are recorded below only after their actual completion.
+
+### Scope A completed result
+
+The independently executed Scope A cohort passed full closure: **1/1**, 4096
+accepted tracks in each reconstruction, zero outliers and zero Pede rejected
+local fits. Its initial five-parameter fit and final cumulative pose are:
+
+| Parameter | Injected | Initial Pede | Nominal sigma | Final cumulative correction |
+|---|---:|---:|---:|---:|
+| L1 Y [um] | 80 | 79.965 | 0.197643 | 79.964975471 |
+| L1 Rx [mrad] | 1.0 | 1.021 | 0.0195943 | 1.020794647 |
+| L1 Ry [mrad] | 0.5 | 0.23909 | 0.452627 | 0.201299218 |
+| L1 Rz [mrad] | -0.5 | -0.71327 | 0.398090 | -0.706804032 |
+| L2 Y [um] | -60 | -60.136 | 0.181287 | -60.136047501 |
+
+The actual selected information has rank 5 and diagonal-scaled condition
+1.980128. Every recorded sample-size prefix (16 through 4096) and all six
+slope/impact subsets have rank 5. L1/L2 Y correlation is 0.262071. The complete
+5x5 covariance, axis correlations and omitted-component diagnostics are saved
+in each solver's `observability.json`. The common rigid gauge residual norm
+ratios are below 7.08e-16; the released-reference diagnostic changes rank from
+21 to 23 after physical rotation, while the six rigid null directions remain.
+Extra nullity is Geometry dependent and is not an enabled alignment mode.
+
+ACTS chi2/stored-NDF improves **9.946553319 -> 0.597247931** (control
+0.596316760). Final orientation error is 0.363899 mrad on L1; L2 orientation is
+unchanged as required. Center biases are -0.035025 um and -0.136048 um.
+Both physical updates pass unchanged all-eight-corner/module/layer gates and
+actual DD4hep/ACTS matrix and ID checks. All unrelated XML is identical under
+the independent placement whitelist.
+
+The first correction already passes the existing post-update gate; the explicit
+fixed protocol also exercised its one allowed extra correction. Final updates
+are at most 0.031999 nm in Y and 0.10244 urad in angle. This extra fit uses the
+same RawHit bytes and supplies no independent uncertainty to add in quadrature.
+Three real-Geometry finite-difference gates each check 61440 two-coordinate
+vectors across all five parameters and three step sizes. Angular differences
+remain below 2.64e-8 mm/rad. Official independent decoding confirms both nominal
+and final files contain 4096 records, 40960 scalar measurements, precisely the
+five labels, and no free labels on fixed sensors.
+
+Scope A's numerical validation and 84 unit tests are complete. Remaining
+historical native-cohort reruns continue separately and will be reported at the
+end of this milestone; they are not represented as complete by this checkpoint.
+This demonstrates selected Geometry/derivative/reconstruction closure. One seed
+cannot validate bias, coverage or the nominal uncertainty model.

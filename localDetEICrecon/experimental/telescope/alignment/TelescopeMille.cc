@@ -49,7 +49,7 @@ public:
     app->SetDefaultParameter("TelescopeMille:multipleEvents",multipleEvents,"Write one native Mille record per accepted event and aggregate diagnostics");
     app->SetDefaultParameter("TelescopeMille:output",output,"New official Mille Binary; experimental single-track probe");
     app->SetDefaultParameter("TelescopeMille:report",reportPath,"New native equation JSON audit");
-    app->SetDefaultParameter("TelescopeMille:config",configPath,"Explicit selected physical Global Y / separate L1 Global Rx, Ry or Rz label map JSON");
+    app->SetDefaultParameter("TelescopeMille:config",configPath,"Explicit physical Global Y and selected L1 Global rotation label map JSON");
     app->SetDefaultParameter("TelescopeMille:derivativeGate",gatePath,"Successful derivative gate JSON from this build/fixture");
     for(const auto& path:{output,reportPath}) if(path.empty() || std::filesystem::exists(path))
       throw std::runtime_error("Mille probe requires new explicit output paths");
@@ -69,8 +69,8 @@ public:
         throw std::runtime_error("Unsupported or duplicate selected physical alignment parameter");
     }
     if(labels!=std::set<int>{700102,700202} && labels!=std::set<int>{700104} &&
-       labels!=std::set<int>{700102,700104,700202} && labels!=std::set<int>{700105} && labels!=std::set<int>{700106} && labels!=std::set<int>{700105,700106} && labels!=std::set<int>{700104,700105,700106} && labels!=std::set<int>{700102,700104,700105,700106})
-      throw std::runtime_error("Only two-Y, separate L1 Rx, Ry or Rz, coupled L1 Ry/Rz or Rx/Ry/Rz (with optional L1 Y), or L1 Y/Rx plus L2 Y scopes are enabled");
+       labels!=std::set<int>{700102,700104,700202} && labels!=std::set<int>{700105} && labels!=std::set<int>{700106} && labels!=std::set<int>{700105,700106} && labels!=std::set<int>{700104,700105,700106} && labels!=std::set<int>{700102,700104,700105,700106} && labels!=std::set<int>{700102,700104,700105,700106,700202})
+      throw std::runtime_error("Only two-Y, separate L1 Rx, Ry or Rz, coupled L1 Ry/Rz or Rx/Ry/Rz (with optional L1 Y), L1 Y/Rx plus L2 Y, or L1 Y/Rx/Ry/Rz plus L2 Y scopes are enabled");
   }
   void Process(const std::shared_ptr<const JEvent>& event) override {
     std::lock_guard<std::mutex> guard(mutex);++processed;

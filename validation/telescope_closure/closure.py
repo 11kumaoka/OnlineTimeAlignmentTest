@@ -24,7 +24,7 @@ MODULE_TO_GLOBAL=((0.,0.,1.),(-1.,0.,0.),(0.,-1.,0.))
 
 
 def displaced_xml(nominal,output,shifts,rotations=None,rotation_axis='x'):
-    """Apply selected physical Y shifts and optional selected center-preserving L1 rotation."""
+    """Apply selected physical Y shifts and optional selected center-preserving selected rotation."""
     if output.exists():raise ValueError('Geometry output must be new')
     root=ET.parse(nominal).getroot()
     detector=root.find("./detectors/detector[@name='SiMAPS']")
@@ -50,7 +50,6 @@ def displaced_xml(nominal,output,shifts,rotations=None,rotation_axis='x'):
         assert ET.tostring(comparison)==ET.tostring(original_component)
         if rotations and layer in rotations:
             from validation.telescope_closure.rotation import rotate_component
-            if layer!=1:raise ValueError('Only selected L1 rotation is enabled')
             rotate_component(component,rotations[layer],axis=rotation_axis)
         detector.append(module);placement.set('module',module.get('name'))
     ET.indent(root);ET.ElementTree(root).write(output,encoding='unicode')
@@ -109,6 +108,13 @@ def geometry_step(args):
     p=stage(args.result,'geometry')
     prepare(p/'fixtures',initialize_metadata=True)
     nominal=p/'fixtures/nominal.xml'
+    from validation.telescope_closure.multi_sensor import is_multi,fixture
+    if is_multi(args.mode):
+        shifts,rotations=fixture(args.mode)
+        displaced_xml(nominal,p/'truth.xml',shifts,rotations=rotations,rotation_axis='xyz')
+        write_json(p/'rotation_fixture.json',{'mode':args.mode,'injected_global_y_mm':shifts,'injected_global_rxyz_rad':rotations,'truth_definition':'per-sensor Exp(dw) Rnominal'})
+        done(p,nominal_sha256=digest(nominal),truth_sha256=digest(p/'truth.xml'),injected_global_y_mm=shifts)
+        return
     if getattr(args,'mode','l1_l2_y')=='l1_l2_y':
         displaced_xml(nominal,p/'truth.xml',{1:.150,2:.200})
     else:
@@ -173,6 +179,7 @@ def reconstruct(args,name,geometry,input_name,limit=None,cut=None):
 
 
 def solve(args,reconstruction,name):
+    from validation.telescope_closure.multi_sensor import is_multi,mapping
     rotation=getattr(args,'mode','l1_l2_y')!='l1_l2_y'
     selected=LABELS
     if rotation:
@@ -186,7 +193,7 @@ def solve(args,reconstruction,name):
     dimension=len(selected)
     normal=np.zeros((dimension,dimension));rhs=np.zeros(dimension)
     for block in blocks:
-        a,b,_=profile(block,selected,require_global_rank=getattr(args,'mode','l1_l2_y') not in ('l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative'));normal+=a;rhs+=b
+        a,b,_=profile(block,selected,require_global_rank=not is_multi(args.mode) and getattr(args,'mode','l1_l2_y') not in ('l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative'));normal+=a;rhs+=b
     assert np.linalg.matrix_rank(normal)==dimension
     if getattr(args,'mode','l1_l2_y') in ('l1_ry','l1_ry_negative','l1_rz','l1_rz_negative','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative'):
         # Refuse to run Pede before the actual native design resolves this tilt.
@@ -214,6 +221,16 @@ def solve(args,reconstruction,name):
             assert max(last['sigma'][3:5])<.0005,'Coupled tilt unresolved before Pede'
             assert max(design['all_translation_diagnostic']['sigma'][4:6])<.0005
         else:assert last['sigma'][index]<.001,'Native selected tilt unresolved before Pede'
+    if is_multi(args.mode):
+        from validation.telescope_closure.multi_information import analyze
+        design=analyze(args.result/reconstruction/'mille.json',selected)
+        write_json(p/'observability.json',design)
+        assert design['fixed_reference_selected_design_full_rank'] and design['fixed_reference_rows_have_no_selected_global_columns']
+        assert design['released_reference_gauge_diagnostic']['common_rigid_gauge_is_null']
+        actual=design['selected']
+        assert np.allclose(normal,actual['information'],rtol=1e-10,atol=1e-6),'Mille/native profiled information mismatch'
+        assert actual['rank']==dimension and actual['diagonal_scaled_condition']<100
+        assert all(v<(.001 if mapping(k)[1]==1 else .0005) for k,v in zip(selected,actual['sigma']))
     text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n700102 0.0 1.0\n700202 0.0 1.0\n\nprintcounts\nend\n'
     if rotation:
         text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n'+''.join(f'{label} 0.0 1.0\n' for label in selected)+'\nprintcounts\nend\n'
@@ -240,9 +257,9 @@ def solve(args,reconstruction,name):
         correlation=covariance/np.outer(sigma,sigma)
         scaled=normal/np.sqrt(np.outer(np.diag(normal),np.diag(normal)))
         assert np.linalg.cond(scaled)<100,'Insufficient selected information'
-        assert all(v<(.001 if k in (700104,700105,700106) else .02) for k,v in zip(selected,sigma)),'Insufficient angular/linear sensitivity'
+        assert all(v<(.001 if k in (700104,700105,700106,700204,700205,700206) else .02) for k,v in zip(selected,sigma)),'Insufficient angular/linear sensitivity'
         write_json(p/'independent.json',{'parameters':parameters,'schur_solution':expected.tolist(),
-          'parameter_units':{k:('rad' if k in (700104,700105,700106) else 'mm') for k in selected},'nominal_sigma':sigma.tolist(),'pede_reported_sigma':reported.tolist(),
+          'parameter_units':{k:('rad' if k in (700104,700105,700106,700204,700205,700206) else 'mm') for k in selected},'nominal_sigma':sigma.tolist(),'pede_reported_sigma':reported.tolist(),
           'rank':dimension,'condition':float(np.linalg.cond(normal)),'condition_diagonal_scaled':float(np.linalg.cond(scaled)),
           'correlation':correlation.tolist(),'normal':normal.tolist(),'status':status,'records':len(blocks)})
     else:
@@ -530,8 +547,8 @@ def main():
     parser.add_argument('--result',type=Path,required=True)
     parser.add_argument('--build',type=Path,required=True)
     parser.add_argument('--validation-name',default='validation',help='New validation/regression output stage name; existing reports remain immutable')
-    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_ry_negative','l1_rz_negative','l1_rz','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative','l1_y_rx_l2_y'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
-    parser.add_argument('--refine-once',action='store_true',help='Explicit four-parameter-only second Geometry correction; at most one, same data and unchanged gates')
+    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_ry_negative','l1_rz_negative','l1_rz','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative','l1_y_rx_l2_y','l1_y_rx_ry_rz_l2_y','l1_y_rx_ry_rz_l2_y_negative'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
+    parser.add_argument('--refine-once',action='store_true',help='Explicit bounded Y/SO(3) second Geometry correction; at most one, same data and unchanged gates')
     parser.add_argument('--beam',type=Path,help='Optional bounded angular study recipe; never changes the baseline cohort')
     parser.add_argument('--events',type=int,default=32)
     parser.add_argument('--chi2-cut',type=float,default=None,help='Explicit alignment capture window; same setting in all closure passes')
@@ -540,7 +557,8 @@ def main():
     if args.mode!='l1_l2_y' and args.step=='regressions':parser.error('Consolidated regression uses the original l1_l2_y baseline')
     if args.refine_once:
         from validation.telescope_closure.rotation import is_four
-        if not is_four(args.mode):parser.error('Refinement is restricted to explicit L1 Y plus rotations')
+        from validation.telescope_closure.multi_sensor import is_multi
+        if not (is_four(args.mode) or is_multi(args.mode)):parser.error('Refinement is restricted to explicit bounded Y plus rotation scopes')
     args.result=args.result.resolve();args.build=args.build.resolve()
     if not args.validation_name.isidentifier():parser.error('Validation stage name must be an identifier')
     if args.beam:args.beam=args.beam.resolve()

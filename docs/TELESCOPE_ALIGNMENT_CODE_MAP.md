@@ -126,28 +126,34 @@ The earliest accepted smoothed state supplies the common bound reference.
 parameters (loc0,loc1,phi,theta), and uses Surface::alignmentToBoundDerivative
 including path correction. Local right rotation increments map to Global left
 increments through R^T. Enabled scopes are two Global Y translations, separate
-L1 Rx/Ry/Rz, L1 Y/Rx plus L2 Y, coupled L1 Ry/Rz, and bounded L1 Rx/Ry/Rz.
-Translations plus coupled tilts and other-layer rotations remain unsupported.
+L1 Rx/Ry/Rz, L1 Y/Rx plus L2 Y, coupled L1 Ry/Rz, bounded L1 Rx/Ry/Rz, and
+bounded L1 Global Y plus Rx/Ry/Rz. The contained four-parameter fixture has six
+completed closures; the original wider fixture retains its 5/6 result and one
+physical refusal. The new simultaneous L1 four-parameter plus L2 Y scope is
+validated experimentally for one prospective cohort, as described below. Other
+free translations and L2 rotation alignment are not established by that scope.
 
 The equation is measured-minus-prediction = A*localDelta + G*alignmentDelta.
 Whitening uses the original calibrated covariance C=L L^T and W=L^-1 for residual
 and both Jacobians; official Mille receives scalar sigma=1. Smoothed covariance
 is not substituted for measurement errors, and no seed-prior equations are added.
-Pede profiles four local parameters per track and solves one, two or three shared
-labels in the selected explicit scope.
+Pede profiles four local parameters per track and solves the shared global
+labels in the selected explicitly whitelisted scope.
 Nonzero field, assigned material and observable q/p/time contributions are guarded
 as unsupported. Derivative validation alone does not establish general six-DOF closure.
 
 `correct` reuses `alignment.pede.read_pede`; `displaced_xml` reuses
 `geometry.transforms.matvec/transpose` to map physical Global Y into module axes.
 Only selected module references, sensitive-component translations and the selected
-L1 rotation serialization change; all
+sensitive-component orientation serialization change; all
 other XML attributes/text are whitelisted. Same channel bytes are decoded again
 in a fresh process. No Controller registry or Geometry activation is involved.
 The historical writer remains an independent straight-line equivalence reference.
 
 ACTS stored NDF counts measured dimensions (10 per track). Pede statistical NDF
-is 32*(10-4)-2=190. Native CKF includes the seed prior; profiled Pede does not.
+is N*(10-4)-G for N accepted tracks and G free global parameters; the original
+32-track/two-Y reference has 32*(10-4)-2=190. Native CKF includes the seed prior;
+profiled Pede does not.
 Their chi2 values and denominators therefore have distinct meanings. No covariance
 rescaling or uncertainty-coverage claim follows from the successful closure.
 
@@ -188,7 +194,8 @@ and decoded Mille labels are authoritative for a multi-parameter sensor; the old
 scalar equation `label` field remains for the original Y-only comparison.
 
 `TelescopeChannels::main` now also reports actual DD4hep basis columns.
-`closure.py::displaced_xml` permits a selected L1 rotation and preserves untouched
+`closure.py::displaced_xml` permits selected L1/L2 sensitive-component rotations
+for bounded geometry validation and preserves untouched
 XML attributes in rotation fixtures. `geometry_step` generates test Truth;
 `rotation.correct` reads Pede and nominal XML only. The same native reconstruction
 is then restarted with corrected Geometry. `rotation.physical_derivatives` is an
@@ -198,7 +205,7 @@ standalone CKF and legacy-equivalence tests remain independent.
 
 Single-axis routes retain their restricted charts; coupled routes compute a
 full SO(3) target matrix before XML serialization. Arbitrary Survey Geometry,
-extra translations combined with tilts, multi-layer six-DOF, sequential Controller
+fitted Global X/Z combined with tilts, multi-layer six-DOF, sequential Controller
 operation and original Geant4/RawHit compatibility remain unrestored. The retained legacy implementation is unchanged.
 
 ## Bounded three-rotation extension
@@ -225,8 +232,8 @@ parameters remain fixed. `rotation_labels` separates the angular coordinates
 from translation; `fixture_shifts` supplies the world displacement. The existing
 native matrix, transport, whitening, fitter and selector are unchanged.
 
-`rotation.refine` implements an explicitly requested, four-parameter-only second
-Geometry correction. It reads the completed first post-correction Pede result,
+`rotation.refine` implements an explicitly requested second Geometry correction
+for bounded selected Y/SO(3) scopes. It reads the completed first post-correction Pede result,
 updates the current center and left-multiplies its current orientation, and
 reloads the XML for actual surface checks. Exclusive immutable stages limit this
 to one additional correction. `closure.main --refine-once` connects its separate
@@ -258,3 +265,114 @@ seeds without changing the existing angular distribution. Four unit tests cover
 parent-frame invariance, first-order extent, joint-error sampling, and original
 fixture/label preservation. No runtime provider, navigator, fitter or solver is
 added; the numerical C++ tree is unchanged from the starting uncommitted feature.
+
+## Bounded L1/L2 selection: five-parameter development scope
+
+Scope A selects L1 Global Y/Rx/Ry/Rz and L2 Global Y together. Its explicit mode
+is `l1_y_rx_ry_rz_l2_y`, with `_negative` selecting the opposite L1 rotation
+vector while retaining both translations. This section describes the implemented
+route; full closure passed for one prospective 4096-track cohort and
+is recorded separately in the parity report. It does not declare eight-parameter
+or arbitrary six-DOF alignment support.
+
+| Maintained module | Responsibility |
+|---|---|
+| `localDetEICrecon/experimental/telescope/alignment/TelescopeMille.cc` | Validate the selected configuration, identify each actual native measurement sensor, and write only that sensor's selected global columns to official Mille Binary. |
+| `validation/telescope_alignment/l1_y_rx_ry_rz_l2_y.json` | Declare five physical labels, units, pivots, composition and distinct actual sensor identities. |
+| `validation/telescope_closure/multi_sensor.py` | Decode the bounded label selection, define signed fixtures, separate per-sensor increments, check XML changes and validate physical composition/inverse operations. |
+| `validation/telescope_closure/multi_information.py` | Profile four local parameters from actual native equations; report accumulated information, covariance, cross-sensor correlations, sample-size/beam subsets, omitted-X/Z diagnostics and reference-release gauge directions. |
+| `validation/telescope_closure/multi_preflight.py` | Read unchanged module/layer bounds and earlier native information; sample a joint-error design before new recovery, then reload actual DD4hep/ACTS poses. |
+| `validation/telescope_closure/closure.py` | Keep the existing independent geometry, data, reconstruction and official Pede stages; dispatch the selected scope and enforce observability before Pede. |
+| `validation/telescope_closure/rotation.py` | Reuse matrix-first correction, actual pose/containment checks, finite-difference validation, optional single additional correction, native coefficient auditing and ROOT closure output. |
+| `validation/test_native_multi_sensor.py` | Test label/sensor separation, shared-module isolation, independent translations, noncommuting composition, fixed-sensor protection and refusal of unrelated XML changes. |
+
+The actual association remains:
+
+```
+native TrackState SourceLink
+  -> Measurement2D index -> associated hit CellID
+  -> DD4hep converter Volume context -> official SurfaceMap
+  -> the identical native reference Surface and GeometryIdentifier
+  -> selected configuration entries for that physical sensor
+  -> original native global derivative columns -> original whitening -> Mille
+```
+
+The L1 VolumeID/ACTS GeometryIdentifier pair is
+`272631839 / 216173056991691039`; the independently discovered L2 pair is
+`272633887 / 216173194430644511`. These are different identifier spaces and
+different sensors. Labels 700102/700104/700105/700106 map to L1 columns 1/3/4/5;
+700202 maps to L2 column 1. Columns are zero-based Global X/Y/Z/Rx/Ry/Rz.
+Fixed L0/L3/L4 measurements retain local track information and have no selected
+free global coefficients. Native SourceLinks, CellIDs, SurfaceMap associations
+and configured identities are checked at runtime rather than inferred from the
+label value alone.
+
+The installed EICrecon geometry service/`ActsGeometryProvider`, DD4hep conversion,
+official SurfaceMap, native measurement conversion and installed ACTS CKF path
+are unchanged. `NativeMilleModel` equations, calibrated covariance/whitening,
+four-local-parameter model, electron hypothesis, CKF selection and official
+Millepede-II steering are also unchanged. No provider, navigator, fitter or
+solver is added by these Python validation helpers.
+
+Both sensors' corrections come from one simultaneous Pede result. Each selected
+sensitive component is isolated by cloning its placed shared module definition;
+unrelated module templates, placements and material/segmentation/envelope nodes
+remain exact. For each sensor the update is
+`c_new=c_current+(0,dY,0)` and `R_new=Exp(dw_global) R_current`, about its current
+physical sensitive center. L2 has no rotation increment in Scope A. The current
+orientation is serialized from the target matrix, then freshly loaded DD4hep
+and ACTS matrices, IDs and all eight sensitive corners are checked before
+corrected reconstruction can start. An invalid candidate is preserved and
+refused rather than clipped or accommodated by enlarging its mother.
+
+Gauge handling is explicit fixed-reference selection, not a hidden prior:
+L0/L3/L4 poses and L1/L2 X/Z stay fixed. Actual local rank must be four per track;
+individual tracks need not resolve every global parameter. The accumulated
+selected design must have rank five and satisfy the existing scaled-condition
+and sensitivity gates before Pede. Releasing all reference poses is a separate
+diagnostic that exposes common rigid gauge directions; those extra columns are
+never fitted or used to regularize the selected model. Prospective ellipsoid
+sampling is engineering evidence, not uncertainty coverage. The optional
+`--refine-once` stage retains the existing 20 nm translation and quarter-initial-
+sigma angular post-update gates and permits at most one additional correction.
+No Controller iteration, Geometry activation or full six-DOF mode is introduced.
+
+The Scope A audit uses the following manual inputs. Existing output directories
+are immutable: use a new suffix for each output path when reproducing these
+commands. The fixed Docker container name is an explicit local environment
+choice.
+
+```bash
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  cmake -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_multi_20261024_01 \
+  -DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  cmake --build /work/build/native_multi_20261024_01 -j2
+
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B validation/telescope_closure/multi_preflight.py \
+  --build build/native_multi_20261024_01 \
+  --prior-run result/native_containment_seed1_positive_20261024_01 \
+  --output-dir result/native_multi_20261024_01_audit/geometry_preflight \
+  --mode l1_y_rx_ry_rz_l2_y
+
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B validation/telescope_closure/closure.py \
+  --build build/native_multi_20261024_01 \
+  --result result/native_multi_scope_a_seed1_positive_20261024_01 \
+  --mode l1_y_rx_ry_rz_l2_y --events 4096 \
+  --beam validation/telescope_alignment/multi_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+```
+
+The same invocation accepts each independent `--step` in place of `all`:
+`geometry`, `data`, `nominal`, `solve`, `correct`, `corrected`, `postsolve`,
+`refine`, `refined`, `refinesolve`, `control`, `controlsolve`, `check`.
+Each requires complete, unmodified preceding artifacts and creates fresh stage
+outputs. `solve` also performs the real-geometry derivative/pose gates. The
+read-only `multi_information.py --native RUN/nominal/mille.json --output NEW.json`
+command exposes the selected and diagnostic designs independently. The final
+`validation/report.json` and `validation/rotation.root` retain closure metrics
+and ROOT histograms; they distinguish initial nominal covariance from final
+cumulative geometry without combining correlated successive-fit errors.

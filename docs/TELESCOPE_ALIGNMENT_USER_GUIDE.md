@@ -369,3 +369,73 @@ its own segmented channels from its explicit seed and physically displaced XML.
 Use `cohort_summary.py --runs ... --output-dir result/NEW` to retain **all**
 attempted fits in ROOT and JSON summaries, including physically refused fits.
 No command activates a Geometry or adjusts an uncertainty to force closure.
+
+
+## Bounded multi-sensor native alignment
+
+The `l1_y_rx_ry_rz_l2_y` fixture selects L1 Global Y/Rx/Ry/Rz and L2
+Global Y together. L0/L3/L4 remain fixed reference sensors; both sensors'
+Global X/Z remain fixed. The configuration is
+`validation/telescope_alignment/l1_y_rx_ry_rz_l2_y.json`. This is an opt-in,
+zero-field, material-free synthetic-channel validation, not a production
+Geometry activation or an uncertainty-coverage measurement.
+
+The prospective fixture uses L1 Y = +0.080 mm, L2 Y = -0.060 mm and a
+single active L1 rotation vector (+1.0, +0.5, -0.5) mrad. The `_negative`
+fixture reverses the rotation vector while retaining the translations.
+The bounded beam recipe is unchanged; `multi_beam_seed1.json` records seed
+2026102701. No Simulation Truth enters the Pede equations or corrections.
+
+Run from the repository root in the fixed container. Choose unused build,
+result and preflight directories when repeating these commands:
+
+```sh
+export TESTBENCH_CONTAINER=sweet_mahavira
+bash environment/run.sh cmake -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_multi_20261024_01 -DCMAKE_BUILD_TYPE=Release \
+  -DTELESCOPE_BUILD_MILLE_PROBE=ON
+bash environment/run.sh cmake --build /work/build/native_multi_20261024_01 -j2
+bash environment/run.sh python3 -B validation/telescope_closure/multi_preflight.py \
+  --build build/native_multi_20261024_01 \
+  --prior-run result/native_containment_seed1_positive_20261024_01 \
+  --output-dir result/native_multi_20261024_01_audit/geometry_preflight
+bash environment/run.sh python3 -B validation/telescope_closure/closure.py \
+  --build build/native_multi_20261024_01 \
+  --result result/native_multi_scope_a_seed1_positive_20261024_01 \
+  --mode l1_y_rx_ry_rz_l2_y --events 4096 \
+  --beam validation/telescope_alignment/multi_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+```
+
+The Geometry-only preflight uses a previous native cohort solely for its
+calibrated-covariance information matrix. It samples a correlated nominal
+5-sigma ellipsoid with a 10% engineering margin and reloads the worst sampled
+poses through real DD4hep/ACTS. This is a prospective engineering test, not a
+proof of containment for every point of the ellipsoid or calibrated coverage.
+It must pass before new fitted recovery is inspected. It does not resize
+modules, alter errors, impose fit constraints or select successful seeds.
+
+Each stage can also run independently with the same arguments and `--step`:
+`geometry`, `data`, `nominal`, `solve`, `correct`, `corrected`, `postsolve`,
+`refine`, `refined`, `refinesolve`, `control`, `controlsolve`, `check`.
+`solve`, `postsolve` and `refinesolve` independently perturb each selected
+sensor/parameter through real Geometry at three step sizes, then check
+accumulated observability before calling official Pede. The extra correction
+requires the explicit `--refine-once` option and is limited to one.
+
+Inputs are the generated nominal XML, fixed physical fixture, recorded beam
+recipe and packed `data/shifted.root` channels. Outputs include actual native
+`mille.json`, official `mille.dat`, `solve/millepede.res`, full covariance and
+gauge diagnostics in `solve/observability.json`, per-sensor corrected XML and
+Geometry audits, and `validation/report.json` plus `validation/rotation.root`.
+The latter contains nine ROOT histograms for nominal/corrected/control ACTS
+chi2 and local residuals and can be opened with TBrowser. The same immutable
+channel file is read in every correction pass. Initial nominal uncertainties
+are reported separately from final cumulative poses and are never combined
+across successive fits of the same channels.
+
+Scope A passed its prospective 4096-track cohort: rank 5, scaled condition
+1.980128, zero rejected local fits, and ACTS chi2/stored-NDF
+9.946553319 -> 0.597247931. Full numerical evidence and limitations are in
+`TELESCOPE_ALIGNMENT_LEGACY_PARITY.md`. This is Geometry/derivative closure,
+not statistical validation of the nominal uncertainty model.

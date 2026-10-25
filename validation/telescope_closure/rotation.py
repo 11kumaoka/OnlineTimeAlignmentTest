@@ -9,6 +9,8 @@ from geometry.transforms import rotation_exp,rotation_log,multiply,transpose
 from geometry.placements import xml_number
 from research_common import stage,execute,digest,require,done,write_json
 
+from validation.telescope_closure import multi_sensor as multi
+
 INJECTED_RX_RAD=.0018
 INJECTED_RY_RAD=.005
 INJECTED_RZ_RAD=.005
@@ -31,6 +33,7 @@ def fixture_shifts(mode):
 
 
 def is_coupled(mode):
+    if multi.is_multi(mode):return True
     return mode in ('l1_ry_rz','l1_ry_rz_negative') or is_three(mode)
 
 
@@ -39,6 +42,7 @@ def injected_vector(mode):
 
 
 def axis(mode):
+    if multi.is_multi(mode):return 'xyz'
     if is_three(mode):return 'xyz'
     if is_coupled(mode):return 'yz'
     return 'y' if mode in ('l1_ry','l1_ry_negative') else ('z' if mode in ('l1_rz','l1_rz_negative') else 'x')
@@ -63,6 +67,7 @@ def injected_rotation(mode):
 
 
 def labels(mode):
+    if multi.is_multi(mode):return multi.labels(mode)
     if is_four(mode):return [700102,700104,700105,700106]
     if is_three(mode):return [700104,700105,700106]
     if is_coupled(mode):return [700105,700106]
@@ -70,6 +75,7 @@ def labels(mode):
 
 
 def config_name(mode):
+    if multi.is_multi(mode):return 'l1_y_rx_ry_rz_l2_y'
     if is_four(mode):return 'l1_global_y_rx_ry_rz'
     if is_three(mode):return 'l1_global_rx_ry_rz'
     if is_coupled(mode):return 'l1_global_ry_rz'
@@ -188,12 +194,13 @@ def correct(args):
     require(args.result,'solve');p=stage(args.result,'correction')
     values=read_pede(args.result/'solve/millepede.res')
     shifts={l:values[k] for l,k in [(1,700102),(2,700202)] if k in values}
-    rotations={1:[values[k] for k in rotation_labels(args.mode)] if is_coupled(args.mode) else values[rotation_label(args.mode)]}
+    rotations=({} if multi.is_multi(args.mode) else {1:[values[k] for k in rotation_labels(args.mode)] if is_coupled(args.mode) else values[rotation_label(args.mode)]})
+    if multi.is_multi(args.mode):shifts,rotations=multi.pose_increments(values)
     nominal=args.result/'geometry/fixtures/nominal.xml'
     displaced_xml(nominal,p/'corrected.xml',shifts,rotations=rotations,rotation_axis=axis(args.mode))
     write_json(p/'provenance.json',{'parent_sha256':digest(nominal),'pede_sha256':digest(args.result/'solve/millepede.res'),
        'physical_global_y_mm':shifts,'physical_global_r'+axis(args.mode)+'_rad':rotations,'pivot':'current sensitive center',
-       'composition':(('Rnew=Exp([dRx,dRy,dRz]) Rcurrent; bounded L1 full rotation-vector update' if is_three(args.mode) else 'Rnew=Exp([0,dRy,dRz]) Rcurrent; current full pose, not a closed two-axis subgroup') if is_coupled(args.mode) else 'Rnew=Exp(dw_global) Rcurrent; selected '+axis(args.mode)+' subgroup'),'truth_used':False,'activated':False})
+       'composition':('per-sensor cnew=ccurrent+(0,dY,0); Rnew=Exp([dRx,dRy,dRz]) Rcurrent; current sensitive-center pivot' if multi.is_multi(args.mode) else (('Rnew=Exp([dRx,dRy,dRz]) Rcurrent; bounded L1 full rotation-vector update' if is_three(args.mode) else 'Rnew=Exp([0,dRy,dRz]) Rcurrent; current full pose, not a closed two-axis subgroup') if is_coupled(args.mode) else 'Rnew=Exp(dw_global) Rcurrent; selected '+axis(args.mode)+' subgroup')),'truth_used':False,'activated':False})
     q=stage(p,'geometry_audit');execute([args.build/'TelescopeChannels',p/'corrected.xml',0,q/'geometry.json'],q,env=environment(args.build))
     base=json.loads((args.result/'data/control/channels_truth.json').read_text())['sensors']
     pose_checks(base,json.loads((q/'geometry.json').read_text())['sensors'],shifts,rotations,axis=axis(args.mode))
@@ -204,17 +211,18 @@ def refine(args):
     """One explicitly requested finite relinearization; never a Controller loop."""
     from validation.telescope_closure.closure import displaced_xml,environment
     from alignment.pede import read_pede
-    if not is_four(args.mode) or not args.refine_once:raise ValueError('One refinement requires the explicit four-parameter opt-in')
+    if not (is_four(args.mode) or multi.is_multi(args.mode)) or not args.refine_once:raise ValueError('One refinement requires the explicit four-parameter opt-in')
     require(args.result,'postsolve');require(args.result,'correction')
     p=stage(args.result,'refinement');values=read_pede(args.result/'postsolve/millepede.res')
-    shifts={1:values[700102]};rotations={1:[values[k] for k in rotation_labels(args.mode)]}
+    if multi.is_multi(args.mode):shifts,rotations=multi.pose_increments(values)
+    else:shifts={1:values[700102]};rotations={1:[values[k] for k in rotation_labels(args.mode)]}
     parent=args.result/'correction/corrected.xml'
     displaced_xml(parent,p/'refined.xml',shifts,rotations=rotations,rotation_axis='xyz')
     q=stage(p,'geometry_audit');execute([args.build/'TelescopeChannels',p/'refined.xml',0,q/'geometry.json'],q,env=environment(args.build))
     previous=json.loads((args.result/'correction/geometry_audit/geometry.json').read_text())['sensors']
     actual=json.loads((q/'geometry.json').read_text())['sensors'];pose_checks(previous,actual,shifts,rotations,axis='xyz')
     first=json.loads((args.result/'solve/independent.json').read_text());selected=labels(args.mode)
-    thresholds={k:(2e-5 if k==700102 else first['nominal_sigma'][selected.index(k)]/4) for k in selected}
+    thresholds={k:(2e-5 if k in (700102,700202) else first['nominal_sigma'][selected.index(k)]/4) for k in selected}
     write_json(p/'provenance.json',{'parent_sha256':digest(parent),'pede_sha256':digest(args.result/'postsolve/millepede.res'),
         'increments':values,'units':first['parameter_units'],'initial_one_step_thresholds':thresholds,
         'initial_one_step_post_gate_passed':all(abs(values[k])<thresholds[k] for k in selected),
@@ -234,19 +242,21 @@ def check(args):
     p=stage(args.result,args.validation_name)
     refined=getattr(args,'refine_once',False)
     if refined:
-        assert is_four(args.mode)
+        assert is_four(args.mode) or multi.is_multi(args.mode)
         for name in ('refinement','refined','refined_physical_derivatives','refinesolve'):require(args.result,name)
     final='refined' if refined else 'corrected'
     final_solver='refinesolve' if refined else 'postsolve'
     paths={name:args.result/(final if name=='corrected' else name) for name in ('nominal','corrected','control')}
     if refined:paths['first_corrected']=args.result/'corrected'
     selected=labels(args.mode);combined=args.mode=='l1_y_rx_l2_y'
-    injected=dict(zip(rotation_labels(args.mode),injected_rotation(args.mode))) if is_coupled(args.mode) else {rotation_label(args.mode):injected_rotation(args.mode)}
+    injected=multi.injection(args.mode) if multi.is_multi(args.mode) else (dict(zip(rotation_labels(args.mode),injected_rotation(args.mode))) if is_coupled(args.mode) else {rotation_label(args.mode):injected_rotation(args.mode)})
     if combined:injected.update({700102:.150,700202:.200})
     if is_four(args.mode):injected[700102]=.150
     truth=json.loads((args.result/'data/shifted/channels_truth.json').read_text())
     base=json.loads((args.result/'data/control/channels_truth.json').read_text())
-    pose_checks(base['sensors'],truth['sensors'],fixture_shifts(args.mode),{1:injected_rotation(args.mode)},axis=axis(args.mode))
+    if multi.is_multi(args.mode):
+        dy,dw=multi.fixture(args.mode);pose_checks(base['sensors'],truth['sensors'],dy,dw,axis='xyz')
+    else:pose_checks(base['sensors'],truth['sensors'],fixture_shifts(args.mode),{1:injected_rotation(args.mode)},axis=axis(args.mode))
     # Independent XML whitelist: only selected module references, component X
     # translation and the selected L1 orientation serialization may vary.
     def structure(n):return n.tag,dict(n.attrib),(n.text or '').strip(),tuple(structure(c) for c in n)
@@ -254,6 +264,9 @@ def check(args):
     pairs=[(args.result/'geometry/fixtures/nominal.xml',args.result/'geometry/truth.xml'),(args.result/'geometry/fixtures/nominal.xml',args.result/'correction/corrected.xml')]
     if refined:pairs.append((args.result/'correction/corrected.xml',args.result/'refinement/refined.xml'))
     for parent,xml in pairs:
+        if multi.is_multi(args.mode):
+            multi.xml_identity(parent,xml,selected)
+            continue
         nominal_xml=ET.parse(parent).getroot()
         candidate=ET.parse(xml).getroot();detector=candidate.find("./detectors/detector[@name='SiMAPS']")
         original=nominal_xml.find("./detectors/detector[@name='SiMAPS']")
@@ -280,21 +293,36 @@ def check(args):
     for i,k in enumerate(selected):
         assert abs(values[k]-injected[k])<tolerances[k]
         assert abs(control_solution['parameters'][str(k)])<5*control_solution['nominal_sigma'][i]
-        assert abs(post[k])<(2e-5 if is_four(args.mode) and k==700102 else (solution['nominal_sigma'][i]/4 if axis(args.mode) in ('y','z','yz','xyz') else 2e-5)),(k,post[k])
+        assert abs(post[k])<(2e-5 if (is_four(args.mode) or multi.is_multi(args.mode)) and k in (700102,700202) else (solution['nominal_sigma'][i]/4 if axis(args.mode) in ('y','z','yz','xyz') else 2e-5)),(k,post[k])
     from geometry.transforms import orientation_distance
     angle_error=orientation_distance(truth['sensors'][1]['acts_rotation'],actual[1]['acts_rotation'])
+    sensor_errors={}
     if is_coupled(args.mode):
         covariance=np.linalg.inv(np.array(solution['normal']))
         error=np.array([values[k]-injected[k] for k in selected])
         assert error@np.linalg.solve(covariance,error)<25
-        angular=[selected.index(k) for k in rotation_labels(args.mode)]
+        if multi.is_multi(args.mode):
+            shifts,rotations=multi.fixture(args.mode)
+            for layer in (1,2):
+                angular=[i for i,k in enumerate(selected) if multi.mapping(k)[0]==layer and multi.mapping(k)[1]>=3]
+                bias=np.array(actual[layer]['center_mm'])-truth['sensors'][layer]['center_mm']
+                assert abs(bias[1])<min(abs(shifts[layer]),5*solution['nominal_sigma'][selected.index(700002+100*layer)])
+                assert max(abs(bias[0]),abs(bias[2]))<1e-9
+                distance=orientation_distance(truth['sensors'][layer]['acts_rotation'],actual[layer]['acts_rotation'])
+                if angular:
+                    assert distance<5*np.sqrt(np.linalg.eigvalsh(covariance[np.ix_(angular,angular)]).max())
+                    assert distance<np.linalg.norm(rotations[layer])
+                else:assert distance<1e-12
+                sensor_errors[layer]={'orientation_error_rad':distance,'center_bias_mm':bias.tolist()}
+            angular=[selected.index(k) for k in (700104,700105,700106)]
+        else:angular=[selected.index(k) for k in rotation_labels(args.mode)]
         angular_covariance=covariance[np.ix_(angular,angular)]
         assert angle_error<5*np.sqrt(np.linalg.eigvalsh(angular_covariance).max())
         if is_four(args.mode):
             bias=np.array(actual[1]['center_mm'])-truth['sensors'][1]['center_mm']
             assert abs(bias[1])<min(.150,5*solution['nominal_sigma'][selected.index(700102)])
             assert max(abs(bias[0]),abs(bias[2]))<1e-9
-        assert angle_error<np.linalg.norm(injected_rotation(args.mode))
+        if not multi.is_multi(args.mode):assert angle_error<np.linalg.norm(injected_rotation(args.mode))
         require(args.result,'coupled_pose')
     else:assert angle_error<tolerances[rotation_label(args.mode)]
     input_path=args.result/'data/shifted.root';payload=channel_values(input_path)
@@ -330,6 +358,7 @@ def check(args):
                 for j in (0,1):
                     coefficients=rows[2*l+j][3]
                     expected={k:g[j,k-700101 if k in (700104,700105,700106) else 1] for k in selected if (1 if k in (700104,700105,700106) else (k-700002)//100)==l and g[j,k-700101 if k in (700104,700105,700106) else 1]!=0}
+                    if multi.is_multi(args.mode):expected={k:g[j,c] for k in selected for sensor,c in [multi.mapping(k)] if sensor==l and g[j,c]!=0}
                     assert coefficients.keys()==expected.keys()
                     assert all(abs(coefficients[k]-expected[k])<1e-10 for k in expected)
         for event in audit['events']:
@@ -409,14 +438,22 @@ def check(args):
       'summaries':summaries,'pede_diagnostics':diagnostics,'changed_l1_channel_events':changed,
       'input_channel_sha256':channel_digest(payload),'immutable_input_file_sha256':digest(input_path),
       'truth_used_for_inference':False,'geometry_activated':False,'scope':'quantized synthetic channels, zero field, no assigned ACTS material; not statistical coverage'}
-    if is_coupled(args.mode):
+    if is_coupled(args.mode) and not multi.is_multi(args.mode):
         result.update(injected_rotation_vector_rad=injected_vector(args.mode),
             injected_matrix=rotation_exp(injected_vector(args.mode)),
             recovered_rotation_vector_rad=([values[k] for k in rotation_labels(args.mode)] if is_three(args.mode) else [0.,values[700105],values[700106]]),
             **{('nominal_covariance_mixed_units' if is_four(args.mode) else 'nominal_covariance_rad2'):covariance.tolist()},
             initial_error_mahalanobis_squared=float(error@np.linalg.solve(covariance,error)),
             truth_definition='single rotation vector, not an ordered Euler product')
-    if refined:
+    if multi.is_multi(args.mode):
+        result.update(sensor_errors=sensor_errors,nominal_covariance_mixed_units=covariance.tolist(),initial_error_mahalanobis_squared=float(error@np.linalg.solve(covariance,error)),sensor_identities={l:{k:actual[l][k] for k in ('volume_id','geometry_id')} for l in (1,2)},cumulative_geometry={l:{'global_y_mm':float(actual[l]['center_mm'][1]-base['sensors'][l]['center_mm'][1]),'rotation_vector_rad':list(rotation_log((np.array(actual[l]['acts_rotation'])@np.array(base['sensors'][l]['acts_rotation']).T).tolist()))} for l in (1,2)},cumulative_uncertainty_combined=False,refinement_count=int(refined))
+        first_post=read_pede(args.result/'postsolve/millepede.res')
+        result.update(final_reconstruction_stage=final,
+            refinement_increments=(first_post if refined else {}),
+            initial_one_step_post_gate_passed=all(abs(first_post[k])<
+                (2e-5 if multi.mapping(k)[1]==1 else solution['nominal_sigma'][i]/4)
+                for i,k in enumerate(selected)))
+    if refined and not multi.is_multi(args.mode):
         nominal_basis=np.array(base['sensors'][1]['acts_rotation'])
         result.update(refinement_count=1,final_reconstruction_stage=final,
             refinement_increments=read_pede(args.result/'postsolve/millepede.res'),
@@ -483,6 +520,7 @@ def coupled_pose_gate(args):
     """Independent real-constructor composition/inverse checks before inference."""
     from validation.telescope_closure.closure import displaced_xml,environment
     from geometry.transforms import orientation_distance
+    if multi.is_multi(args.mode):return multi.pose_gate(args)
     p=stage(args.result,'coupled_pose')
     base=json.loads((args.result/'data/control/channels_truth.json').read_text())['sensors']
     if is_three(args.mode):
@@ -530,19 +568,20 @@ def coupled_physical_derivatives(args,reconstruction):
     base_path=args.result/('data/control/channels_truth.json' if reconstruction=='nominal' else ('refinement/geometry_audit/geometry.json' if reconstruction=='refined' else 'correction/geometry_audit/geometry.json'))
     base=json.loads(base_path.read_text())['sensors'];errors={};translation_errors={};checks=0
     columns=(1,3,4,5) if is_four(args.mode) else ((3,4,5) if is_three(args.mode) else (4,5))
-    for column in columns:
+    selected_columns=[multi.mapping(k) for k in labels(args.mode)] if multi.is_multi(args.mode) else [(1,c) for c in columns]
+    for layer,column in selected_columns:
         for step in ((1e-3,1e-4,1e-5) if column==1 else (1e-4,1e-5,1e-6)):
             poses=[]
             for sign in (1,-1):
-                delta=[0.]*(3 if is_three(args.mode) else 2)
-                if column!=1:delta[column-(3 if is_three(args.mode) else 4)]=sign*step
-                shifts={1:sign*step} if column==1 else {}
-                rotations=None if column==1 else {1:delta}
-                q=stage(p,f'column_{column}_step_{step:g}_{sign:+d}')
+                delta=[0.]*(3 if is_three(args.mode) or multi.is_multi(args.mode) else 2)
+                if column!=1:delta[column-(3 if is_three(args.mode) or multi.is_multi(args.mode) else 4)]=sign*step
+                shifts={layer:sign*step} if column==1 else {}
+                rotations=None if column==1 else {layer:delta}
+                q=stage(p,(f'layer_{layer}_' if multi.is_multi(args.mode) else '')+f'column_{column}_step_{step:g}_{sign:+d}')
                 displaced_xml(geometry,q/'geometry.xml',shifts,rotations=rotations,rotation_axis=axis(args.mode))
                 execute([args.build/'TelescopeChannels',q/'geometry.xml',0,q/'geometry.json'],q,env=environment(args.build))
                 sensors=json.loads((q/'geometry.json').read_text())['sensors']
-                pose_checks(base,sensors,shifts, {} if column==1 else {1:delta},axis=axis(args.mode));poses.append(sensors[1])
+                pose_checks(base,sensors,shifts, {} if column==1 else {layer:delta},axis=axis(args.mode));poses.append(sensors[layer])
             error=0.
             for event in native['events']:
                 point=np.array(event['reference_position_mm']);direction=np.array(event['reference_direction']);predictions=[]
@@ -551,13 +590,13 @@ def coupled_physical_derivatives(args,reconstruction):
                     intersection=point+direction*(normal@(center-point))/(normal@direction)
                     predictions.append((r.T@(intersection-center))[:2])
                 finite=(predictions[0]-predictions[1])/(2*step)
-                equation=next(e for e in event['equations'] if e['layer']==1)
+                equation=next(e for e in event['equations'] if e['layer']==layer)
                 error=max(error,float(np.max(np.abs(finite-np.array(equation['global'])[:,column]))));checks+=1
             assert error<2e-5,(column,step,error)
-            (translation_errors if column==1 else errors)[f'{column}_{step}']=error
+            (translation_errors if column==1 else errors)[(f'{layer}_' if multi.is_multi(args.mode) else '')+f'{column}_{step}']=error
     report={'passed':True,'checks':checks,'errors_mm_per_rad':errors,
         'maximum_error_mm_per_rad':max(errors.values()),'model_sha256':native['model_sha256'],
         'method':'independent actual DD4hep/ACTS perturbations; selected left-Global columns, original native reference'}
-    if is_four(args.mode):report.update(translation_errors_mm_per_mm=translation_errors,maximum_translation_error_mm_per_mm=max(translation_errors.values()))
+    if is_four(args.mode) or multi.is_multi(args.mode):report.update(translation_errors_mm_per_mm=translation_errors,maximum_translation_error_mm_per_mm=max(translation_errors.values()))
     write_json(p/'report.json',report)
     done(p,passed=True)
