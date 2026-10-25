@@ -72,7 +72,7 @@ class NativeMultiSensor(unittest.TestCase):
         self.assertEqual(labels(MODE), list(expected))
         self.assertEqual(labels(MODE + '_negative'), list(expected))
         self.assertEqual({label: mapping(label) for label in labels(MODE)}, expected)
-        for label in (700101, 700103, 700301, 700304):
+        for label in (700101, 700103, 700301, 700404):
             with self.assertRaises(ValueError):
                 mapping(label)
 
@@ -84,7 +84,7 @@ class NativeMultiSensor(unittest.TestCase):
         self.assertEqual(rotations, {1: [.0012, -.0007, .0009]})
         self.assertEqual(values[700202], -.09)
         for invalid in ({700102: float('nan')}, {700104: .001},
-                        {700102: .1, 700302: .1}):
+                        {700102: .1, 700402: .1}):
             with self.assertRaises(ValueError):
                 pose_increments(invalid)
 
@@ -217,7 +217,8 @@ class NativeMultiSensor(unittest.TestCase):
         self.assertEqual(labels(mode + '_negative'), list(expected))
         self.assertEqual({label: mapping(label) for label in labels(mode)}, expected)
         self.assertEqual(labels(mode)[:5], labels(MODE))
-        for fixed in (700101, 700103, 700201, 700203, 700304, 700405):
+        self.assertNotIn(700304, labels(mode))
+        for fixed in (700101, 700103, 700201, 700203, 700404, 700405):
             with self.assertRaises(ValueError):
                 mapping(fixed)
 

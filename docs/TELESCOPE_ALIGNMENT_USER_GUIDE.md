@@ -559,3 +559,71 @@ The nine histograms are nominal/corrected/control chi2 and local u/v residuals.
 The chi2 histograms use ACTS stored NDF (ten measurement coordinates per track),
 while the independently profiled Pede model has four local track parameters
 and eight selected global parameters. Their denominators must not be confused.
+
+## Configured three-sensor alignment
+
+Scope C, `l1_l2_y_rx_ry_rz_l3_y`, has passed nine-parameter native closure:
+L1/L2 Y/Rx/Ry/Rz plus L3 Y, with L0/L4 fixed and every Global X/Z fixed.
+The twelve-parameter preset `l1_l2_l3_y_rx_ry_rz` is prospective at this
+checkpoint; its presence is not a claim of validated Scope D closure.
+
+The corresponding JSON files in `validation/telescope_alignment/` explicitly
+declare `aligned_sensors`, component lists, actual VolumeID/GeometryIdentifier,
+fixed references, coordinate/pivot conventions and unchanged containment rules.
+Parameter rows retain the established Mille labels. Actual L3 identity is
+VolumeID 272635935 and ACTS GeometryIdentifier 216173331869597983. Its labels
+are 700302 (Y), 700304/700305/700306 (Rx/Ry/Rz); only Y is free in C.
+The processor still verifies these declarations against actual native sensor
+associations. No Truth injection values are passed in the alignment JSON.
+
+The physical fixtures retain L1/L2 values and add L3 Y=+0.050 mm. Scope D's
+prospective L3 rotation vector is (+0.8,-0.4,+0.4) mrad. New beam JSON files
+`three_sensor_beam_seed1.json` and `three_sensor_beam_seed2.json` declare seeds
+2026102801/2026102802 with the unchanged bounded recipe. The initial N=4096,
+strict sensitivity/containment gates, chi2 cut 1000 and one explicit additional
+correction were declared before fitting. Negative fixtures reverse rotations
+only and share rays within a seed. No seed is replaced after seeing its fit.
+
+These exact commands were executed for Scope C; outputs already exist. Choose
+unused build/result/preflight names before repeating them:
+
+```sh
+export TESTBENCH_CONTAINER=sweet_mahavira
+bash environment/run.sh cmake -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_three_sensor_c_20261024_01 \
+  -DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON
+bash environment/run.sh cmake --build /work/build/native_three_sensor_c_20261024_01 -j2
+# The unchanged existing geometry executable was used for the prospective check.
+bash environment/run.sh python3 -B validation/telescope_closure/multi_preflight.py \
+  --build build/native_multi_precision_20261024_01 \
+  --prior-run result/native_multi_scope_b_seed1_positive_20261024_02 \
+  --output-dir result/native_three_sensor_20261024_01_audit/geometry_preflight_c \
+  --mode l1_l2_y_rx_ry_rz_l3_y
+bash environment/run.sh python3 -B validation/telescope_closure/closure.py \
+  --build build/native_three_sensor_c_20261024_01 \
+  --result result/native_three_sensor_scope_c_seed1_positive_20261024_01 \
+  --mode l1_l2_y_rx_ry_rz_l3_y --events 4096 \
+  --beam validation/telescope_alignment/three_sensor_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+```
+
+The preflight's local prior native dataset is not a Git asset; the previous
+Scope B recipe can regenerate it under a fresh path. It supplies original
+calibrated covariance and derivatives for the engineering preflight, not Truth
+corrections. New high-dimensional checks use sensor-marginal covariance samples
+lifted into the full correlated ellipsoid. Old 5/8 sampling is unchanged. This
+is sampled engineering validation, not exhaustive containment or coverage.
+The optional `--target-events` forecast is engineering-only and was not used
+for C: actual N=4096 passed. Every actual solve must separately pass the strict
+native information/sensitivity gates before Pede.
+
+Inputs/outputs and independent stage commands remain those of the multi-sensor
+workflow above. All three sensors use the same correction implementation and
+actual fresh Geometry reload; no new provider, fitter, navigator or solver is
+introduced. C's `validation/report.json` contains all nine estimates, original
+nominal uncertainties, full covariance, actual cumulative matrices, Geometry
+errors, hashes and solver diagnostics. `validation/rotation.root` contains the
+same nine TBrowser histograms. C recovered Y=(80.007625,-59.906822,50.174805) um,
+with ACTS chi2/stored-NDF 12.237088→0.604573. The parity report records the weak
+tilt components as well as the successful closure gates; numerical convergence
+does not establish exact Truth/sign recovery or uncertainty coverage.

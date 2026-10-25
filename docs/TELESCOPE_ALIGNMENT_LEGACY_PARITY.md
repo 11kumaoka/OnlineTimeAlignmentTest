@@ -3257,3 +3257,516 @@ coverage. No arbitrary six-DOF, additional free layer, material-aware physics
 performance, original Geant4-channel compatibility, automatic Controller loop
 or production Geometry activation is claimed. Those remain separate gated
 development/validation steps. The legacy scientific implementation is retained.
+
+
+# Next milestone: Configurable three-sensor native ACTS alignment — L1/L2/L3
+
+Repository: `11kumaoka/OnlineTimeAlignmentTest`
+
+Branch: `feature/upstream-acts-geometry`
+
+Starting commit:
+`4f31408f7736bf28eceb62c187fd9142714ea72e`
+
+Previous validated commits:
+- Scope A: `b3b4cc922aaae0d20de20cd96294053acebc3e37`
+- Scope B: `4f31408f7736bf28eceb62c187fd9142714ea72e`
+
+Primary references:
+- `docs/TELESCOPE_ALIGNMENT_LEGACY_PARITY.md`
+- `docs/TELESCOPE_ALIGNMENT_CODE_MAP.md`
+- `docs/TELESCOPE_ALIGNMENT_USER_GUIDE.md`
+
+## Objective
+
+The existing native EICrecon/ACTS telescope alignment now supports simultaneous L1/L2 Global Y translations and three-axis SO(3) rotations.
+
+The eight-parameter Scope B has passed real DD4hep Geometry and reconstruction-based closure.
+
+The next priority is to extend the implementation to a third measured SiMAPS sensor, L3, while making sensor selection configuration-driven.
+
+I want to progress toward complete beam-test alignment functionality as efficiently as possible.
+
+Implement two scopes in sequence:
+
+### Scope C — Nine global parameters
+
+- L1: Global Y, Rx, Ry, Rz
+- L2: Global Y, Rx, Ry, Rz
+- L3: Global Y
+
+### Scope D — Twelve global parameters
+
+- L1: Global Y, Rx, Ry, Rz
+- L2: Global Y, Rx, Ry, Rz
+- L3: Global Y, Rx, Ry, Rz
+
+Keep L0 and L4 fixed as reference sensors.
+
+Keep all Global X/Z translations fixed.
+
+Scope D is a target for validation, not an assumed observable or physically feasible configuration.
+
+If Scope C succeeds, proceed directly to Scope D without requesting separate approval.
+
+Do not implement general six-DOF fitting or an automatic Controller in this milestone.
+
+## Phase 1 — Preserve existing capabilities
+
+Verify the current Git branch and clean working tree.
+
+Protect all previously validated scientific baselines.
+
+In particular preserve:
+
+- Existing L1/L2 eight-parameter closure
+- Previous L1 four-parameter closure
+- Existing SO(3) correction conventions
+- NativeMilleModel numerical equations
+- Installed ACTS CKF/Navigator/smoother
+- Original covariance and whitening
+- Original Millepede-II steering
+- The validated FactoryAudit float-serialization fix
+- Existing Geometry containment rules
+- Historical expected-containment-refusal tests
+
+Do not repeat the complete legacy audit.
+
+Do not modify external EICrecon installations.
+
+## Phase 2 — Make sensor selection configuration-driven
+
+Inspect the current implementations of:
+
+- `TelescopeMille.cc`
+- `multi_sensor.py`
+- `multi_information.py`
+- `multi_preflight.py`
+- `rotation.py`
+- `closure.py`
+- `TelescopeChannels.cc`
+- Existing JSON parameter configurations
+
+Identify L1/L2-specific assumptions.
+
+Extend the existing implementation to support an explicit list of aligned sensors and selected physical parameters.
+
+The configuration should identify:
+
+- Actual DD4hep sensor identity
+- Actual ACTS GeometryIdentifier
+- Enabled translation/rotation components
+- Mille labels
+- Fixed reference sensors
+- Physical coordinate conventions
+- Correction pivot
+- Geometry containment constraints
+
+Keep the design small and compatible with the existing codebase.
+
+Do not introduce another Geometry Provider, Fitter, Navigator or Solver.
+
+Avoid duplicating separate geometry-correction implementations for L1, L2 and L3.
+
+## Phase 3 — Extend native Mille labeling to L3
+
+Obtain L3's actual VolumeID and ACTS GeometryIdentifier from the installed geometry.
+
+Verify the established parameter-label convention.
+
+The proposed L3 labels are:
+
+- Global Y: 700302
+- Global Rx: 700304
+- Global Ry: 700305
+- Global Rz: 700306
+
+Treat these labels as proposals until collision and identity checks pass.
+
+Every ACTS measurement must be associated with the correct sensor using the actual SourceLink/CellID, DD4hep VolumeContext and SurfaceMap mapping.
+
+Use the existing official ACTS derivative columns.
+
+Fixed reference layers must contribute local track measurements without unintended free global alignment columns.
+
+Independently inspect the official decoded Mille records.
+
+Keep NativeMilleModel unchanged unless a specific numerical defect is independently established.
+
+## Phase 4 — Three-sensor Geometry correction
+
+Extend the existing tested physical correction functions so that L1, L2 and L3 can be corrected from the same Pede result.
+
+For each selected sensor:
+
+- Apply Global translation using the established convention.
+- Apply active left-Global SO(3) rotations around its sensitive center.
+- Preserve noncommutative rotation composition.
+- Verify the exact actual DD4hep and ACTS matrices.
+- Preserve the correct sensitive-center pivot.
+- Preserve VolumeID and GeometryIdentifier.
+- Preserve unrelated XML attributes and materials.
+- Check all eight sensitive corners.
+- Check containment within unchanged module and layer mothers.
+
+Verify that updating one sensor does not alter another sensor unintentionally.
+
+Pay particular attention to shared XML module definitions, cloned components and references.
+
+Do not enlarge Geometry envelopes or relax safety checks.
+
+## Phase 5 — Establish observability and gauge constraints
+
+Before running Pede, calculate the actual covariance-weighted, locally profiled global information matrix.
+
+For Scope C require accumulated rank 9.
+
+For Scope D require accumulated rank 12.
+
+Also investigate:
+
+- Normalized information-matrix condition number
+- Full global covariance
+- Cross-sensor correlations
+- Translation/rotation correlations
+- Formal uncertainties for all selected parameters
+- Gauge freedoms and weak modes
+- Dependence on track slopes and impact positions
+- Dependence on sample size
+- Omitted X/Z translation correlations as diagnostics
+
+With L0 and L4 fixed, explicitly verify that the selected global parameter scope has sufficient reference constraints.
+
+Do not assume that two fixed layers automatically eliminate every weak mode.
+
+Preserve the local four-parameter track model and its local-rank requirements.
+
+Per-track global rank need not equal the total number of alignment parameters; the accumulated global design must have adequate rank and sensitivity.
+
+Use the established broad-angle synthetic beam as the initial diagnostic.
+
+Increase track statistics only if the actual information matrix provides quantitative justification.
+
+Do not introduce hidden priors, artificial constraints or altered measurement uncertainties.
+
+If a rank or gauge blocker exists, document the exact null vectors or weak modes and stop the affected fit before Pede.
+
+## Phase 6 — Prospective three-sensor Geometry fixtures
+
+Construct actual, physically contained misalignments on L1/L2/L3.
+
+Each enabled sensor should have a nonzero selected misalignment.
+
+Perform Geometry-only preflight before inspecting any Pede recovery.
+
+Use actual DD4hep corner checks and a documented engineering margin against plausible correction fluctuations.
+
+Preserve the existing module envelopes and layer geometry.
+
+Declare:
+- Physical injection parameters
+- Beam recipe
+- Random seeds
+- Track count
+- Global parameter configuration
+- Required numerical sensitivity
+- Geometry containment margins
+- Recovery and residual acceptance gates
+- Maximum allowed additional correction count
+
+Keep these declarations fixed during validation.
+
+Do not select or replace seeds based on whether a fit succeeds.
+
+## Phase 7 — Scope C: Nine-parameter closure
+
+First validate:
+
+- L1: Y/Rx/Ry/Rz
+- L2: Y/Rx/Ry/Rz
+- L3: Y
+
+Run the entire native reconstruction-based closure:
+
+Truth DD4hep Geometry
+→ segmented immutable channels
+→ installed EICrecon Hit Reconstruction
+→ ACTS Measurements and CKF
+→ native TrackStates
+→ official Mille Binary
+→ official Pede
+→ physical correction of L1/L2/L3
+→ fresh EICrecon Geometry reload
+→ corrected reconstruction on identical channels
+→ independent validation.
+
+Require:
+- Nine correctly decoded parameter labels
+- Correct actual sensor associations
+- Full-rank and sufficiently sensitive fit
+- Valid physical Geometry after every update
+- Actual DD4hep/ACTS derivative agreement
+- Normal Pede diagnostics
+- No rejected local fits
+- Improved physical Geometry and reconstruction residuals
+- Correct post-correction consistency
+- Preserved immutable input channels
+
+Allow at most the previously established one explicit additional correction.
+
+If Scope C succeeds, create a local milestone commit.
+
+## Phase 8 — Scope D: Twelve-parameter closure
+
+Enable L3 Rx/Ry/Rz in addition to its Global Y translation.
+
+Validate the complete twelve-parameter matrix.
+
+Check the effects of having only L0 and L4 fixed.
+
+Run finite-difference derivative tests for every enabled sensor/parameter pair at multiple step sizes.
+
+Use physically valid real DD4hep surfaces, not analytical-only approximations.
+
+If observability and Geometry preflight pass, perform the complete actual reconstruction closure.
+
+Start with one independent cohort.
+
+After successful implementation, validate a small number of additional prospectively defined independent cohorts.
+
+Keep signed pairs correctly identified as paired samples.
+
+Report all twelve fitted parameters, the complete covariance matrix, actual geometry errors and relevant cross-sensor correlations.
+
+If twelve-parameter fitting is not reliably observable or physically feasible, preserve the nine-parameter success and produce a concrete blocker report.
+
+Do not weaken the acceptance criteria or change the detector geometry to force success.
+
+Commit Scope D only when its declared scientific validation is complete.
+
+## Phase 9 — Regression and preservation
+
+At the end of each successful milestone, run targeted tests for the affected functions.
+
+Before the final completion report, run:
+
+- All previously established native modes
+- Protected L1/L2 Scope A and Scope B results
+- Complete 18-command regression suite
+- All existing 91 unit tests and new tests
+- Official Mille binary inspection
+- ACTS/DD4hep real-Geometry finite differences
+- Native/legacy mathematical equivalence
+- Historical 99-track regression
+- Expected physical-containment refusal
+- Safety and preservation checks
+- Pinned upstream patch reproduction
+
+Verify exact scientific baseline equivalence and historical artifact identity where established.
+
+Preserve the original observer-failed execution and diagnostic evidence.
+
+Do not modify old physics settings, successful fixtures or immutable outputs.
+
+## Phase 10 — Documentation and commits
+
+Update:
+
+- `docs/TELESCOPE_ALIGNMENT_LEGACY_PARITY.md`
+- `docs/TELESCOPE_ALIGNMENT_CODE_MAP.md`
+- `docs/TELESCOPE_ALIGNMENT_USER_GUIDE.md`
+
+Explain the current execution flow, exact changed source files/functions and how additional sensors are selected.
+
+Document:
+
+- Supported sensor subsets
+- Actual L3 geometry identities
+- Label mappings
+- Fixed-reference and gauge choices
+- Observable global parameter scopes
+- SourceLink-to-Mille association
+- Geometry update semantics
+- Rank and covariance evidence
+- Physical containment
+- Reconstruction and closure results
+- Exact reproduction commands
+- Remaining functional limitations
+
+Create separate local commits for validated Scope C and Scope D where practical.
+
+Do not push, merge, activate production Geometry, overwrite scientific results or delete the legacy implementation.
+
+## After this milestone
+
+Once a multi-sensor configurable alignment framework is validated, prioritize:
+
+1. A bounded iterative Calibration Controller using the established native alignment and Geometry correction steps.
+2. Geometry versioning, convergence checks, rollback and reproducibility.
+3. Original Geant4/RawHit and beam-test input compatibility.
+4. Additional observable translation degrees of freedom.
+5. Separate statistical bias/uncertainty-coverage validation.
+6. Safe retirement of legacy components only after demonstrated parity.
+
+The main objective is to progress quickly toward operational multi-sensor telescope alignment without sacrificing the existing scientific validation.
+## Configurable three-sensor milestone — Scope C validated
+
+Starting authority: `4f31408f7736bf28eceb62c187fd9142714ea72e`. At entry, only
+this document had an uncommitted edit: the final Scope B section was replaced
+by the supplied three-sensor requirements above. Both were retained by inserting
+the original committed Scope B section before the supplied draft. Exact initial
+document/diff backups and their hashes are recorded in `initial_state.json`,
+`preexisting_user_parity_document.md` and `initial_working_tree.patch` under
+`result/native_three_sensor_20261024_01_audit/`, with a second copy under
+`/private/tmp/OnlineTimeAlignmentTest_three_sensor_20261024_01/`. No user edit
+was discarded or reset.
+
+### Configuration and unchanged numerical path
+
+The processor now validates explicit `aligned_sensors` metadata and parameter
+rows rather than enumerating hard-coded mode label sets. C selects L1/L2
+Y/Rx/Ry/Rz and L3 Y, with L0/L4 fixed and all X/Z fixed. Existing ten legacy
+configuration schemas remain accepted. Every selected sensor declares its actual
+system, VolumeID, GeometryIdentifier and enabled components. The reference
+partition, mm/rad units, world translation, sensitive-center pivot, active
+left-Global SO(3) composition and unchanged eight-corner module/layer contract
+are explicitly checked. No Truth injection values are passed to the Mille plugin.
+
+Actual L3 is VolumeID **272635935**, ACTS GeometryIdentifier
+**216173331869597983**. Labels 700302/700304/700305/700306 match the established
+Y/Rx/Ry/Rz convention without conflicting active parameter assignments. C uses
+700302 only; D is a prospective twelve-parameter configuration at this checkpoint.
+Including the D preset and software-selection tests does not declare D closure.
+
+TelescopeMille changes are confined to `Init`; `Process` and `Finish` remain
+byte-identical. NativeMilleModel, FactoryAudit float serialization, installed
+CKF/Navigator/smoother, covariance/whitening, official Pede steering and numerical
+Geometry/SO(3) functions are unchanged. `multi_sensor.configuration`, `labels`,
+`aligned_sensors` and `references` read the configuration. `multi_information.analyze`
+profiles four local parameters and diagnoses six pose columns per selected sensor.
+Its A/B reports reproduce byte-for-byte. `closure.displaced_xml` retains the
+legacy default allowed layers (1,2); L3 requires explicit configured permission.
+The same correction/derivative/check functions serve all selected sensors.
+
+A demonstrated isolation-test defect in `xml_identity` was also fixed: selected
+sensors whose module reference is unchanged are left for the final whole-XML
+comparison, rather than incorrectly removing their original shared module.
+In-place/shared mutations still fail that comparison. No containment gate is
+relaxed. Three obsolete unit assertions that treated every L3 label as invalid
+now test fixed L4 instead; Scope B explicitly still excludes L3. The original
+default L3 mutation refusal and all numerical assertions remain.
+
+### Prospective declaration and Geometry preflight
+
+The immutable pre-fit plan is `prospective_study_plan.json` in the audit root.
+C seed is 2026102801, N=4096; D prospectively uses seeds 2026102801/2026102802
+and paired positive/negative rotations. Beam recipe, energy/hypothesis, widths,
+slope range, chi2 cut 1000, covariance and solver settings are unchanged.
+Translations are L1 +0.080, L2 -0.060, L3 +0.050 mm. Positive rotation vectors
+are L1 (1.0,0.5,-0.5), L2 (-1.2,0.6,0.6), and prospectively D L3
+(0.8,-0.4,0.4) mrad. C keeps L3 rotation zero. Negative fixtures reverse
+rotations only. At most one explicitly requested additional correction is
+allowed, with the same fixed protocol for every declared case.
+
+The prior actual 4096-track design has C rank 9/condition 3.60622, D rank 12/
+condition 5.11619, and nuisance rank 18/condition 5.54320. The limiting nuisance
+sigma is 0.493218 mrad below the existing 0.5 mrad gate, so no statistics
+increase is justified or performed. Actual new-cohort gates run before Pede.
+
+For new 9/12 scopes, containment separates by sensor. The preflight samples each
+1D/4D marginal ellipsoid and lifts it into the full correlated covariance with
+delta=C[:,S] Css^-1 deltaS. This retains its joint Mahalanobis radius without
+allocating a 3^12 grid. Old 5/8 sampling is unchanged. C checks 180 directions
+per sign at five nominal sigmas with the same 10% engineering margin, and
+performs 38 actual DD4hep/ACTS reloads including worst module and cylindrical
+layer clearances. Minimum sampled module clearance is 78.639922 micrometers.
+Actual dimensions, all eight corners, IDs and matrices pass unchanged bounds.
+This is a sampled engineering preflight, not an exhaustive containment proof
+or a nominal-error coverage claim.
+
+### Scope C full reconstruction closure
+
+Executed run: `result/native_three_sensor_scope_c_seed1_positive_20261024_01`,
+build `build/native_three_sensor_c_20261024_01`. All 17 direct stages complete.
+Every nominal/first-corrected/refined/control reconstruction accepts 4096 tracks
+with zero rejections; the shifted RawHit ROOT bytes and channel payload remain
+identical across its three alignment passes. The input contains only EventHeader
+and TelescopeChannels; Truth is external validation data.
+
+| Parameter | Injected | Initial Pede | Initial data-only sigma | Final cumulative | Unit |
+|---|---:|---:|---:|---:|---|
+| L1 Y | +0.08 | +0.080008 | 0.000203995622597 | +0.08000762454 | mm |
+| L1 Rx | +0.001 | +0.00098877 | 2.00698141046e-05 | +0.000988612539294 | rad |
+| L1 Ry | +0.0005 | -8.5453e-05 | 0.000462895967229 | -0.000129462199021 | rad |
+| L1 Rz | -0.0005 | -0.0002223 | 0.000404485484473 | -0.000224674636007 | rad |
+| L2 Y | -0.06 | -0.059906 | 0.000204512013403 | -0.05990682247 | mm |
+| L2 Rx | -0.0012 | -0.0012205 | 1.6148237469e-05 | -0.00122042899262 | rad |
+| L2 Ry | +0.0006 | +0.00086459 | 0.000346454178421 | +0.000800798128563 | rad |
+| L2 Rz | +0.0006 | +0.00054646 | 0.000335444614605 | +0.000549463307666 | rad |
+| L3 Y | +0.05 | +0.050175 | 0.00019918036028 | +0.05017480482 | mm |
+
+Cumulative rotation components come from actual matrix logarithms, not sums of
+successive fit vectors. No same-RawHit fit uncertainties are combined. Final Y
+biases are +0.007625/+0.093178/+0.174805 micrometers on L1/L2/L3; orientation
+distances are 0.687136/0.208065/0 mrad. The weak L1 Ry estimate has the opposite
+sign to its injected +0.5 mrad but is within its nominal uncertainty scale:
+the current fixture does not establish statistically significant sign recovery
+for every tilt component. No errors, amplitudes or acceptance gates were tuned
+to remove that fluctuation. The joint initial squared Mahalanobis error is
+5.932975 <25. All three physical center/pose improvements and the original
+five-sigma component/pose gates pass.
+
+Selected rank 9 holds in all four solves, with scaled condition 3.68462–3.68520;
+full nuisance rank 18 has condition 5.76745–5.76984. Limiting selected nuisance
+sigma is 0.491219 mrad. Every prefix16–4096 and eight slope/impact subsets have
+rank 9. Maximum cross-sensor absolute correlation is 0.312294. The six common
+rigid motions have projected norm ratios below 3.23e-16 when all 30 columns are
+released; that diagnostic has rank 21 nominal/rank 23 rotated and is not a
+supported all-30-parameter fit. Fixed-reference principal information agrees
+exactly with the selected information. The full initial covariance (row/column
+order is the parameter table; mixed mm/rad products) is:
+
+```text
+4.1614214039e-08 5.1898451528e-11 -3.4747465686e-10 -1.7786044083e-08 1.3028773164e-08 1.1178193841e-11 -7.3058712755e-11 -3.8155094496e-09 9.1552652126e-09
+5.1898451528e-11 4.0279743819e-10 -1.6543192619e-10 3.3978135297e-11 9.3368666227e-12 8.3318063241e-11 -2.6429871883e-11 7.4113424975e-12 8.0130397734e-25
+-3.4747465686e-10 -1.6543192619e-10 2.1427267648e-07 1.1459938624e-09 -6.9949713567e-11 -2.9285560941e-11 4.0807525146e-08 6.4444733135e-11 -5.5194360673e-24
+-1.7786044083e-08 3.3978135297e-11 1.1459938624e-09 1.6360850715e-07 -7.5451075983e-09 2.9110680405e-12 2.8798071855e-10 3.5099444481e-08 -2.6211219474e-22
+1.3028773164e-08 9.3368666227e-12 -6.9949713567e-11 -7.5451075983e-09 4.1825163626e-08 3.2466771133e-11 -2.5429489666e-10 -2.4187907854e-08 1.2207020283e-08
+1.1178193841e-11 8.3318063241e-11 -2.9285560941e-11 2.9110680405e-12 3.2466771133e-11 2.6076557335e-10 -7.5412880301e-11 8.0584344893e-12 1.8453074982e-25
+-7.3058712755e-11 -2.6429871883e-11 4.0807525146e-08 2.8798071855e-10 -2.5429489666e-10 -7.5412880301e-11 1.2003049775e-07 4.2191621371e-10 -1.2113257264e-24
+-3.8155094496e-09 7.4113424975e-12 6.4444733135e-11 3.5099444481e-08 -2.4187907854e-08 8.0584344893e-12 4.2191621371e-10 1.1252308947e-07 -5.5087198087e-23
+9.1552652126e-09 7.9033137112e-25 -5.3336080649e-24 -2.6276958269e-22 1.2207020283e-08 1.6505956562e-25 -1.0073393424e-24 -5.6126579183e-23 3.9672815921e-08
+```
+
+ACTS chi2/stored-NDF improves 12.237087872→0.604573462; control is 0.602733344.
+All four official Pede solves exit 0, with no warnings/rejected local fits or
+error scaling. Their chi2/NDF is 1.007940/1.007978/1.007978/1.004380, using
+NDF=6*4096-9=24567; independent profiling agrees. The first one-step gate
+already passes, and the declared single extra correction gives maximum final
+post-update 0.000506939 initial sigma. Final Y updates are -0.023855,+0.037761,
++0.011400 **nanometers**, far below the unchanged 20 nm translation gate.
+
+The three actual-Geometry derivative gates check 331776 two-component vectors:
+maximum error 3.29080e-8 mm/rad and 5.29555e-10 mm/mm against 2e-5. The official
+decoder independently reads 4096 records / 40960 scalar measurements with exactly
+nine selected labels each 8192 times. Actual SourceLink/CellID/VolumeContext/
+SurfaceMap matches on all events; L0/L4 rows have no selected global columns.
+Final real module clearance is 120.574102 micrometers. ROOT re-open confirms
+nine histograms with 4096 track / 20480 residual entries. No candidate is activated.
+
+Full numerical evidence, Geometry chain hashes, covariance/correlation,
+prefix/subset/gauge designs, RawHit identities and exact commands are in
+`result/native_three_sensor_20261024_01_audit/scope_c_summary/`. Official binary
+inspection, actual associations and library identities are separate audit stages.
+The actual libraries resolve to `external/install/lib/libMille2.so` and
+installed ACTS 45.3.0. A diagnostic initially compared a symlink path literally;
+its preserved incident was resolved by actual realpath/binary SHA identity.
+
+At the C checkpoint: fresh Plugin build and 28 targeted tests (existing 17 plus
+new 11) pass; complete 102-unit / 18-command and 23 full historical-closure regression
+runs are in progress and are not yet claimed as passed. Historical preservation
+already verifies 3347+597 old files plus 4744 A/B snapshots and 186 strict source
+references including FactoryAudit/NativeMilleModel. D remains a target requiring
+its own actual preflight, pre-Pede observability and full closure before a
+separate scientific milestone commit. No general six-DOF, automatic Controller,
+material-aware performance or uncertainty-coverage capability is claimed.

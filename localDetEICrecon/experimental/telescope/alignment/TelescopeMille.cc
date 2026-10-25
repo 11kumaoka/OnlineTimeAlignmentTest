@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <set>
+#include <map>
 #include <mutex>
 namespace eicrecon::telescope {
 namespace {
@@ -49,7 +50,7 @@ public:
     app->SetDefaultParameter("TelescopeMille:multipleEvents",multipleEvents,"Write one native Mille record per accepted event and aggregate diagnostics");
     app->SetDefaultParameter("TelescopeMille:output",output,"New official Mille Binary; experimental single-track probe");
     app->SetDefaultParameter("TelescopeMille:report",reportPath,"New native equation JSON audit");
-    app->SetDefaultParameter("TelescopeMille:config",configPath,"Explicit physical Global Y and selected L1/L2 Global rotation label map JSON");
+    app->SetDefaultParameter("TelescopeMille:config",configPath,"Explicit SiMAPS sensor identities and selected physical Global Y/rotation label map JSON");
     app->SetDefaultParameter("TelescopeMille:derivativeGate",gatePath,"Successful derivative gate JSON from this build/fixture");
     for(const auto& path:{output,reportPath}) if(path.empty() || std::filesystem::exists(path))
       throw std::runtime_error("Mille probe requires new explicit output paths");
@@ -57,20 +58,79 @@ public:
     if(!gate.at("passed").get<bool>() || gate.at("model_sha256")!=TELESCOPE_MILLE_MODEL_SHA)throw std::runtime_error("Derivative gate failed");
     if(config.at("scope")!="experimental_zero_field_material_free")
       throw std::runtime_error("Unsupported experimental alignment scope");
+    const bool explicitSensors=config.contains("aligned_sensors");
+    std::map<int,nlohmann::json> selectedSensors;
+    std::map<int,std::set<std::string>> selectedComponents;
+    if(explicitSensors) {
+      if(!config.at("aligned_sensors").is_array() || config.at("aligned_sensors").empty() ||
+         config.at("correction_pivot")!="sensitive_surface_center" ||
+         config.at("rotation_composition")!="left_global_exp" ||
+         config.at("translation_convention")!="world_translation" ||
+         config.at("fixed_components")!=nlohmann::json::array({"global_x","global_z"}) ||
+         config.at("containment").at("module_envelope")!="unchanged" ||
+         config.at("containment").at("layer_envelope")!="unchanged" ||
+         config.at("containment").at("sensitive_corners")!=8)
+        throw std::runtime_error("Unsupported explicit sensor correction or containment convention");
+      std::set<uint64_t> volumes,geometries;
+      std::set<int> partition;
+      for(const auto& sensor:config.at("aligned_sensors")) {
+        if(!sensor.at("layer").is_number_integer() || !sensor.at("volume_id").is_number_unsigned() ||
+           !sensor.at("geometry_id").is_number_unsigned())
+          throw std::runtime_error("Explicit sensor identities must use integer JSON values");
+        const int layer=sensor.at("layer");
+        const auto volume=sensor.at("volume_id").get<uint64_t>();
+        const auto geometry=sensor.at("geometry_id").get<uint64_t>();
+        if(sensor.at("system")!=31 || layer<1 || layer>3 || !volume || !geometry ||
+           !selectedSensors.emplace(layer,sensor).second || !volumes.insert(volume).second ||
+           !geometries.insert(geometry).second || !partition.insert(layer).second)
+          throw std::runtime_error("Invalid or duplicate explicit SiMAPS sensor identity");
+      }
+      if(!config.at("fixed_reference_sensors").is_array())
+        throw std::runtime_error("Expected explicit fixed reference sensors");
+      for(const auto& reference:config.at("fixed_reference_sensors")) {
+        if(!reference.is_number_integer())
+          throw std::runtime_error("Fixed reference sensor identifiers must be integers");
+        const int layer=reference;
+        if(layer<0 || layer>4 || !partition.insert(layer).second)
+          throw std::runtime_error("Fixed references overlap selected sensors or each other");
+      }
+      if(partition!=std::set<int>{0,1,2,3,4})
+        throw std::runtime_error("Selected and fixed reference sensors must partition SiMAPS L0-L4");
+    }
     std::set<int> labels;
+    if(!config.at("parameters").is_array() || config.at("parameters").empty())
+      throw std::runtime_error("Expected selected physical alignment parameters");
     for(const auto& p:config.at("parameters")) {
+      if(!p.at("layer").is_number_integer() || !p.at("label").is_number_integer())
+        throw std::runtime_error("Alignment layers and labels must be integers");
       const int layer=p.at("layer"),label=p.at("label");
-      const bool translation=p.at("axis")=="global_y" && (layer==1 || layer==2) && label==700002+100*layer;
+      const bool allowedLayer=layer>=1 && layer<=(explicitSensors?3:2);
+      const bool translation=p.at("axis")=="global_y" && allowedLayer && label==700002+100*layer &&
+          p.value("unit",std::string("mm"))=="mm" &&
+          (!explicitSensors || (p.at("unit")=="mm" && p.at("pivot")=="sensitive_surface_center" && p.at("composition")=="world_translation"));
       const bool rotation=((p.at("axis")=="global_rx" && label==700004+100*layer) ||
           (p.at("axis")=="global_ry" && label==700005+100*layer) ||
-          (p.at("axis")=="global_rz" && label==700006+100*layer)) && (layer==1 || layer==2) &&
+          (p.at("axis")=="global_rz" && label==700006+100*layer)) && allowedLayer &&
           p.at("unit")=="rad" && p.at("pivot")=="sensitive_surface_center" && p.at("composition")=="left_global_exp";
       if(p.at("system")!=31 || (!translation && !rotation) || !labels.insert(label).second)
         throw std::runtime_error("Unsupported or duplicate selected physical alignment parameter");
+      selectedComponents[layer].insert(p.at("axis").get<std::string>());
+      if(explicitSensors) {
+        const auto sensor=selectedSensors.find(layer);
+        if(sensor==selectedSensors.end() || !p.at("volume_id").is_number_unsigned() ||
+           !p.at("geometry_id").is_number_unsigned() || p.at("volume_id")!=sensor->second.at("volume_id") ||
+           p.at("geometry_id")!=sensor->second.at("geometry_id"))
+          throw std::runtime_error("Parameter identity differs from its explicit selected sensor");
+      }
     }
-    if(labels!=std::set<int>{700102,700202} && labels!=std::set<int>{700104} &&
-       labels!=std::set<int>{700102,700104,700202} && labels!=std::set<int>{700105} && labels!=std::set<int>{700106} && labels!=std::set<int>{700105,700106} && labels!=std::set<int>{700104,700105,700106} && labels!=std::set<int>{700102,700104,700105,700106} && labels!=std::set<int>{700102,700104,700105,700106,700202} && labels!=std::set<int>{700102,700104,700105,700106,700202,700204,700205,700206})
-      throw std::runtime_error("Only two-Y, separate L1 Rx, Ry or Rz, coupled L1 Ry/Rz or Rx/Ry/Rz (with optional L1 Y), L1 Y/Rx plus L2 Y, L1 Y/Rx/Ry/Rz plus L2 Y, or simultaneous L1/L2 Y/Rx/Ry/Rz scopes are enabled");
+    for(const auto& [layer,sensor]:selectedSensors) {
+      if(!sensor.at("components").is_array())
+        throw std::runtime_error("Expected explicit selected sensor components");
+      const auto components=sensor.at("components").get<std::vector<std::string>>();
+      const std::set<std::string> declared(components.begin(),components.end());
+      if(declared.empty() || declared.size()!=components.size() || declared!=selectedComponents[layer])
+        throw std::runtime_error("Selected sensor components differ from parameter declarations");
+    }
   }
   void Process(const std::shared_ptr<const JEvent>& event) override {
     std::lock_guard<std::mutex> guard(mutex);++processed;

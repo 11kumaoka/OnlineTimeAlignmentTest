@@ -65,12 +65,16 @@ Paths below are relative to the repository root. `T/` means
 | installed `ActsToTracks` and factory | native states/tracks to EDM trajectories, parameters, tracks and relations | eicrecon |
 | `T/upstream_support/algorithms/meta/CollectionCollector.h` | official unchanged empty subset collector, no Truth association input | eicrecon |
 | `T/FactoryAudit.h` | `Process`, `Finish`: actual native and EDM consistency, event diagnostics | eicrecon observer |
-| `T/alignment/TelescopeMille.cc` | `TelescopeMilleProcessor::Process`, `Finish`: native measurement states to one Mille record per accepted track | eicrecon observer |
+| `T/alignment/TelescopeMille.cc` | `Init`: bounded sensor/parameter configuration and identity validation; `Process`, `Finish`: native measurement states to one Mille record per accepted track | eicrecon observer |
 | `T/alignment/NativeMilleModel.{h,cc}` | `nativeEquation`: real ACTS propagation and transport/alignment derivatives | called inside observer and external derivative tests |
 | `V/telescope_alignment/TelescopeMilleDerivatives.cc` | `main`: analytical/finite-difference gates on actual surfaces | external executable |
 | `V/telescope_alignment/l1_l2_global_y.json` | labels 700102/700202 and explicit supported physical Global Y scope | observer configuration |
 | `V/telescope_alignment/l1_global_rx.json`, `l1_y_rx_l2_y.json` | selected physical labels, rad unit, current-center pivot, Global left composition and actual L1 IDs | observer configuration |
+| `V/telescope_alignment/l1_l2_y_rx_ry_rz_l3_y.json`, `l1_l2_l3_y_rx_ry_rz.json` | explicit selected sensor identities, components, references and containment contract; validated nine-column Scope C and prospective twelve-column Scope D | observer configuration |
 | `V/telescope_closure/rotation.py` | `rotate_component`, `pose_checks`, `physical_derivatives`, `correct`, `check`: restricted SO(3) serialization and actual-Geometry/native-row validation | external selected-mode helpers |
+| `V/telescope_closure/multi_sensor.py` | `configuration`, `labels`, `aligned_sensors`, `references`: explicit physical selection; `pose_increments`, `xml_identity`, `pose_gate`: shared sensor-isolated updates and validation | external Python |
+| `V/telescope_closure/multi_information.py` | `analyze`: native calibrated information, four-local-parameter profiling, fixed-reference and nuisance diagnostics | external read-only Python |
+| `V/telescope_closure/multi_preflight.py` | `preflight`, `sampled_offsets`, `_bounds`, `_pose_bounds`: prospective covariance-informed corner/envelope checks and actual Geometry reloads | external Geometry-only Python |
 | `alignment/pede.py` | `read_pede`: shared text parser, no legacy stage/scope imports | external Python, both workflows |
 | `V/telescope_closure/closure.py` | `solve`: official Pede execution and independent Schur comparison | external Python/Pede |
 | same | `correct`, `displaced_xml`: Pede text + nominal XML to separate corrected XML, no Truth | external Python |
@@ -96,7 +100,7 @@ one-event benchmark remains independent. Reproducible commands use one thread.
 | Unchanged pinned header copies | `extensions/edm4eic/EDM4eicToActs.h` and `upstream_support/algorithms/meta/CollectionCollector.h`; installation lacks these headers. Replace with installed includes when provided and regression-tested |
 | Official measurement copy, locally modified | optional B0 constant lookup avoids inventing an absent detector; missing VolumeContext guard; system31/SiMAPSHits CartesianGridXZ covariance projection maps packed sensor X/Z variances into ACTS u/v through J C J^T. Upstream needs equivalent optional detector handling and covariance semantics before direct replacement |
 | Official CKF wrapper copy, locally modified | namespace/includes and installed interface adaptation; each seed's perigee is honored instead of assuming origin; electronHypothesis option defaults false, explicitly true for this telescope. Installed numerical CKF is reused. Replace when upstream respects the same seed reference and particle hypothesis |
-| Telescope-specific | collection wiring, metadata hook, reconstructed-endpoint seed, native Mille observer, offline channel fixture, bounded two-sensor correction and validation |
+| Telescope-specific | collection wiring, metadata hook, reconstructed-endpoint seed, native Mille observer, offline channel fixture, configured bounded sensor correction and validation |
 | Historical/reference | BeamTestReco, BeamTestACTSFitter, BeamTestMilleWriter, tilt/SO(3) model, original stages/Controller. Preserved unchanged; the new native chain does not substitute these for official tracking |
 
 Official seeding assumes beamline/circle-curvature information and cannot directly
@@ -605,3 +609,176 @@ full closure reruns; it is not described as nineteen new complete closures.
 Evidence is recorded in
 `result/native_multi_20261024_01_audit/baseline_identity.json` and
 `result/native_multi_20261024_01_audit/final_plugin_full_replay_summary.json`.
+
+## Configured L1/L2/L3 selection: Scope C and prospective Scope D
+
+The three-sensor extension changes selection and validation adapters. It reuses
+the same native measurement equations, four local track parameters, installed
+ACTS tracking, calibrated covariance, whitening and official Mille/Pede path.
+`FactoryAudit.h`, including its validated binary32 serialization contract, and
+`NativeMilleModel.{h,cc}` are byte-identical to Scope B commit
+`4f31408f7736bf28eceb62c187fd9142714ea72e`.
+
+| Configuration in `validation/telescope_alignment/` | Selected physical components | References | Status at the Scope C checkpoint |
+|---|---|---|---|
+| `l1_l2_y_rx_ry_rz_l3_y.json` | L1/L2 Y/Rx/Ry/Rz and L3 Y: nine columns | L0/L4 fixed | One complete 4096-track native closure passed; official nominal/refined nine-label binaries checked |
+| `l1_l2_l3_y_rx_ry_rz.json` | L1/L2/L3 Y/Rx/Ry/Rz: twelve columns | L0/L4 fixed | Prospective preset; not a validated twelve-parameter closure at this checkpoint |
+
+All Global X/Z translations remain fixed. These configurations do not enable a
+general six-DOF fitter. The original Scope A/B names and configurations remain
+available. The `_negative` fixture names reverse the selected rotation vectors
+and retain the translations; each signed pair shares its seed's trajectories.
+Physical injection values belong to `multi_sensor.fixture` and the separate
+validation records. They are absent from the configuration passed to Mille.
+
+Actual identities were obtained from accepted native measurement associations
+and independently reloaded DD4hep/ACTS Geometry, not calculated from label
+numbers:
+
+| Sensor | DD4hep VolumeID | ACTS GeometryIdentifier | Physical labels |
+|---|---:|---:|---|
+| L1 | 272631839 | 216173056991691039 | Y 700102; Rx/Ry/Rz 700104/700105/700106 |
+| L2 | 272633887 | 216173194430644511 | Y 700202; Rx/Ry/Rz 700204/700205/700206 |
+| L3 | 272635935 | 216173331869597983 | Y 700302; Rx/Ry/Rz 700304/700305/700306 |
+
+The new JSON metadata makes the bounded contract explicit:
+
+| Key | Meaning and checked values |
+|---|---|
+| `aligned_sensors` | Actual system/layer/VolumeID/GeometryIdentifier and enabled `components` for each selected sensor |
+| `parameters` | Ordered physical axes, integer Mille labels, units, pivot, composition and matching actual sensor IDs |
+| `fixed_reference_sensors` | `[0,4]`; selected and reference sensors partition SiMAPS L0–L4 |
+| `fixed_components` | `global_x`, `global_z` |
+| `correction_pivot` | `sensitive_surface_center` |
+| `translation_convention` | `world_translation` |
+| `rotation_composition` | `left_global_exp` |
+| `containment` | Unchanged module and layer envelopes; all eight sensitive corners checked by the external Geometry gates |
+
+`TelescopeMilleProcessor::Init` replaces the former whole-mode label whitelist
+with bounded component validation. It accepts only Global Y and Global
+Rx/Ry/Rz on selected SiMAPS L1–L3, checks unique integer labels and identities,
+checks the declared component sets against parameter rows, and rejects
+selected/reference overlap. Existing JSONs without the new metadata retain
+their previous L1/L2 schema. The actual measurement association in `Process`
+is unchanged:
+
+```text
+native TrackState SourceLink -> Measurement2D -> linked TrackerHit CellID
+    -> actual DD4hep VolumeContext -> official SurfaceMap
+    -> native/EDM/SourceLink surface identity checks
+    -> selected parameter rows for that measured sensor
+    -> existing ACTS derivative columns and calibrated whitening
+    -> official MilleRecord
+```
+
+The fixed reference sensors still contribute local track measurements, with no
+free global labels. Independent audits checked every nominal and refined
+event: 4096 records, 40960 scalar measurements, the exact nine-label set and
+8192 occurrences per label in each official decoded binary. Runtime L3 IDs
+match the configuration. The records and associations are retained in
+`result/native_three_sensor_20261024_01_audit/scope_c_native_association/`,
+`scope_c_refined_association/`, and `official_binary_scope_c_{nominal,refined}/`.
+
+The Python control flow remains small:
+
+1. `multi_sensor.configuration` reads the selected JSON. `labels`,
+   `aligned_sensors` and `references` derive the ordered parameter list,
+   selected layers and fixed complement. The mode-to-file table preserves
+   existing CLI names.
+2. `closure.geometry_step` and correction helpers call the existing
+   `displaced_xml` with explicit `allowed_layers`. Its default remains L1/L2,
+   preserving the former refusal of an undeclared L3 update.
+3. `rotation.correct` and `refine` parse one Pede result and use
+   `multi_sensor.pose_increments` to update all selected sensors together.
+   Each receives `c_new=c_current+(0,dY,0)` and
+   `R_new=Exp(dw_global) R_current`, about its current sensitive center.
+   The shared sensitive component is cloned per changed layer; no separate
+   L3 correction algorithm is introduced.
+4. `xml_identity` whitelists selected component positions/orientations and
+   layer module references. An unchanged selected reference is skipped during
+   normalization, permitting isolation tests; the final whole-XML comparison
+   still rejects changes to a shared definition, fixed sensor or unrelated
+   attribute. `pose_checks` verifies actual matrices, centers, identities,
+   eight-corner containment and the unchanged layer mothers for L1–L3.
+5. `multi_information.analyze` profiles four local parameters independently
+   per track, then accumulates the selected information. References derive
+   from the selected layers. For Scope C it checks rank nine and separately
+   diagnoses all eighteen pose columns on L1/L2/L3. The latter is an omitted-
+   component diagnostic, not an additional fit or constraint. Cross-sensor
+   correlations are reported for L1/L2, L1/L3 and L2/L3. Per-track global rank
+   need not equal nine or twelve.
+
+The prospective Scope C fixture adds L3 Y=+0.050 mm to the unchanged Scope B
+injections. Its seed is 2026102801, with 4096 trajectories from the unchanged
+bounded broad-angle recipe. Geometry-only preflight used the earlier Scope B
+native information: 360 sampled joint poses across both signs and 38 real
+DD4hep/ACTS reloads. Above eight parameters, `sampled_offsets` samples each
+sensor's marginal covariance and lifts the displacement through
+`C_:S C_SS^-1`; this retains the full covariance correlations without an
+exponential global grid. The five-nominal-sigma radius and 10% engineering
+margin are fixture-design choices, not calibrated statistical coverage or an
+exhaustive containment proof. Module and layer dimensions are read from the
+unchanged XML, and actual worst sampled poses are reloaded independently.
+
+The actual initial Scope C selected rank is nine, with diagonal-scaled
+condition 3.684623. The read-only eighteen-column diagnostic has full rank;
+its largest selected angular nominal error is 0.491219 mrad, below the
+predeclared 0.5 mrad sensitivity gate. Every correction must also satisfy the
+unchanged physical and post-fit gates. These facts establish Geometry,
+derivative and observability evidence; they do not establish uncertainty
+coverage or material-aware electron performance.
+
+The completed Scope C report is
+`result/native_three_sensor_scope_c_seed1_positive_20261024_01/validation/report.json`.
+All 4096 tracks remain accepted. ACTS chi2/stored-NDF improves from
+12.23708787187934 to 0.6045734615695437. One explicitly requested additional
+correction was applied; the first one-step post-fit gate already passed and
+remains recorded separately. Final Y updates are below 0.038 nm in magnitude,
+and the largest angular update is 0.192 microrad, within the unchanged gates.
+This single cohort validates the implemented closure; it is not an uncertainty
+coverage study.
+
+The following records the **executed** Geometry preflight and reconstruction
+invocations. Their outputs already exist and must not be rerun in place.
+The preflight used the unchanged prior geometry probe; the reconstruction
+used the new Scope C build.
+
+```bash
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  cmake -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_three_sensor_c_20261024_01 \
+  -DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  cmake --build /work/build/native_three_sensor_c_20261024_01 -j2
+
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B validation/telescope_closure/multi_preflight.py \
+  --build build/native_multi_precision_20261024_01 \
+  --prior-run result/native_multi_scope_b_seed1_positive_20261024_02 \
+  --output-dir result/native_three_sensor_20261024_01_audit/geometry_preflight_c \
+  --mode l1_l2_y_rx_ry_rz_l3_y
+
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B validation/telescope_closure/closure.py \
+  --build build/native_three_sensor_c_20261024_01 \
+  --result result/native_three_sensor_scope_c_seed1_positive_20261024_01 \
+  --mode l1_l2_y_rx_ry_rz_l3_y --events 4096 \
+  --beam validation/telescope_alignment/three_sensor_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+```
+
+Build configure/build logs are recorded in the audit directory. For a fresh
+reproduction, choose an unused build suffix and an unused result directory;
+configure `localDetEICrecon/experimental/telescope` with
+`-DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON`, build it, and use
+that path in the stage commands. Input channels, per-stage command/exit logs,
+Pede results, candidate XML, actual geometry audits and ROOT diagnostics are
+kept in the separate run directory. `--step` still permits independent manual
+execution of every existing stage. No automatic Controller or activation is
+added.
+
+At the Scope C checkpoint, the 11 new targeted tests and 17 retained
+multi-sensor tests passed. The final 102-test and complete eighteen-command
+regression runs are separate end-of-milestone requirements; this checkpoint
+does not report them as executed. Full closure, regression and prospective
+Scope D status are maintained in the parity report.

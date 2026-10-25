@@ -23,14 +23,15 @@ LABELS=[700102,700202]
 MODULE_TO_GLOBAL=((0.,0.,1.),(-1.,0.,0.),(0.,-1.,0.))
 
 
-def displaced_xml(nominal,output,shifts,rotations=None,rotation_axis='x'):
+def displaced_xml(nominal,output,shifts,rotations=None,rotation_axis='x',allowed_layers=(1,2)):
     """Apply selected physical Y shifts and center-preserving rotations."""
     if output.exists():raise ValueError('Geometry output must be new')
     root=ET.parse(nominal).getroot()
     detector=root.find("./detectors/detector[@name='SiMAPS']")
     for layer in sorted(set(shifts)|set(rotations or {})):
         delta=shifts.get(layer,0.)
-        if int(layer) not in (1,2) or not math.isfinite(delta):raise ValueError('Only finite L1/L2 Global Y supported')
+        if int(layer) not in allowed_layers or int(layer) not in (1,2,3) or not math.isfinite(delta):
+            raise ValueError('Only finite explicitly selected SiMAPS Global Y supported')
         placement=detector.find(f"./layer[@id='{int(layer)}']")
         original=detector.find(f"./module[@name='{placement.get('module')}']")
         module=copy.deepcopy(original);module.set('name',original.get('name')+f'_L{layer}')
@@ -108,10 +109,10 @@ def geometry_step(args):
     p=stage(args.result,'geometry')
     prepare(p/'fixtures',initialize_metadata=True)
     nominal=p/'fixtures/nominal.xml'
-    from validation.telescope_closure.multi_sensor import is_multi,fixture
+    from validation.telescope_closure.multi_sensor import is_multi,fixture,aligned_sensors
     if is_multi(args.mode):
         shifts,rotations=fixture(args.mode)
-        displaced_xml(nominal,p/'truth.xml',shifts,rotations=rotations,rotation_axis='xyz')
+        displaced_xml(nominal,p/'truth.xml',shifts,rotations=rotations,rotation_axis='xyz',allowed_layers=aligned_sensors(args.mode))
         write_json(p/'rotation_fixture.json',{'mode':args.mode,'injected_global_y_mm':shifts,'injected_global_rxyz_rad':rotations,'truth_definition':'per-sensor Exp(dw) Rnominal'})
         done(p,nominal_sha256=digest(nominal),truth_sha256=digest(p/'truth.xml'),injected_global_y_mm=shifts)
         return
@@ -232,8 +233,9 @@ def solve(args,reconstruction,name):
         assert actual['rank']==dimension and actual['diagonal_scaled_condition']<100
         assert all(v<(.001 if mapping(k)[1]==1 else .0005) for k,v in zip(selected,actual['sigma']))
         full=design['omitted_X_Z_diagnostic']
-        assert full['rank']==12 and full['diagonal_scaled_condition']<100
-        assert all(full['sigma'][6*(mapping(k)[0]-1)+mapping(k)[1]]<(.001 if mapping(k)[1]==1 else .0005) for k in selected),'Selected sensitivity unresolved with omitted-translation diagnostic columns'
+        layers=sorted({mapping(k)[0] for k in selected})
+        assert full['rank']==6*len(layers) and full['diagonal_scaled_condition']<100
+        assert all(full['sigma'][6*layers.index(mapping(k)[0])+mapping(k)[1]]<(.001 if mapping(k)[1]==1 else .0005) for k in selected),'Selected sensitivity unresolved with omitted-translation diagnostic columns'
 
     text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n700102 0.0 1.0\n700202 0.0 1.0\n\nprintcounts\nend\n'
     if rotation:
@@ -267,9 +269,9 @@ def solve(args,reconstruction,name):
         correlation=covariance/np.outer(sigma,sigma)
         scaled=normal/np.sqrt(np.outer(np.diag(normal),np.diag(normal)))
         assert np.linalg.cond(scaled)<100,'Insufficient selected information'
-        assert all(v<(.001 if k in (700104,700105,700106,700204,700205,700206) else .02) for k,v in zip(selected,sigma)),'Insufficient angular/linear sensitivity'
+        assert all(v<(.001 if k%100 in (4,5,6) else .02) for k,v in zip(selected,sigma)),'Insufficient angular/linear sensitivity'
         write_json(p/'independent.json',{'parameters':parameters,'schur_solution':expected.tolist(),
-          'parameter_units':{k:('rad' if k in (700104,700105,700106,700204,700205,700206) else 'mm') for k in selected},'nominal_sigma':sigma.tolist(),'pede_reported_sigma':reported.tolist(),
+          'parameter_units':{k:('rad' if k%100 in (4,5,6) else 'mm') for k in selected},'nominal_sigma':sigma.tolist(),'pede_reported_sigma':reported.tolist(),
           'rank':dimension,'condition':float(np.linalg.cond(normal)),'condition_diagonal_scaled':float(np.linalg.cond(scaled)),
           'correlation':correlation.tolist(),'normal':normal.tolist(),'status':status,'records':len(blocks),
           **({'covariance_source':'Inverse data-only locally profiled native information; no stabilization or prior',
@@ -562,7 +564,7 @@ def main():
     parser.add_argument('--result',type=Path,required=True)
     parser.add_argument('--build',type=Path,required=True)
     parser.add_argument('--validation-name',default='validation',help='New validation/regression output stage name; existing reports remain immutable')
-    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_ry_negative','l1_rz_negative','l1_rz','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative','l1_y_rx_l2_y','l1_y_rx_ry_rz_l2_y','l1_y_rx_ry_rz_l2_y_negative','l1_l2_y_rx_ry_rz','l1_l2_y_rx_ry_rz_negative'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
+    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_ry_negative','l1_rz_negative','l1_rz','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative','l1_y_rx_l2_y','l1_y_rx_ry_rz_l2_y','l1_y_rx_ry_rz_l2_y_negative','l1_l2_y_rx_ry_rz','l1_l2_y_rx_ry_rz_negative','l1_l2_y_rx_ry_rz_l3_y','l1_l2_y_rx_ry_rz_l3_y_negative','l1_l2_l3_y_rx_ry_rz','l1_l2_l3_y_rx_ry_rz_negative'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
     parser.add_argument('--refine-once',action='store_true',help='Explicit bounded Y/SO(3) second Geometry correction; at most one, same data and unchanged gates')
     parser.add_argument('--beam',type=Path,help='Optional bounded angular study recipe; never changes the baseline cohort')
     parser.add_argument('--events',type=int,default=32)

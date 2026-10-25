@@ -75,7 +75,7 @@ def labels(mode):
 
 
 def config_name(mode):
-    if multi.is_multi(mode):return 'l1_l2_y_rx_ry_rz' if mode.startswith('l1_l2_') else 'l1_y_rx_ry_rz_l2_y'
+    if multi.is_multi(mode):return multi.config_name(mode)
     if is_four(mode):return 'l1_global_y_rx_ry_rz'
     if is_three(mode):return 'l1_global_rx_ry_rz'
     if is_coupled(mode):return 'l1_global_ry_rz'
@@ -131,7 +131,7 @@ def pose_checks(before,after,shifts,rx,axis='x'):
         assert np.allclose(b['dd4hep_rotation'],q@a['dd4hep_rotation'],atol=2e-12,rtol=0)
         # Every 100 mm square sensitive corner stays inside the existing module
         # projection (100.5 mm) and layer z envelope (102 mm), including shifts.
-        if layer in (1,2):
+        if layer in (1,2,3):
             from validation.telescope_closure.closure import MODULE_TO_GLOBAL
             total=np.array(b['acts_rotation'])@np.array(MODULE_TO_GLOBAL).T
             half=50*(abs(total[1,1])+abs(total[1,2]))
@@ -197,7 +197,7 @@ def correct(args):
     rotations=({} if multi.is_multi(args.mode) else {1:[values[k] for k in rotation_labels(args.mode)] if is_coupled(args.mode) else values[rotation_label(args.mode)]})
     if multi.is_multi(args.mode):shifts,rotations=multi.pose_increments(values)
     nominal=args.result/'geometry/fixtures/nominal.xml'
-    displaced_xml(nominal,p/'corrected.xml',shifts,rotations=rotations,rotation_axis=axis(args.mode))
+    displaced_xml(nominal,p/'corrected.xml',shifts,rotations=rotations,rotation_axis=axis(args.mode),allowed_layers=multi.aligned_sensors(args.mode) if multi.is_multi(args.mode) else (1,2))
     write_json(p/'provenance.json',{'parent_sha256':digest(nominal),'pede_sha256':digest(args.result/'solve/millepede.res'),
        'physical_global_y_mm':shifts,'physical_global_r'+axis(args.mode)+'_rad':rotations,'pivot':'current sensitive center',
        'composition':('per-sensor cnew=ccurrent+(0,dY,0); Rnew=Exp([dRx,dRy,dRz]) Rcurrent; current sensitive-center pivot' if multi.is_multi(args.mode) else (('Rnew=Exp([dRx,dRy,dRz]) Rcurrent; bounded L1 full rotation-vector update' if is_three(args.mode) else 'Rnew=Exp([0,dRy,dRz]) Rcurrent; current full pose, not a closed two-axis subgroup') if is_coupled(args.mode) else 'Rnew=Exp(dw_global) Rcurrent; selected '+axis(args.mode)+' subgroup')),'truth_used':False,'activated':False})
@@ -217,12 +217,12 @@ def refine(args):
     if multi.is_multi(args.mode):shifts,rotations=multi.pose_increments(values)
     else:shifts={1:values[700102]};rotations={1:[values[k] for k in rotation_labels(args.mode)]}
     parent=args.result/'correction/corrected.xml'
-    displaced_xml(parent,p/'refined.xml',shifts,rotations=rotations,rotation_axis='xyz')
+    displaced_xml(parent,p/'refined.xml',shifts,rotations=rotations,rotation_axis='xyz',allowed_layers=multi.aligned_sensors(args.mode) if multi.is_multi(args.mode) else (1,2))
     q=stage(p,'geometry_audit');execute([args.build/'TelescopeChannels',p/'refined.xml',0,q/'geometry.json'],q,env=environment(args.build))
     previous=json.loads((args.result/'correction/geometry_audit/geometry.json').read_text())['sensors']
     actual=json.loads((q/'geometry.json').read_text())['sensors'];pose_checks(previous,actual,shifts,rotations,axis='xyz')
     first=json.loads((args.result/'solve/independent.json').read_text());selected=labels(args.mode)
-    thresholds={k:(2e-5 if k in (700102,700202) else first['nominal_sigma'][selected.index(k)]/4) for k in selected}
+    thresholds={k:(2e-5 if k%100==2 else first['nominal_sigma'][selected.index(k)]/4) for k in selected}
     write_json(p/'provenance.json',{'parent_sha256':digest(parent),'pede_sha256':digest(args.result/'postsolve/millepede.res'),
         'increments':values,'units':first['parameter_units'],'initial_one_step_thresholds':thresholds,
         'initial_one_step_post_gate_passed':all(abs(values[k])<thresholds[k] for k in selected),
@@ -293,7 +293,7 @@ def check(args):
     for i,k in enumerate(selected):
         assert abs(values[k]-injected[k])<tolerances[k]
         assert abs(control_solution['parameters'][str(k)])<5*control_solution['nominal_sigma'][i]
-        assert abs(post[k])<(2e-5 if (is_four(args.mode) or multi.is_multi(args.mode)) and k in (700102,700202) else (solution['nominal_sigma'][i]/4 if axis(args.mode) in ('y','z','yz','xyz') else 2e-5)),(k,post[k])
+        assert abs(post[k])<(2e-5 if (is_four(args.mode) or multi.is_multi(args.mode)) and k%100==2 else (solution['nominal_sigma'][i]/4 if axis(args.mode) in ('y','z','yz','xyz') else 2e-5)),(k,post[k])
     from geometry.transforms import orientation_distance
     angle_error=orientation_distance(truth['sensors'][1]['acts_rotation'],actual[1]['acts_rotation'])
     sensor_errors={}
@@ -303,7 +303,7 @@ def check(args):
         assert error@np.linalg.solve(covariance,error)<25
         if multi.is_multi(args.mode):
             shifts,rotations=multi.fixture(args.mode)
-            for layer in (1,2):
+            for layer in multi.aligned_sensors(args.mode):
                 angular=[i for i,k in enumerate(selected) if multi.mapping(k)[0]==layer and multi.mapping(k)[1]>=3]
                 bias=np.array(actual[layer]['center_mm'])-truth['sensors'][layer]['center_mm']
                 assert abs(bias[1])<min(abs(shifts[layer]),5*solution['nominal_sigma'][selected.index(700002+100*layer)])
@@ -333,7 +333,7 @@ def check(args):
     changed_by_sensor={}
     if multi.is_multi(args.mode):
         control_payload=channel_values(args.result/'data/control.root')
-        changed_by_sensor={layer:sum(a[1][layer][0]!=b[1][layer][0] for a,b in zip(payload,control_payload)) for layer in (1,2)}
+        changed_by_sensor={layer:sum(a[1][layer][0]!=b[1][layer][0] for a,b in zip(payload,control_payload)) for layer in multi.aligned_sensors(args.mode)}
         assert min(changed_by_sensor.values())>=args.events//32
     assert changed>=args.events//(32 if axis(args.mode) in ('y','z','yz','xyz') else 4),'Rotation/translation fixture must have nontrivial quantized channel changes'
     nominal_audit=json.loads((args.result/'nominal/audit.json').read_text())
@@ -436,7 +436,7 @@ def check(args):
     f.Close();f=ROOT.TFile.Open(str(p/'rotation.root'));assert f.GetListOfKeys().GetEntries()==9;f.Close()
     result={'passed':True,'mode':args.mode,'events':args.events,'injected':injected,'parameters':values,'parameter_units':solution['parameter_units'],
       'errors':{k:values[k]-injected[k] for k in selected},'geometric_tolerance':tolerances,'orientation_error_rad':angle_error,
-      'center_bias_mm':{l:(np.array(actual[l]['center_mm'])-truth['sensors'][l]['center_mm']).tolist() for l in (1,2)},
+      'center_bias_mm':{l:(np.array(actual[l]['center_mm'])-truth['sensors'][l]['center_mm']).tolist() for l in (multi.aligned_sensors(args.mode) if multi.is_multi(args.mode) else (1,2))},
       'actual_l1_geometry_id':actual[1]['geometry_id'],'actual_l1_volume_id':actual[1]['volume_id'],
       'rank':solution['rank'],'condition_raw_mixed_units':solution['condition'],'condition_diagonal_scaled':solution['condition_diagonal_scaled'],
       'correlation':solution['correlation'],'nominal_sigma':solution['nominal_sigma'],'pede_reported_sigma':solution['pede_reported_sigma'],'post_correction':post,
@@ -451,7 +451,7 @@ def check(args):
             initial_error_mahalanobis_squared=float(error@np.linalg.solve(covariance,error)),
             truth_definition='single rotation vector, not an ordered Euler product')
     if multi.is_multi(args.mode):
-        result.update(changed_channel_events_by_sensor=changed_by_sensor,sensor_errors=sensor_errors,nominal_covariance_mixed_units=covariance.tolist(),initial_error_mahalanobis_squared=float(error@np.linalg.solve(covariance,error)),sensor_identities={l:{k:actual[l][k] for k in ('volume_id','geometry_id')} for l in (1,2)},cumulative_geometry={l:{'global_y_mm':float(actual[l]['center_mm'][1]-base['sensors'][l]['center_mm'][1]),'rotation_vector_rad':list(rotation_log((np.array(actual[l]['acts_rotation'])@np.array(base['sensors'][l]['acts_rotation']).T).tolist()))} for l in (1,2)},cumulative_uncertainty_combined=False,refinement_count=int(refined))
+        result.update(changed_channel_events_by_sensor=changed_by_sensor,sensor_errors=sensor_errors,nominal_covariance_mixed_units=covariance.tolist(),initial_error_mahalanobis_squared=float(error@np.linalg.solve(covariance,error)),sensor_identities={l:{k:actual[l][k] for k in ('volume_id','geometry_id')} for l in multi.aligned_sensors(args.mode)},cumulative_geometry={l:{'global_y_mm':float(actual[l]['center_mm'][1]-base['sensors'][l]['center_mm'][1]),'rotation_vector_rad':list(rotation_log((np.array(actual[l]['acts_rotation'])@np.array(base['sensors'][l]['acts_rotation']).T).tolist()))} for l in multi.aligned_sensors(args.mode)},cumulative_uncertainty_combined=False,refinement_count=int(refined))
         first_post=read_pede(args.result/'postsolve/millepede.res')
         result.update(final_reconstruction_stage=final,
             refinement_increments=(first_post if refined else {}),
@@ -585,7 +585,7 @@ def coupled_physical_derivatives(args,reconstruction):
                 shifts={layer:sign*step} if column==1 else {}
                 rotations=None if column==1 else {layer:delta}
                 q=stage(p,(f'layer_{layer}_' if multi.is_multi(args.mode) else '')+f'column_{column}_step_{step:g}_{sign:+d}')
-                displaced_xml(geometry,q/'geometry.xml',shifts,rotations=rotations,rotation_axis=axis(args.mode))
+                displaced_xml(geometry,q/'geometry.xml',shifts,rotations=rotations,rotation_axis=axis(args.mode),allowed_layers=multi.aligned_sensors(args.mode) if multi.is_multi(args.mode) else (1,2))
                 execute([args.build/'TelescopeChannels',q/'geometry.xml',0,q/'geometry.json'],q,env=environment(args.build))
                 sensors=json.loads((q/'geometry.json').read_text())['sensors']
                 pose_checks(base,sensors,shifts, {} if column==1 else {layer:delta},axis=axis(args.mode));poses.append(sensors[layer])

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Profile native four-local-parameter equations for a bounded L1/L2 study.
+"""Profile native four-local-parameter equations for bounded SiMAPS sensor sets.
 
 This read-only diagnostic consumes the actual native ACTS equation audit. It does
 not construct measurements, alter uncertainties, add constraints, or run Pede.
@@ -18,6 +18,8 @@ from research_common import digest, write_json
 
 SCOPE_A_LABELS = (700102, 700104, 700105, 700106, 700202)
 SCOPE_B_LABELS = SCOPE_A_LABELS + (700204, 700205, 700206)
+SCOPE_C_LABELS = SCOPE_B_LABELS + (700302,)
+SCOPE_D_LABELS = SCOPE_C_LABELS + (700304, 700305, 700306)
 AXES = ('X', 'Y', 'Z', 'Rx', 'Ry', 'Rz')
 
 
@@ -77,25 +79,27 @@ def _columns(equations, definitions):
 
 
 def analyze(native, labels=SCOPE_A_LABELS):
-    """Accumulate actual native information, with L0/L3/L4 held fixed.
+    """Accumulate native information with all unselected sensor poses fixed.
 
-    The twelve-column diagnostic only frees X/Z and the other pose components
-    on L1/L2. The thirty-column diagnostic releases the reference sensors too;
+    The nuisance diagnostic frees all six pose components on selected sensors.
+    The thirty-column diagnostic releases the reference sensors too;
     its null directions are diagnostics, never constraints applied to a fit.
     """
     native = Path(native)
     selected = [parameter(label) for label in labels]
     if len({p['label'] for p in selected}) != len(selected):
         raise ValueError('Selected alignment labels must be unique')
-    if any(p['layer'] not in (1, 2) for p in selected):
-        raise ValueError('Only L1/L2 may be free in this bounded study')
+    if not selected or any(p['layer'] not in (1, 2, 3) for p in selected):
+        raise ValueError('Only selected L1/L2/L3 sensors may be free in this bounded study')
+    aligned_layers = sorted({p['layer'] for p in selected})
+    fixed_layers = sorted(set(range(5)) - set(aligned_layers))
     extended = [parameter(700001 + 100 * layer + column)
-                for layer in (1, 2) for column in range(6)]
+                for layer in aligned_layers for column in range(6)]
     released = [parameter(700001 + 100 * layer + column)
                 for layer in range(5) for column in range(6)]
     data = json.loads(native.read_text())
     contributions, rhs, slopes, positions = [], [], [], []
-    extended_total = np.zeros((12, 12))
+    extended_total = np.zeros((len(extended), len(extended)))
     released_total = np.zeros((30, 30))
     identities, local_ranks, per_track_ranks = {}, Counter(), Counter()
     selected_fixed_rows_zero = True
@@ -140,7 +144,7 @@ def analyze(native, labels=SCOPE_A_LABELS):
             (np.asarray(e['measurement']).ravel() - np.asarray(e['prediction']).ravel())
             for e in equations])
         rhs.append(projected.T @ residual)
-        fixed_rows = np.concatenate([np.full(2, e['layer'] in (0, 3, 4)) for e in equations])
+        fixed_rows = np.concatenate([np.full(2, e['layer'] in fixed_layers) for e in equations])
         selected_fixed_rows_zero &= not np.any(g[fixed_rows])
         for definitions, total in ((extended, extended_total), (released, released_total)):
             design = _columns(equations, definitions)
@@ -165,7 +169,7 @@ def analyze(native, labels=SCOPE_A_LABELS):
         slopes.append(direction[1:] / direction[0])
         positions.append([np.asarray(next(e['measurement'] for e in equations
                                          if e['layer'] == layer)).ravel()
-                          for layer in (1, 2)])
+                          for layer in aligned_layers])
     n = len(contributions)
     if (len({identity['volume_id'] for identity in identities.values()}) != 5 or
             len({identity['geometry_id'] for identity in identities.values()}) != 5):
@@ -182,9 +186,9 @@ def analyze(native, labels=SCOPE_A_LABELS):
         prefixes[str(count)] = report
     slopes, positions = np.asarray(slopes), np.asarray(positions)
     subsets = {}
-    quantities = [('slope_magnitude', np.linalg.norm(slopes, axis=1)),
-                  ('L1_impact_radius', np.linalg.norm(positions[:, 0], axis=1)),
-                  ('L2_impact_radius', np.linalg.norm(positions[:, 1], axis=1))]
+    quantities = [('slope_magnitude', np.linalg.norm(slopes, axis=1))] + [
+        ('L' + str(layer) + '_impact_radius', np.linalg.norm(positions[:, i], axis=1))
+        for i, layer in enumerate(aligned_layers)]
     for name, values in quantities:
         median = float(np.median(values))
         for side, mask in (('lower', values <= median), ('upper', values > median)):
@@ -203,12 +207,18 @@ def analyze(native, labels=SCOPE_A_LABELS):
     if not np.allclose(fixed_information, full['information'], rtol=1e-12, atol=1e-8):
         raise ValueError('Fixed-reference information does not match the selected design')
     cross_sensor = None
+    cross_pairs = {}
     if full['correlation'] is not None:
-        first = [i for i, p in enumerate(selected) if p['layer'] == 1]
-        second = [i for i, p in enumerate(selected) if p['layer'] == 2]
-        cross_sensor = {'row_labels': [selected[i]['label'] for i in first],
+        for a, first_layer in enumerate(aligned_layers):
+            for second_layer in aligned_layers[a + 1:]:
+                first = [i for i, p in enumerate(selected) if p['layer'] == first_layer]
+                second = [i for i, p in enumerate(selected) if p['layer'] == second_layer]
+                pair = {'row_labels': [selected[i]['label'] for i in first],
                         'column_labels': [selected[i]['label'] for i in second],
                         'correlation': np.asarray(full['correlation'])[np.ix_(first, second)].tolist()}
+                cross_pairs['L' + str(first_layer) + '_L' + str(second_layer)] = pair
+        # Preserve the established L1/L2 report field exactly for old scopes.
+        cross_sensor = cross_pairs.get('L1_L2')
     released_report = _report(released_total)
     released_report['parameter_definitions'] = released
     released_report['common_rigid_gauge_profiled_to_unprofiled_norm_ratio'] = np.sqrt(
@@ -224,9 +234,10 @@ def analyze(native, labels=SCOPE_A_LABELS):
         'parallel-plane geometry; no fixed nullity or constraint is imposed.')
     extended_report = _report(extended_total)
     extended_report['parameter_definitions'] = extended
-    extended_report['scope'] = ('Read-only omitted-X/Z and other fixed L1/L2 pose-component diagnostic; '
-                                'no additional alignment mode enabled')
-    return {'source': str(native), 'source_sha256': digest(native),
+    layer_name = '/'.join('L' + str(layer) for layer in aligned_layers)
+    extended_report['scope'] = ('Read-only omitted-X/Z and other fixed ' + layer_name +
+                               ' pose-component diagnostic; no additional alignment mode enabled')
+    result = {'source': str(native), 'source_sha256': digest(native),
             'model_sha256': data['model_sha256'], 'accepted_tracks': n,
             'labels': [p['label'] for p in selected], 'parameter_definitions': selected,
             'surface_identities': {str(k): v for k, v in sorted(identities.items())},
@@ -238,7 +249,7 @@ def analyze(native, labels=SCOPE_A_LABELS):
             'slopes_rms': np.sqrt(np.mean(slopes ** 2, axis=0)).tolist(),
             'impact_local_min_mm': positions.min(axis=0).tolist(),
             'impact_local_max_mm': positions.max(axis=0).tolist(),
-            'fixed_reference_layers': [0, 3, 4],
+            'fixed_reference_layers': fixed_layers,
             'fixed_reference_rows_have_no_selected_global_columns': bool(selected_fixed_rows_zero),
             'fixed_reference_selected_design_full_rank': full['rank'] == len(selected),
             'fixed_reference_principal_information_max_abs_difference': information_identity,
@@ -248,6 +259,10 @@ def analyze(native, labels=SCOPE_A_LABELS):
                        'four local nuisance parameters independently per track. Global observability '
                        'is evaluated only after accumulating tracks; no priors or gauge constraints added.'),
             'uncertainty_coverage_validated': False, 'truth_used_for_inference': False}
+    if 3 in aligned_layers:
+        result['aligned_sensor_layers'] = aligned_layers
+        result['cross_sensor_pair_correlations'] = cross_pairs
+    return result
 
 
 def main():

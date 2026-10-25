@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prospective geometry-only containment check for the bounded L1/L2 study.
+"""Prospective geometry-only containment check for selected telescope sensors.
 
 Use an earlier native equation audit to sample a nominal joint-error ellipsoid.
 This fixture-design check neither reads a new fitted correction nor establishes
@@ -22,18 +22,41 @@ from validation.telescope_closure.closure import (
 from validation.telescope_closure.containment import corners_in_module
 from validation.telescope_closure.multi_information import analyze
 from validation.telescope_closure.multi_sensor import (
-    fixture, injection, labels, mapping, pose_increments, xml_identity)
+    aligned_sensors, fixture, injection, labels, mapping, pose_increments, xml_identity)
 from validation.telescope_closure.rotation import pose_checks
 
 
-def sampled_offsets(covariance, radius=5.):
-    """Sample deterministic joint directions and covariance coordinate extrema."""
+def sampled_offsets(covariance, radius=5., parameter_groups=None):
+    """Sample joint directions, with bounded sensor projections above eight DOF.
+
+    A sensor's containment depends only on its own selected pose coordinates.
+    The projection of a global ellipsoid onto those coordinates has covariance
+    C_SS. Lift each sampled marginal point by C_:S C_SS^-1: its full correlated
+    displacement has the same Mahalanobis radius. This samples each physical
+    sensor's relevant ellipsoid without allocating a 3^N global grid. It is not
+    exhaustive containment proof or calibrated uncertainty coverage.
+    """
     covariance = np.asarray(covariance, dtype=float)
     if (covariance.ndim != 2 or covariance.shape[0] != covariance.shape[1]
             or not np.isfinite(covariance).all()):
         raise ValueError('Expected a finite square covariance')
     root = np.linalg.cholesky(covariance)
     n = len(root)
+    if n > 8:
+        if parameter_groups is None:
+            raise ValueError('High-dimensional sampling requires physical sensor groups')
+        groups = [list(group) for group in parameter_groups]
+        indices = [index for group in groups for index in group]
+        if (sorted(indices) != list(range(n)) or any(not group or len(group) > 4
+                                                   for group in groups)):
+            raise ValueError('Sensor groups must partition selected one/four-parameter poses')
+        result = []
+        for group in groups:
+            marginal = covariance[np.ix_(group, group)]
+            for delta in sampled_offsets(marginal, radius):
+                result.append(covariance[:, group] @ np.linalg.solve(marginal, delta))
+        return result
+    # Preserve the established five/eight-parameter direction order and values.
     directions = [np.asarray(v, dtype=float)
                   for v in itertools.product((-1, 0, 1), repeat=n) if any(v)]
     for i in range(n):
@@ -113,7 +136,7 @@ def _candidate(vector, selected, base, bounds):
     return {'parameters_mixed_units': list(map(float, vector)), 'sensors': report}
 
 
-def preflight(build, prior_run, output, mode):
+def preflight(build, prior_run, output, mode, target_events=None):
     """Validate both signed fixtures before generating their new channel data."""
     output.mkdir()  # Exclusive, including preservation of partial failures.
     selected = labels(mode)
@@ -127,7 +150,15 @@ def preflight(build, prior_run, output, mode):
     if design['selected']['rank'] != len(selected):
         raise ValueError('Prospective selected design is not full rank')
     covariance = np.asarray(design['selected']['covariance_mixed_units'])
-    offsets = sampled_offsets(covariance)
+    groups = None
+    if len(selected) > 8:
+        groups = [[i for i, label in enumerate(selected) if mapping(label)[0] == layer]
+                  for layer in sorted(bounds)]
+    if target_events is not None:
+        if len(selected) <= 8 or target_events <= 0:
+            raise ValueError('A positive sample-size forecast is restricted to new three-sensor scopes')
+        covariance = covariance * design['accepted_tracks'] / target_events
+    offsets = sampled_offsets(covariance, parameter_groups=groups)
     plan = {
         'mode': mode, 'labels': selected, 'parameters': design['parameter_definitions'],
         'nominal_sha256': digest(nominal), 'prior_native_sha256': digest(native),
@@ -136,6 +167,17 @@ def preflight(build, prior_run, output, mode):
         'sampled_directions_per_sign': len(offsets),
         'coverage_claim': False, 'new_fit_estimates_used': False,
         'geometry_activated': False}
+    if groups is not None:
+        plan.update(sampling_method='per-sensor marginal ellipsoid with correlated full-pose lift',
+            sampling_exhaustive=False,
+            parameter_groups=[{'layer': mapping(selected[group[0]])[0],
+                               'labels': [selected[i] for i in group]} for group in groups],
+            engineering_covariance_mixed_units=covariance.tolist(),
+            sample_size_forecast={'source_accepted_tracks': design['accepted_tracks'],
+                'target_accepted_tracks': target_events or design['accepted_tracks'],
+                'covariance_scale': design['accepted_tracks'] / target_events if target_events else 1.,
+                'assumption': 'Same independent broad-angle recipe, information proportional to N; '
+                              'engineering design only. Actual target information gates remain mandatory before Pede.'})
     write_json(output / 'prospective_plan.json', plan)
     reports = []
     positive = mode.removesuffix('_negative')
@@ -158,7 +200,8 @@ def preflight(build, prior_run, output, mode):
             raise ValueError('Prospective joint-error poses exceed fixed physical bounds')
         truth = stage(q, 'truth')
         dy, dw = fixture(signed_mode)
-        displaced_xml(nominal, truth / 'geometry.xml', dy, rotations=dw, rotation_axis='xyz')
+        displaced_xml(nominal, truth / 'geometry.xml', dy, rotations=dw, rotation_axis='xyz',
+                      allowed_layers=aligned_sensors(signed_mode))
         xml_identity(nominal, truth / 'geometry.xml', selected)
         execute([build / 'TelescopeChannels', truth / 'geometry.xml', 0,
                  truth / 'geometry.json'], truth, env=environment(build))
@@ -171,15 +214,22 @@ def preflight(build, prior_run, output, mode):
                    for item in truth_checks.values())
         worst = []
         for layer in bounds:
-            for axis in range(3):
+            checks = [('module', axis) for axis in range(3)]
+            if groups is not None:
+                checks += [('layer', axis) for axis in range(3)]
+            for envelope, axis in checks:
                 key = str(layer)
+                clearance = ('clearance_mm' if envelope == 'module'
+                             else 'layer_clearance_inner_outer_z_mm')
                 selected_pose = min(candidates,
-                    key=lambda item: item['sensors'][key]['clearance_mm'][axis])
-                probe = stage(q, f'worst_layer_{layer}_axis_{axis}')
+                    key=lambda item: item['sensors'][key][clearance][axis])
+                suffix = '' if envelope == 'module' else '_layer_envelope'
+                probe = stage(q, f'worst_layer_{layer}_axis_{axis}' + suffix)
                 values = dict(zip(selected, selected_pose['parameters_mixed_units']))
                 dy, dw = pose_increments(values)
                 displaced_xml(nominal, probe / 'geometry.xml', dy,
-                              rotations=dw, rotation_axis='xyz')
+                              rotations=dw, rotation_axis='xyz',
+                              allowed_layers=aligned_sensors(signed_mode))
                 xml_identity(nominal, probe / 'geometry.xml', selected)
                 execute([build / 'TelescopeChannels', probe / 'geometry.xml', 0,
                          probe / 'geometry.json'], probe, env=environment(build))
@@ -192,9 +242,14 @@ def preflight(build, prior_run, output, mode):
                     predicted = selected_pose['sensors'][str(sensor_layer)]
                     np.testing.assert_allclose(actual_bounds['clearance_mm'],
                         predicted['clearance_mm'], atol=1e-9, rtol=0)
-                worst.append({'layer': layer, 'axis': axis,
+                    if groups is not None:
+                        np.testing.assert_allclose(actual_bounds['layer_clearance_inner_outer_z_mm'],
+                            predicted['layer_clearance_inner_outer_z_mm'], atol=1e-9, rtol=0)
+                item = {'layer': layer, 'axis': axis,
                               'sample_index': selected_pose['sample_index'],
-                              'parameters_mixed_units': selected_pose['parameters_mixed_units']})
+                              'parameters_mixed_units': selected_pose['parameters_mixed_units']}
+                if groups is not None:item['envelope'] = envelope
+                worst.append(item)
         reports.append({'sign': sign, 'mode': signed_mode,
             'injected_parameters_mixed_units': injected.tolist(),
             'sampled_poses': len(candidates), 'truth_bounds': truth_checks,
@@ -217,11 +272,13 @@ def main():
     parser.add_argument('--prior-run', type=Path, required=True)
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--mode', default='l1_y_rx_ry_rz_l2_y')
+    parser.add_argument('--target-events', type=int,
+                        help='Three-sensor engineering-only 1/N covariance forecast; actual target information is checked before Pede')
     args = parser.parse_args()
     output = args.output_dir.resolve()
     if not output.is_relative_to(REPO / 'result') or output == REPO / 'result':
         parser.error('Use a fresh child of result/')
-    preflight(args.build.resolve(), args.prior_run.resolve(), output, args.mode)
+    preflight(args.build.resolve(), args.prior_run.resolve(), output, args.mode, args.target_events)
 
 
 if __name__ == '__main__':
