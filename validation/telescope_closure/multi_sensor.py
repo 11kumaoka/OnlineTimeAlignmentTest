@@ -3,16 +3,17 @@ import math
 
 
 def is_multi(mode):
-    return mode in ('l1_y_rx_ry_rz_l2_y','l1_y_rx_ry_rz_l2_y_negative')
+    return mode in ('l1_y_rx_ry_rz_l2_y','l1_y_rx_ry_rz_l2_y_negative','l1_l2_y_rx_ry_rz','l1_l2_y_rx_ry_rz_negative')
 
 
 def labels(mode):
     if not is_multi(mode):raise ValueError('Unsupported multi-sensor scope')
-    return [700102,700104,700105,700106,700202]
+    selected=[700102,700104,700105,700106,700202]
+    return selected+[700204,700205,700206] if mode.startswith('l1_l2_') else selected
 
 
 def mapping(label):
-    table={700102:(1,1),700104:(1,3),700105:(1,4),700106:(1,5),700202:(2,1)}
+    table={700102:(1,1),700104:(1,3),700105:(1,4),700106:(1,5),700202:(2,1),700204:(2,3),700205:(2,4),700206:(2,5)}
     if label not in table:raise ValueError('Unsupported physical parameter label')
     return table[label]
 
@@ -20,7 +21,9 @@ def mapping(label):
 def fixture(mode):
     labels(mode)
     sign=-1 if mode.endswith('_negative') else 1
-    return {1:.080,2:-.060},{1:[sign*v for v in (.001,.0005,-.0005)]}
+    rotations={1:[sign*v for v in (.001,.0005,-.0005)]}
+    if mode.startswith('l1_l2_'):rotations[2]=[sign*v for v in (-.0012,.0006,.0006)]
+    return {1:.080,2:-.060},rotations
 
 
 def pose_increments(values):
@@ -75,6 +78,7 @@ def pose_gate(args):
     pose_checks(base,truth,shifts,rotations,axis='xyz')
     parent=args.result/'geometry/fixtures/nominal.xml';previous=base
     cross_shifts={1:-.015,2:.020};cross_rotations={1:[-.0003,.0004,.0002]}
+    if 2 in rotations:cross_rotations[2]=[.0002,-.0003,.0004]
     chain=[(shifts,rotations),(cross_shifts,cross_rotations),
            ({l:-v for l,v in cross_shifts.items()},{l:[-v for v in w] for l,w in cross_rotations.items()}),
            ({l:-v for l,v in shifts.items()},{l:[-v for v in w] for l,w in rotations.items()})]

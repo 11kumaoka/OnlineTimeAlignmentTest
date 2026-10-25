@@ -206,6 +206,148 @@ class NativeMultiSensor(unittest.TestCase):
         with self.assertRaises(AssertionError):
             xml_identity(self.nominal, output, labels(MODE))
 
+    def test_scope_b_adds_only_the_three_l2_rotation_columns(self):
+        mode = 'l1_l2_y_rx_ry_rz'
+        expected = {700102: (1, 1), 700104: (1, 3), 700105: (1, 4),
+                    700106: (1, 5), 700202: (2, 1), 700204: (2, 3),
+                    700205: (2, 4), 700206: (2, 5)}
+        self.assertTrue(is_multi(mode))
+        self.assertTrue(is_multi(mode + '_negative'))
+        self.assertEqual(labels(mode), list(expected))
+        self.assertEqual(labels(mode + '_negative'), list(expected))
+        self.assertEqual({label: mapping(label) for label in labels(mode)}, expected)
+        self.assertEqual(labels(mode)[:5], labels(MODE))
+        for fixed in (700101, 700103, 700201, 700203, 700304, 700405):
+            with self.assertRaises(ValueError):
+                mapping(fixed)
+
+    def test_scope_b_rotation_decoding_has_no_cross_sensor_leakage(self):
+        first = {700104: .0011, 700105: -.0002, 700106: .0003}
+        second = {700204: -.0012, 700205: .0006, 700206: .0007}
+        self.assertEqual(pose_increments(first), ({}, {1: [.0011, -.0002, .0003]}))
+        self.assertEqual(pose_increments(second), ({}, {2: [-.0012, .0006, .0007]}))
+        values = {700102: .08, **first, 700202: -.06, **second}
+        self.assertEqual(pose_increments(values),
+                         ({1: .08, 2: -.06},
+                          {1: [.0011, -.0002, .0003], 2: [-.0012, .0006, .0007]}))
+        for missing in second:
+            incomplete = dict(values)
+            incomplete.pop(missing)
+            with self.assertRaises(ValueError):
+                pose_increments(incomplete)
+        with self.assertRaises(ValueError):
+            pose_increments({**values, 700205: float('inf')})
+
+    def test_scope_b_signed_fixture_does_not_redefine_scope_a(self):
+        a_shifts, a_rotations = fixture(MODE)
+        shifts, rotations = fixture('l1_l2_y_rx_ry_rz')
+        negative_shifts, negative_rotations = fixture('l1_l2_y_rx_ry_rz_negative')
+        self.assertEqual(shifts, a_shifts)
+        self.assertEqual(rotations[1], a_rotations[1])
+        self.assertEqual(set(rotations), {1, 2})
+        self.assertTrue(all(value != 0 for value in rotations[2]))
+        self.assertNotEqual(rotations[1], rotations[2])
+        self.assertEqual(negative_shifts, shifts)
+        for layer in (1, 2):
+            np.testing.assert_allclose(negative_rotations[layer],
+                                       -np.array(rotations[layer]), atol=0, rtol=0)
+
+    def test_scope_b_both_sensor_rotations_compose_and_invert_independently(self):
+        w = {1: np.array([.001, .0005, -.0005]),
+             2: np.array([-.0012, .0006, .0006])}
+        v = {1: np.array([-.0004, .0003, .0002]),
+             2: np.array([.0002, -.0001, .0003])}
+        updates = [({1: .08, 2: -.06}, w), ({1: -.01, 2: .02}, v),
+                   ({1: .01, 2: -.02}, {layer: -vector for layer, vector in v.items()}),
+                   ({1: -.08, 2: .06}, {layer: -vector for layer, vector in w.items()})]
+        parent = self.nominal
+        stages = []
+        for index, (shifts, rotations) in enumerate(updates):
+            output = self.root / f'both_rotations_{index}.xml'
+            displaced_xml(parent, output, shifts, rotations=rotations, rotation_axis='xyz')
+            xml_identity(parent, output, labels('l1_l2_y_rx_ry_rz'))
+            stages.append(output)
+            parent = output
+        for layer, y in ((1, .07), (2, -.04)):
+            center, rotation = world_pose(stages[1], layer)
+            np.testing.assert_allclose(center, [0, y, 0], atol=1e-15, rtol=0)
+            expected = (np.array(rotation_exp(v[layer])) @ np.array(rotation_exp(w[layer]))
+                        @ world_pose(self.nominal, layer)[1])
+            np.testing.assert_allclose(rotation, expected, atol=5e-13, rtol=0)
+        for layer in range(5):
+            center, rotation = world_pose(stages[-1], layer)
+            nominal_center, nominal_rotation = world_pose(self.nominal, layer)
+            np.testing.assert_allclose(center, nominal_center, atol=1e-15, rtol=0)
+            np.testing.assert_allclose(rotation, nominal_rotation, atol=5e-13, rtol=0)
+        for layer in (0, 3, 4):
+            self.assertEqual(structure(component(stages[1], layer)),
+                             structure(component(self.nominal, layer)))
+
+    def test_scope_b_xml_gate_allows_both_rotations_and_rejects_fixed_layer_changes(self):
+        output = self.root / 'scope_b.xml'
+        shifts, rotations = fixture('l1_l2_y_rx_ry_rz')
+        displaced_xml(self.nominal, output, shifts, rotations=rotations, rotation_axis='xyz')
+        xml_identity(self.nominal, output, labels('l1_l2_y_rx_ry_rz'))
+        with self.assertRaises(AssertionError):
+            xml_identity(self.nominal, output, labels(MODE))
+        tree = ET.parse(output)
+        fixed = tree.getroot().find("./detectors/detector[@name='SiMAPS']/"
+                                    "layer[@id='3']/rphi_layout")
+        fixed.set('rc', '401*mm')
+        tree.write(output, encoding='unicode')
+        with self.assertRaises(AssertionError):
+            xml_identity(self.nominal, output, labels('l1_l2_y_rx_ry_rz'))
+
+    def test_scope_b_configuration_has_eight_unique_labels_and_actual_sensor_ids(self):
+        mode = 'l1_l2_y_rx_ry_rz'
+        config = json.loads((Path(__file__).parent /
+                             'telescope_alignment/l1_l2_y_rx_ry_rz.json').read_text())
+        parameters = config['parameters']
+        self.assertEqual([parameter['label'] for parameter in parameters], labels(mode))
+        self.assertEqual(len({parameter['label'] for parameter in parameters}), 8)
+        identities = {1: (272631839, 216173056991691039),
+                      2: (272633887, 216173194430644511)}
+        columns = {1: 'global_y', 3: 'global_rx', 4: 'global_ry', 5: 'global_rz'}
+        for layer in (1, 2):
+            selected = [parameter for parameter in parameters if parameter['layer'] == layer]
+            self.assertEqual(len(selected), 4)
+            self.assertEqual({parameter['axis'] for parameter in selected}, set(columns.values()))
+            for parameter in selected:
+                sensor, column = mapping(parameter['label'])
+                self.assertEqual(sensor, layer)
+                self.assertEqual(parameter['axis'], columns[column])
+                self.assertEqual(parameter['unit'], 'mm' if column == 1 else 'rad')
+                self.assertEqual((parameter['volume_id'], parameter['geometry_id']), identities[layer])
+                self.assertEqual(parameter['pivot'], 'sensitive_surface_center')
+                self.assertEqual(parameter['composition'],
+                                 'world_translation' if column == 1 else 'left_global_exp')
+
+    def test_measurement_edm_rounding_and_one_ulp_corruption_are_distinguishable(self):
+        import ROOT
+        collection = ROOT.edm4eic.Measurement2DCollection()
+        measurement = collection.create()
+        local = np.array([-17.112654700154234, -9.422352232365252])
+        measurement.setLoc(ROOT.edm4hep.Vector2f(*map(float, local)))
+        stored = np.array([measurement.getLoc().a, measurement.getLoc().b])
+        np.testing.assert_array_equal(stored, [-17.112655639648438, -9.422351837158203])
+        np.testing.assert_array_equal(stored, local.astype(np.float32).astype(float))
+        # The real EDM round trip exceeds the former fixed 2D norm threshold,
+        # while each coordinate is rounded within half its binary32 spacing.
+        self.assertGreater(float(np.linalg.norm(stored - local)), 1e-6)
+        half_ulp = np.abs(np.spacing(stored.astype(np.float32))).astype(float) / 2
+        self.assertTrue(np.all(np.abs(stored - local) <= half_ulp))
+
+        small = np.array([.25, -.125], dtype=np.float32)
+        measurement.setLoc(ROOT.edm4hep.Vector2f(*map(float, small)))
+        np.testing.assert_array_equal([measurement.getLoc().a, measurement.getLoc().b], small)
+        corrupt = small.copy()
+        corrupt[0] = np.nextafter(corrupt[0], np.float32(np.inf))
+        measurement.setLoc(ROOT.edm4hep.Vector2f(*map(float, corrupt)))
+        actual = np.array([measurement.getLoc().a, measurement.getLoc().b])
+        self.assertGreater(abs(actual[0] - small[0]), 0.)
+        self.assertLess(float(np.linalg.norm(actual - small)), 1e-6)
+        self.assertFalse(np.array_equal(actual, small.astype(float)))
+
 
 if __name__ == '__main__':
     unittest.main()

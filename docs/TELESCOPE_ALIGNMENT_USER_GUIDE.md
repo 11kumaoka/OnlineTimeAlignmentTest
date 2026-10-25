@@ -439,3 +439,123 @@ Scope A passed its prospective 4096-track cohort: rank 5, scaled condition
 9.946553319 -> 0.597247931. Full numerical evidence and limitations are in
 `TELESCOPE_ALIGNMENT_LEGACY_PARITY.md`. This is Geometry/derivative closure,
 not statistical validation of the nominal uncertainty model.
+
+
+### Eight-parameter L1/L2 validation scope
+
+`l1_l2_y_rx_ry_rz` selects Y/Rx/Ry/Rz on both L1 and L2. Its configuration is
+`validation/telescope_alignment/l1_l2_y_rx_ry_rz.json`, with eight unique labels
+and separate actual surface IDs. The prospective L2 rotation is
+(-1.2,+0.6,+0.6) mrad; L1 and both translations retain Scope A values.
+`_negative` reverses both sensors' rotation vectors. Both signs passed the
+Geometry-only engineering preflight before the first fit. Full reconstruction
+support is declared only by the completed cohort results in the parity report.
+
+Both scopes have now passed full native closure: Scope A's positive cohort and
+Scope B's four paired signed fixtures from two independent seeds, all with 4096
+accepted tracks. Scope B retains rank 8 and scaled condition 3.16497–3.29605
+across sixteen normal Pede fits, with no rejected local fits. These are validated
+experimental zero-field channel fixtures; arbitrary six-DOF fitting and
+statistical uncertainty coverage remain unvalidated. The complete numerical
+results, including the less precise tilt components, are in the parity report.
+
+The following historical first-attempt commands used fresh Scope B paths. That
+attempt stopped in the validation observer during refined reconstruction; it
+is preserved as a diagnostic and is not a completed closure. The corrected
+current-source reproduction recipe follows this block.
+
+```sh
+bash environment/run.sh cmake -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_multi_b_20261024_01 -DCMAKE_BUILD_TYPE=Release \
+  -DTELESCOPE_BUILD_MILLE_PROBE=ON
+bash environment/run.sh cmake --build /work/build/native_multi_b_20261024_01 -j2
+# The unchanged fresh Scope A geometry probe was used for this pre-fit check.
+bash environment/run.sh python3 -B validation/telescope_closure/multi_preflight.py \
+  --build build/native_multi_20261024_01 \
+  --prior-run result/native_containment_seed1_positive_20261024_01 \
+  --output-dir result/native_multi_20261024_01_audit/scope_b_geometry_preflight \
+  --mode l1_l2_y_rx_ry_rz
+bash environment/run.sh python3 -B validation/telescope_closure/closure.py \
+  --build build/native_multi_b_20261024_01 \
+  --result result/native_multi_scope_b_seed1_positive_20261024_01 \
+  --mode l1_l2_y_rx_ry_rz --events 4096 \
+  --beam validation/telescope_alignment/multi_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+```
+
+For an independent repeated validation use `multi_beam_seed2.json` (2026102702)
+and an unused result directory. Paired negative fixtures use
+`--mode l1_l2_y_rx_ry_rz_negative` and their own unused directories. Signs of one
+seed share rays; they are not independent samples. No larger campaign, automatic
+Controller loop or production Geometry activation is implied.
+
+Current multi-sensor reports distinguish data-only covariance from Pede's
+expected stabilized inversion covariance. Maintained positive pre-sigmas (1.0)
+provide solver diagonal stabilization while Pede regularization is disabled.
+The data-only rank and sensitivity gates run before Pede; no stabilization term
+is used to force observability. The parity report documents the very small
+current numerical effect and its limits.
+
+The completed primary retry is
+`result/native_multi_scope_b_seed1_positive_20261024_02`. It reused only the
+byte-verified completed `_01` checkpoint stages and ran `refined`, `refinesolve`,
+`control`, `controlsolve`, and `check` individually with
+`build/native_multi_precision_20261024_01`. The checkpoint copies, original
+commands and retry commands are recorded in
+`result/native_multi_20261024_01_audit/primary_retry_provenance.json` and the
+`primary_retry_*` audit stages. No sample, failed stage, or scientific assertion
+was overwritten. The float-serialization observer correction changes neither
+measurements nor the fit; see the parity report for the reproduced failure.
+
+For a fresh reproduction from the maintained source, use the final build and a
+new result directory. The following is a reproduction recipe, not a claim that
+the already populated primary retry was run again with `--step all`:
+
+```sh
+bash environment/run.sh cmake -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_multi_precision_reproduce_01 -DCMAKE_BUILD_TYPE=Release \
+  -DTELESCOPE_BUILD_MILLE_PROBE=ON
+bash environment/run.sh cmake --build /work/build/native_multi_precision_reproduce_01 -j2
+bash environment/run.sh python3 -B validation/telescope_closure/closure.py \
+  --build build/native_multi_precision_reproduce_01 \
+  --result result/native_multi_scope_b_reproduce_01 \
+  --mode l1_l2_y_rx_ry_rz --events 4096 \
+  --beam validation/telescope_alignment/multi_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+```
+
+Use a different unused directory for each seed/sign. The executed additional
+cohort commands use the final `build/native_multi_precision_20261024_01`,
+`--events 4096 --chi2-cut 1000 --refine-once --step all`, and the following
+mode/beam/result combinations; their completion status is recorded in the
+parity report:
+
+| Seed | Mode | Beam JSON | Result directory below `result/` |
+|---|---|---|---|
+| 2026102701 | `l1_l2_y_rx_ry_rz_negative` | `multi_beam_seed1.json` | `native_multi_scope_b_seed1_negative_20261024_01` |
+| 2026102702 | `l1_l2_y_rx_ry_rz` | `multi_beam_seed2.json` | `native_multi_scope_b_seed2_positive_20261024_01` |
+| 2026102702 | `l1_l2_y_rx_ry_rz_negative` | `multi_beam_seed2.json` | `native_multi_scope_b_seed2_negative_20261024_01` |
+
+Beam JSON paths are relative to `validation/telescope_alignment/`. The retained
+old contained-cohort native audit required by the prospective preflight is a
+local reference dataset, not a Git asset. It can be regenerated with the exact
+contained-fixture commands in the preceding milestone documentation. The
+preflight reads its calibrated covariance and native design, not fitted Truth
+corrections. Once the fixed prospective fixture has been validated, `--step all`
+generates its own nominal XML and immutable channels and needs no external
+simulation dataset. Each candidate is independently checked for actual module
+and layer containment before reconstruction; Geometry activation is never
+part of this validation workflow.
+
+Inspect `validation/rotation.root` with ROOT TBrowser, for example:
+
+```sh
+bash environment/run.sh root -l \
+  result/native_multi_scope_b_seed1_positive_20261024_02/validation/rotation.root
+# In an interactive ROOT session: new TBrowser;
+```
+
+The nine histograms are nominal/corrected/control chi2 and local u/v residuals.
+The chi2 histograms use ACTS stored NDF (ten measurement coordinates per track),
+while the independently profiled Pede model has four local track parameters
+and eight selected global parameters. Their denominators must not be confused.

@@ -131,7 +131,10 @@ bounded L1 Global Y plus Rx/Ry/Rz. The contained four-parameter fixture has six
 completed closures; the original wider fixture retains its 5/6 result and one
 physical refusal. The new simultaneous L1 four-parameter plus L2 Y scope is
 validated experimentally for one prospective cohort, as described below. Other
-free translations and L2 rotation alignment are not established by that scope.
+free translations are not established by that scope. The eight-parameter L1/L2
+Y/Rx/Ry/Rz route has passed full closure for four signed fixtures from two
+independent seeds. This is validated experimental functionality for the stated
+material-free synthetic-channel conditions, not arbitrary six-DOF support.
 
 The equation is measured-minus-prediction = A*localDelta + G*alignmentDelta.
 Whitening uses the original calibrated covariance C=L L^T and W=L^-1 for residual
@@ -376,3 +379,229 @@ command exposes the selected and diagnostic designs independently. The final
 `validation/report.json` and `validation/rotation.root` retain closure metrics
 and ROOT histograms; they distinguish initial nominal covariance from final
 cumulative geometry without combining correlated successive-fit errors.
+
+## Eight-parameter L1/L2 development scope
+
+Scope B uses `l1_l2_y_rx_ry_rz` and its `_negative` fixture. Its implementation
+reuses the Scope A helpers and native path; all four selected signed fixtures
+passed full reconstruction closure. The additional explicit configuration is
+`validation/telescope_alignment/l1_l2_y_rx_ry_rz.json`. No new geometry provider,
+navigation, fitter, derivative model or solver is introduced.
+
+| Physical sensor | Global Y [mm] | Global Rx [rad] | Global Ry [rad] | Global Rz [rad] |
+|---|---:|---:|---:|---:|
+| L1, VolumeID 272631839 / ACTS ID 216173056991691039 | 700102 | 700104 | 700105 | 700106 |
+| L2, VolumeID 272633887 / ACTS ID 216173194430644511 | 700202 | 700204 | 700205 | 700206 |
+
+`multi_sensor.labels`, `mapping` and `pose_increments` keep each sensor's three
+rotation components together and reject incomplete or nonfinite updates. The
+runtime observer still verifies the actual SourceLink/CellID/VolumeID/SurfaceMap
+association before selecting columns 1/3/4/5 for that sensor. Fixed reference
+layers L0/L3/L4 retain no free global labels, and both sensors' X/Z stay fixed.
+The Scope A label list and physical fixture remain unchanged.
+
+One eight-parameter Pede solution updates both sensitive components in separate
+placed module clones. Each update uses its own current center and current
+orientation: world Y translation followed by the independent active left-Global
+`Exp(dw)` multiplication. The shared original template and unrelated XML remain
+exact; matrix serialization, actual DD4hep/ACTS reloads and all eight daughter
+corners in both unchanged mothers/layers are checked. The actual-geometry
+finite-difference gate selects all eight sensor/column pairs at three step sizes
+per parameter, using each event's frozen native reference and the corresponding
+sensor's original ACTS derivative. Cross-sensor coefficient auditing separately
+checks every scalar official Mille record.
+
+The fitted information matrix is eight by eight after profiling four local
+track parameters independently per event. Its full covariance, axis and
+cross-sensor correlations, prefix sample sizes and slope/impact subsets come
+from the original calibrated measurement covariance. A separate twelve-column
+L1/L2 diagnostic adds omitted pose components including X/Z; a thirty-column
+diagnostic releases all five SiMAPS reference poses and tests rigid gauge
+directions. Those diagnostic columns do not enter Pede or supply priors.
+Accumulated rank eight, the existing scaled-condition/sensitivity limits and
+fixed-reference/gauge consistency are required before the eight-label Pede fit.
+
+The independent information calculation and Pede both profile data-only local
+track corrections; no CKF seed-prior equations are added to Mille. Initial
+nominal Pede errors must agree with the unscaled inverse information from the
+same initial native equations. Later relinearized errors describe their current
+linearization and remain separate from the initial errors; same-channel fit
+uncertainties are never combined as independent measurements. Geometry closure
+and stable post-updates alone do not establish uncertainty coverage or absence
+of statistical bias. Pede's statistical NDF is `6*N-8`; ACTS stored NDF remains
+ten measured dimensions per track.
+
+The prospective fixture keeps L1 (Y,Rx,Ry,Rz) at
+(+0.080 mm,+1.0,+0.5,-0.5 mrad), and sets L2 to
+(-0.060 mm,-1.2,+0.6,+0.6 mrad). The negative fixture reverses both rotation
+vectors while retaining the translations. Both signed fixtures are checked
+before new Pede recovery, using the recorded earlier information and unchanged
+physical bounds. These are bounded geometry-validation fixtures, not a claim
+of arbitrary detector-motion support.
+
+The primary Scope B run uses seed 2026102701 with the same bounded broad-angle
+recipe. The current reconstruction build, including the observer-only precision
+correction described below, is `build/native_multi_precision_20261024_01`;
+the primary retry is `result/native_multi_scope_b_seed1_positive_20261024_02`.
+The following is a **fresh reproduction recipe**, not the command history of
+that retry. It uses the unused example output
+`result/native_multi_scope_b_reproduce_01` and the recorded final build path;
+choose a fresh build suffix when rebuilding rather than replacing that build.
+The preflight output is also a new example. The actual prospective preflight
+was executed earlier with `build/native_multi_20261024_01`, using the unchanged
+`TelescopeChannels` geometry probe. All independent stage names remain available
+through `closure.py --step`.
+
+```bash
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  cmake -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_multi_precision_20261024_01 \
+  -DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  cmake --build /work/build/native_multi_precision_20261024_01 -j2
+
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B validation/telescope_closure/multi_preflight.py \
+  --build build/native_multi_precision_20261024_01 \
+  --prior-run result/native_containment_seed1_positive_20261024_01 \
+  --output-dir result/native_multi_scope_b_preflight_reproduce_01 \
+  --mode l1_l2_y_rx_ry_rz
+
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B validation/telescope_closure/closure.py \
+  --build build/native_multi_precision_20261024_01 \
+  --result result/native_multi_scope_b_reproduce_01 \
+  --mode l1_l2_y_rx_ry_rz --events 4096 \
+  --beam validation/telescope_alignment/multi_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+```
+
+The actual primary retry did **not** execute `--step all`. It copied the
+hash-verified immutable inputs and completed geometry, nominal/first-corrected,
+derivative, solver and refinement checkpoints from the original `_01` attempt
+to `_02`; their original command records were retained. It then executed only
+the following five stages with the corrected observer. The source attempt and
+its partial failure remain intact. This is the same seed/sample, not new
+simulation or another independent statistical observation. The copy hashes and
+stage inventory are recorded in
+`result/native_multi_20261024_01_audit/primary_retry_provenance.json`.
+The loop below records the executed invocations; the completed `_02` stages
+must not be rerun in place.
+
+```bash
+for step in refined refinesolve control controlsolve check; do
+  TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+    python3 -B validation/telescope_closure/closure.py \
+    --build build/native_multi_precision_20261024_01 \
+    --result result/native_multi_scope_b_seed1_positive_20261024_02 \
+    --mode l1_l2_y_rx_ry_rz --events 4096 \
+    --beam validation/telescope_alignment/multi_beam_seed1.json \
+    --chi2-cut 1000 --refine-once --step "$step"
+done
+```
+
+The prospective plan and all validation artifacts reside under
+`result/native_multi_20261024_01_audit/` and the separate Scope B run directory.
+No candidate is activated, the Controller is unchanged, and no additional
+sensor, X/Z fit or full six-DOF scope is enabled by this development.
+
+The final Scope B checkpoint contains four passing signed fixtures, each with
+4096 accepted tracks, from seeds 2026102701/2026102702. The two signs share their
+seed's rays; there are two independent cohorts, not four. Initial selected rank
+is eight and scaled conditions span 3.1652–3.2946. ACTS chi2/stored-NDF improves
+from 10.1045–10.1756 to 0.5931–0.6048. All 16 Pede stages terminate normally with
+zero rejected local fits and no error rescaling. All proposed updates retain
+the unchanged physical containment and original post-update gates. The twelve
+real-geometry derivative gates total 1179648 two-coordinate vector checks;
+maximum errors are 3.310e-8 mm/rad and 5.460e-10 mm/mm. Results, initial mixed-unit
+covariances, cross-sensor correlations and cumulative geometry are retained in
+`result/native_multi_20261024_01_audit/scope_b_four_fixture_summary/summary.json`.
+These are geometry/derivative/observability/closure results, not statistical
+coverage or a material-aware performance validation.
+
+## Observer precision contract and independent geometry check
+
+`FactoryAudit::Process` is an observer; it does not fit tracks or mutate event
+data. An initial Scope B refined-reconstruction attempt was stopped by its
+fixed `1e-6 mm` local-coordinate difference-norm assertion. The retained event
+355 L2 measurement has legitimate double-to-binary32 rounding with norm
+`1.019234011353496e-6 mm`, although each coordinate is within half its float ULP.
+Actual partial ROOT output confirms the stored coordinates. The original
+failure and its diagnostic artifacts remain under the original `_01` run and
+`result/native_multi_20261024_01_audit/measurement_precision_diagnosis/`.
+
+The corrected observer checks the official converter's exact contract:
+`static_cast<float>(local[0]) == measurement.getLoc().a` and the corresponding
+`local[1]`/`.b` identity, together with finite coordinates and the unchanged
+Surface identity check. The converter already
+performs this explicit cast when creating `Measurement2D`. This detects a
+one-ULP corrupt value even where its absolute difference is below the old
+threshold; it does not add an adjustable tolerance. Installed ACTS PlaneSurface
+conversion ignores the momentum direction, so the observer and converter use
+the same coordinate transform.
+
+A separate strict geometry check now starts from the unrounded DD4hep CellID
+channel-center position: convert it to ACTS local coordinates and back to
+global coordinates, requiring the full round-trip error below `1e-6 mm`.
+This tests the physical DD4hep/ACTS plane correspondence before EDM rounding.
+It does not require a float-serialized global hit position to have double
+precision. Covariance checks, all-eight-corner containment, fitted states,
+measurement conversion, tracking algorithms, Mille equations and physics
+settings are unchanged. The actual ROOT/EDM unit test retains the failed
+coordinate pair and demonstrates that legitimate rounding and one-ULP
+corruption remain distinguishable.
+
+The fresh precision build passed the complete 18-command regression suite at
+`result/native_multi_regression_l1_l2_y_20261024_01/precision_complete_regressions/`:
+all 18 recorded exit codes are zero and the immutable completion marker is
+present. This includes fresh standalone geometry/CKF builds, geometry and EDM
+comparisons, native/legacy mathematical equivalence, official Pede, all 91 unit
+tests (17 multi-sensor tests), and safety/preservation checks. Existing SQLite
+ResourceWarnings remain visible in the test log. Preservation verifies 221
+baseline records, 2046 relocated files, maintained input links and pinned
+validated sources. Safety checks retain their refusal cases for overwrites,
+incomplete/modified stages, escaped paths, invalid scenarios and ungated legacy
+alignment entry points. These software checks do not by themselves declare
+full Scope B reconstruction closure or statistical validity.
+
+The following checks can also be run independently in the fixed container.
+The consolidated command uses the completed original two-Y baseline and creates
+a fresh validation stage and fresh standalone build directories; change
+`--validation-name` before repeating it.
+
+```bash
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B -m unittest discover -s validation -p 'test_*.py'
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B -m unittest validation.test_native_multi_sensor -v
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B validation/check_safety.py
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B validation/verify_preservation.py
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 -B validation/telescope_closure/closure.py \
+  --build build/native_multi_precision_20261024_01 \
+  --result result/native_multi_regression_l1_l2_y_20261024_01 \
+  --mode l1_l2_y --events 32 --chi2-cut 1000 \
+  --step regressions --validation-name precision_complete
+```
+
+Every consolidated subcommand has its exact arguments, working directory,
+stdout/stderr and exit code in its own `command.json`, `stdout.log` and
+`exit.json`. The audit-only correction is isolated in `FactoryAudit.h`; it
+does not change an installed EICrecon/ACTS component or replace the retained
+failed reconstruction outputs.
+
+The twelve historical modes and six contained L1 four-parameter fixtures also
+passed complete closure using the Scope A build, with protected XML/Mille bytes
+and scientific reports unchanged except regenerated ROOT container metadata.
+The final precision-build plugins were then executed over every event of those
+18 final-geometry datasets plus Scope A: 19 separate replay jobs and 49280
+events. Every full Mille Binary is byte-identical, and all ACTS fitted states
+and audit values match. Only the explicitly verified fresh `derivative_gate`
+output-path metadata is excluded when comparing the native equation JSON; no
+numerical field is excluded. This final-build replay complements the earlier
+full closure reruns; it is not described as nineteen new complete closures.
+Evidence is recorded in
+`result/native_multi_20261024_01_audit/baseline_identity.json` and
+`result/native_multi_20261024_01_audit/final_plugin_full_replay_summary.json`.

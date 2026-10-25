@@ -73,13 +73,24 @@ public:
     if(track.nMeasurements()!=5 || track.nOutliers()!=0 || track.nHoles()!=2) throw std::runtime_error("Unexpected CKF states");
     for(const auto& measurement:*measurements) {
       const auto hit=measurement.getHits()[0];
-      const auto* volume=algorithms::GeoSvc::instance().cellIDPositionConverter()->findContext(hit.getCellID());
+      const auto converter=algorithms::GeoSvc::instance().cellIDPositionConverter();
+      const auto* volume=converter->findContext(hit.getCellID());
       const auto* surface=provider->surfaceMap().at(volume->identifier);
       const auto point=hit.getPosition();
       const auto local=surface->globalToLocal(context,{point.x,point.y,point.z},Acts::Vector3::UnitX(),1e-4).value();
-      if(surface->geometryId().value()!=measurement.getSurface() ||
-          (local-Acts::Vector2(measurement.getLoc().a,measurement.getLoc().b)).norm()>1e-6)
+      // Measurement2D stores binary32 coordinates. Check the official converter's
+      // exact serialization contract, rather than bounding float rounding in mm.
+      if(surface->geometryId().value()!=measurement.getSurface() || !local.allFinite() ||
+          static_cast<float>(local[0])!=measurement.getLoc().a ||
+          static_cast<float>(local[1])!=measurement.getLoc().b)
         throw std::runtime_error("Measurement surface/local mismatch");
+      // Independently retain a strict geometric check before EDM rounding. The
+      // DD4hep channel center must lie on its real ACTS surface within 1e-6 mm.
+      const auto ddPoint=converter->position(hit.getCellID());
+      const Acts::Vector3 exactPoint(ddPoint.x()/dd4hep::mm,ddPoint.y()/dd4hep::mm,ddPoint.z()/dd4hep::mm);
+      const auto exactLocal=surface->globalToLocal(context,exactPoint,Acts::Vector3::UnitX(),1e-6).value();
+      if((surface->localToGlobal(context,exactLocal,Acts::Vector3::UnitX())-exactPoint).norm()>1e-6)
+        throw std::runtime_error("DD4hep channel center/ACTS surface mismatch before EDM rounding");
       const auto cov=measurement.getCovariance();
       if(std::abs(cov.xx-hit.getPositionError().yy)>1e-10 || std::abs(cov.yy-hit.getPositionError().xx)>1e-10 || std::abs(cov.xy)>1e-10)
         throw std::runtime_error("Measurement covariance mismatch");

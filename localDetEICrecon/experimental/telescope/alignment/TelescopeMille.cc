@@ -49,7 +49,7 @@ public:
     app->SetDefaultParameter("TelescopeMille:multipleEvents",multipleEvents,"Write one native Mille record per accepted event and aggregate diagnostics");
     app->SetDefaultParameter("TelescopeMille:output",output,"New official Mille Binary; experimental single-track probe");
     app->SetDefaultParameter("TelescopeMille:report",reportPath,"New native equation JSON audit");
-    app->SetDefaultParameter("TelescopeMille:config",configPath,"Explicit physical Global Y and selected L1 Global rotation label map JSON");
+    app->SetDefaultParameter("TelescopeMille:config",configPath,"Explicit physical Global Y and selected L1/L2 Global rotation label map JSON");
     app->SetDefaultParameter("TelescopeMille:derivativeGate",gatePath,"Successful derivative gate JSON from this build/fixture");
     for(const auto& path:{output,reportPath}) if(path.empty() || std::filesystem::exists(path))
       throw std::runtime_error("Mille probe requires new explicit output paths");
@@ -61,16 +61,16 @@ public:
     for(const auto& p:config.at("parameters")) {
       const int layer=p.at("layer"),label=p.at("label");
       const bool translation=p.at("axis")=="global_y" && (layer==1 || layer==2) && label==700002+100*layer;
-      const bool rotation=((p.at("axis")=="global_rx" && label==700104) ||
-          (p.at("axis")=="global_ry" && label==700105) ||
-          (p.at("axis")=="global_rz" && label==700106)) && layer==1 &&
+      const bool rotation=((p.at("axis")=="global_rx" && label==700004+100*layer) ||
+          (p.at("axis")=="global_ry" && label==700005+100*layer) ||
+          (p.at("axis")=="global_rz" && label==700006+100*layer)) && (layer==1 || layer==2) &&
           p.at("unit")=="rad" && p.at("pivot")=="sensitive_surface_center" && p.at("composition")=="left_global_exp";
       if(p.at("system")!=31 || (!translation && !rotation) || !labels.insert(label).second)
         throw std::runtime_error("Unsupported or duplicate selected physical alignment parameter");
     }
     if(labels!=std::set<int>{700102,700202} && labels!=std::set<int>{700104} &&
-       labels!=std::set<int>{700102,700104,700202} && labels!=std::set<int>{700105} && labels!=std::set<int>{700106} && labels!=std::set<int>{700105,700106} && labels!=std::set<int>{700104,700105,700106} && labels!=std::set<int>{700102,700104,700105,700106} && labels!=std::set<int>{700102,700104,700105,700106,700202})
-      throw std::runtime_error("Only two-Y, separate L1 Rx, Ry or Rz, coupled L1 Ry/Rz or Rx/Ry/Rz (with optional L1 Y), L1 Y/Rx plus L2 Y, or L1 Y/Rx/Ry/Rz plus L2 Y scopes are enabled");
+       labels!=std::set<int>{700102,700104,700202} && labels!=std::set<int>{700105} && labels!=std::set<int>{700106} && labels!=std::set<int>{700105,700106} && labels!=std::set<int>{700104,700105,700106} && labels!=std::set<int>{700102,700104,700105,700106} && labels!=std::set<int>{700102,700104,700105,700106,700202} && labels!=std::set<int>{700102,700104,700105,700106,700202,700204,700205,700206})
+      throw std::runtime_error("Only two-Y, separate L1 Rx, Ry or Rz, coupled L1 Ry/Rz or Rx/Ry/Rz (with optional L1 Y), L1 Y/Rx plus L2 Y, L1 Y/Rx/Ry/Rz plus L2 Y, or simultaneous L1/L2 Y/Rx/Ry/Rz scopes are enabled");
   }
   void Process(const std::shared_ptr<const JEvent>& event) override {
     std::lock_guard<std::mutex> guard(mutex);++processed;

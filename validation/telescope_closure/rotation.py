@@ -75,7 +75,7 @@ def labels(mode):
 
 
 def config_name(mode):
-    if multi.is_multi(mode):return 'l1_y_rx_ry_rz_l2_y'
+    if multi.is_multi(mode):return 'l1_l2_y_rx_ry_rz' if mode.startswith('l1_l2_') else 'l1_y_rx_ry_rz_l2_y'
     if is_four(mode):return 'l1_global_y_rx_ry_rz'
     if is_three(mode):return 'l1_global_rx_ry_rz'
     if is_coupled(mode):return 'l1_global_ry_rz'
@@ -258,7 +258,7 @@ def check(args):
         dy,dw=multi.fixture(args.mode);pose_checks(base['sensors'],truth['sensors'],dy,dw,axis='xyz')
     else:pose_checks(base['sensors'],truth['sensors'],fixture_shifts(args.mode),{1:injected_rotation(args.mode)},axis=axis(args.mode))
     # Independent XML whitelist: only selected module references, component X
-    # translation and the selected L1 orientation serialization may vary.
+    # translation and selected sensor orientation serialization may vary.
     def structure(n):return n.tag,dict(n.attrib),(n.text or '').strip(),tuple(structure(c) for c in n)
     nominal_xml=ET.parse(args.result/'geometry/fixtures/nominal.xml').getroot()
     pairs=[(args.result/'geometry/fixtures/nominal.xml',args.result/'geometry/truth.xml'),(args.result/'geometry/fixtures/nominal.xml',args.result/'correction/corrected.xml')]
@@ -330,6 +330,11 @@ def check(args):
     assert channel_values(args.result/'nominal/reco.root')==channel_values(paths['corrected']/'reco.root')==payload
     if refined:assert channel_values(paths['first_corrected']/'reco.root')==payload
     changed=sum(a[1][1][0]!=b[1][1][0] for a,b in zip(payload,channel_values(args.result/'data/control.root')))
+    changed_by_sensor={}
+    if multi.is_multi(args.mode):
+        control_payload=channel_values(args.result/'data/control.root')
+        changed_by_sensor={layer:sum(a[1][layer][0]!=b[1][layer][0] for a,b in zip(payload,control_payload)) for layer in (1,2)}
+        assert min(changed_by_sensor.values())>=args.events//32
     assert changed>=args.events//(32 if axis(args.mode) in ('y','z','yz','xyz') else 4),'Rotation/translation fixture must have nontrivial quantized channel changes'
     nominal_audit=json.loads((args.result/'nominal/audit.json').read_text())
     corrected_audit=json.loads((paths['corrected']/'audit.json').read_text())
@@ -446,13 +451,15 @@ def check(args):
             initial_error_mahalanobis_squared=float(error@np.linalg.solve(covariance,error)),
             truth_definition='single rotation vector, not an ordered Euler product')
     if multi.is_multi(args.mode):
-        result.update(sensor_errors=sensor_errors,nominal_covariance_mixed_units=covariance.tolist(),initial_error_mahalanobis_squared=float(error@np.linalg.solve(covariance,error)),sensor_identities={l:{k:actual[l][k] for k in ('volume_id','geometry_id')} for l in (1,2)},cumulative_geometry={l:{'global_y_mm':float(actual[l]['center_mm'][1]-base['sensors'][l]['center_mm'][1]),'rotation_vector_rad':list(rotation_log((np.array(actual[l]['acts_rotation'])@np.array(base['sensors'][l]['acts_rotation']).T).tolist()))} for l in (1,2)},cumulative_uncertainty_combined=False,refinement_count=int(refined))
+        result.update(changed_channel_events_by_sensor=changed_by_sensor,sensor_errors=sensor_errors,nominal_covariance_mixed_units=covariance.tolist(),initial_error_mahalanobis_squared=float(error@np.linalg.solve(covariance,error)),sensor_identities={l:{k:actual[l][k] for k in ('volume_id','geometry_id')} for l in (1,2)},cumulative_geometry={l:{'global_y_mm':float(actual[l]['center_mm'][1]-base['sensors'][l]['center_mm'][1]),'rotation_vector_rad':list(rotation_log((np.array(actual[l]['acts_rotation'])@np.array(base['sensors'][l]['acts_rotation']).T).tolist()))} for l in (1,2)},cumulative_uncertainty_combined=False,refinement_count=int(refined))
         first_post=read_pede(args.result/'postsolve/millepede.res')
         result.update(final_reconstruction_stage=final,
             refinement_increments=(first_post if refined else {}),
             initial_one_step_post_gate_passed=all(abs(first_post[k])<
                 (2e-5 if multi.mapping(k)[1]==1 else solution['nominal_sigma'][i]/4)
                 for i,k in enumerate(selected)))
+    if multi.is_multi(args.mode) and 'pede_expected_stabilized_covariance_mixed_units' in solution:
+        for key in ('covariance_source','pede_presigma','pede_expected_stabilized_covariance_mixed_units','pede_regularization_enabled','pede_error_note'):result[key]=solution[key]
     if refined and not multi.is_multi(args.mode):
         nominal_basis=np.array(base['sensors'][1]['acts_rotation'])
         result.update(refinement_count=1,final_reconstruction_stage=final,
@@ -479,14 +486,14 @@ def rotate_coupled_component(component,increment,full=False):
     """Serialize a bounded physical left-Global rotation-vector update.
 
     The two-axis scope retains known commutator Rx but never fits Rx. The explicit
-    full scope permits all three bounded L1 components. General singular Euler
+    full scope permits all three bounded components of a selected sensor. General singular Euler
     extraction is refused; exact one-axis targets use validated restricted charts.
     """
     from validation.telescope_closure.closure import MODULE_TO_GLOBAL
     parent=np.array(MODULE_TO_GLOBAL)
     delta=np.array(increment,dtype=float)
     if delta.shape!=((3,) if full else (2,)) or not np.isfinite(delta).all() or np.linalg.norm(delta)>.01:
-        raise ValueError('Only bounded selected L1 Global rotation-vector increments supported')
+        raise ValueError('Only bounded selected sensor Global rotation-vector increments supported')
     nominal=np.array(multiply(rotation_exp((-math.pi/2,0,0)),rotation_exp((0,-math.pi/2,0))))
     current=component_matrix(component)
     pose=parent@current@nominal.T@parent.T

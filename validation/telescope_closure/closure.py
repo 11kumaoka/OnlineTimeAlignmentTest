@@ -24,7 +24,7 @@ MODULE_TO_GLOBAL=((0.,0.,1.),(-1.,0.,0.),(0.,-1.,0.))
 
 
 def displaced_xml(nominal,output,shifts,rotations=None,rotation_axis='x'):
-    """Apply selected physical Y shifts and optional selected center-preserving selected rotation."""
+    """Apply selected physical Y shifts and center-preserving rotations."""
     if output.exists():raise ValueError('Geometry output must be new')
     root=ET.parse(nominal).getroot()
     detector=root.find("./detectors/detector[@name='SiMAPS']")
@@ -231,6 +231,10 @@ def solve(args,reconstruction,name):
         assert np.allclose(normal,actual['information'],rtol=1e-10,atol=1e-6),'Mille/native profiled information mismatch'
         assert actual['rank']==dimension and actual['diagonal_scaled_condition']<100
         assert all(v<(.001 if mapping(k)[1]==1 else .0005) for k,v in zip(selected,actual['sigma']))
+        full=design['omitted_X_Z_diagnostic']
+        assert full['rank']==12 and full['diagonal_scaled_condition']<100
+        assert all(full['sigma'][6*(mapping(k)[0]-1)+mapping(k)[1]]<(.001 if mapping(k)[1]==1 else .0005) for k in selected),'Selected sensitivity unresolved with omitted-translation diagnostic columns'
+
     text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n700102 0.0 1.0\n700202 0.0 1.0\n\nprintcounts\nend\n'
     if rotation:
         text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n'+''.join(f'{label} 0.0 1.0\n' for label in selected)+'\nprintcounts\nend\n'
@@ -254,6 +258,12 @@ def solve(args,reconstruction,name):
         sigma=np.sqrt(np.diag(covariance))
         reported=np.array([float(printed[k][4]) for k in selected])
         assert np.allclose(reported,sigma,rtol=5e-5,atol=0),'Pede nominal errors differ from unscaled information'
+        if is_multi(args.mode):
+            presigmas=np.array([float(printed[k][2]) for k in selected])
+            assert np.all(presigmas==1.),'Maintained official parameter pre-sigmas changed'
+            stabilized_covariance=np.linalg.inv(normal+np.diag(1/presigmas**2))
+            assert np.allclose(reported,np.sqrt(np.diag(stabilized_covariance)),rtol=5e-5,atol=0),'Pede inversion errors differ from retained diagonal stabilization'
+
         correlation=covariance/np.outer(sigma,sigma)
         scaled=normal/np.sqrt(np.outer(np.diag(normal),np.diag(normal)))
         assert np.linalg.cond(scaled)<100,'Insufficient selected information'
@@ -261,7 +271,12 @@ def solve(args,reconstruction,name):
         write_json(p/'independent.json',{'parameters':parameters,'schur_solution':expected.tolist(),
           'parameter_units':{k:('rad' if k in (700104,700105,700106,700204,700205,700206) else 'mm') for k in selected},'nominal_sigma':sigma.tolist(),'pede_reported_sigma':reported.tolist(),
           'rank':dimension,'condition':float(np.linalg.cond(normal)),'condition_diagonal_scaled':float(np.linalg.cond(scaled)),
-          'correlation':correlation.tolist(),'normal':normal.tolist(),'status':status,'records':len(blocks)})
+          'correlation':correlation.tolist(),'normal':normal.tolist(),'status':status,'records':len(blocks),
+          **({'covariance_source':'Inverse data-only locally profiled native information; no stabilization or prior',
+              'pede_presigma':{k:float(printed[k][2]) for k in selected},
+              'pede_expected_stabilized_covariance_mixed_units':stabilized_covariance.tolist(),
+              'pede_regularization_enabled':False,
+              'pede_error_note':'Unchanged positive presigmas stabilize the solver diagonal and inversion errors; no regularization objective enabled. Printed errors agree with data-only errors at the checked precision.'} if is_multi(args.mode) else {})})
     else:
         write_json(p/'independent.json',{'parameters_mm':parameters,'schur_solution_mm':expected.tolist(),
           'nominal_sigma_mm':np.sqrt(np.diag(covariance)).tolist(),'rank':2,'condition':float(np.linalg.cond(normal)),
@@ -547,7 +562,7 @@ def main():
     parser.add_argument('--result',type=Path,required=True)
     parser.add_argument('--build',type=Path,required=True)
     parser.add_argument('--validation-name',default='validation',help='New validation/regression output stage name; existing reports remain immutable')
-    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_ry_negative','l1_rz_negative','l1_rz','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative','l1_y_rx_l2_y','l1_y_rx_ry_rz_l2_y','l1_y_rx_ry_rz_l2_y_negative'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
+    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_ry_negative','l1_rz_negative','l1_rz','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative','l1_y_rx_l2_y','l1_y_rx_ry_rz_l2_y','l1_y_rx_ry_rz_l2_y_negative','l1_l2_y_rx_ry_rz','l1_l2_y_rx_ry_rz_negative'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
     parser.add_argument('--refine-once',action='store_true',help='Explicit bounded Y/SO(3) second Geometry correction; at most one, same data and unchanged gates')
     parser.add_argument('--beam',type=Path,help='Optional bounded angular study recipe; never changes the baseline cohort')
     parser.add_argument('--events',type=int,default=32)

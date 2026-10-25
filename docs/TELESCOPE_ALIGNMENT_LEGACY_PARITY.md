@@ -2819,3 +2819,441 @@ historical native-cohort reruns continue separately and will be reported at the
 end of this milestone; they are not represented as complete by this checkpoint.
 This demonstrates selected Geometry/derivative/reconstruction closure. One seed
 cannot validate bias, coverage or the nominal uncertainty model.
+
+
+### Scope B prospective development record
+
+Scope A was committed locally as `b3b4cc922aaae0d20de20cd96294053acebc3e37`
+before enabling Scope B. No push, merge or Geometry activation was performed.
+Scope B adds L2 Rx/Ry/Rz labels 700204/700205/700206 to the five existing labels.
+Their actual L2 VolumeID/GeometryIdentifier are the same independently verified
+L2 IDs listed above, rather than L1 IDs. Native equations and local parameters
+remain unchanged; only bounded selection/validation and config entries expand.
+
+Before inspecting any Scope B fit, the fixture was fixed as the same L1 pose and
+translations as Scope A, with L2 rotation vector (-1.2,+0.6,+0.6) mrad. Both
+signed fixtures reverse both rotation vectors and retain both translations.
+Seeds 2026102701 and 2026102702 use the unchanged bounded angular recipe;
+signs within a seed share rays and are not independent statistical experiments.
+The prospective plan is `scope_b_prospective_plan.json` under the audit root.
+
+A Geometry-only preflight using the unchanged fresh Scope A geometry probe
+passed 6576 correlated joint 5-sigma sampled directions per sign, plus the same
+10% design-only margin. Fourteen actual constructor reloads verify both signed
+truth poses and each sensor's worst sampled module-axis poses. The smallest
+module clearance is 85.298 um. All boxes, layer envelopes, IDs and unrelated
+XML remain unchanged. No new recovery estimate was used to select amplitudes.
+Scope B full reconstruction is reported below only after completion.
+
+The current pre-Pede gate also checks the full twelve-column L1/L2 nuisance
+diagnostic: rank 12, scaled condition below 100, and the same selected-component
+sensitivity limits after X/Z (and any other fixed diagnostic components) are
+released. No such columns are enabled in Pede. All four Scope A fits separately
+pass this conservative diagnostic; their worst selected error/limit is 0.965117.
+The recorded prefix study first passes the tested sensitivity gate at 4096
+tracks. The prior Scope B design needs approximately 3669 tracks under a fixed
+1/sqrt(N) sensitivity extrapolation, so no larger cohort is currently justified.
+
+### Maintained Pede pre-sigma semantics
+
+The steering remains `Parameter label 0.0 1.0`, `entries 5`, and
+`method inversion 3 0.001`; no new prior, constraint or regularization command
+has been added. Official Pede reports `regularization: no`. The local official
+manual (`external/src/millepede-ii/doc/draftManual.md`, lines 1399-1408) and
+`pede.f90` show that positive pre-sigmas still add diagonal solver stabilization.
+With regularization disabled, the objective/gradient contain no prior penalty;
+finite iteration can retain damping effects, and matrix-inversion nominal errors
+retain `(H+W)^-1`. Here every maintained pre-sigma is 1.0 and W is the identity
+in the declared mixed physical units. This is distinct from the data-only
+covariance `H^-1`, which supplies the observability/rank tests before Pede.
+
+All twenty Scope A printed errors agree with the stabilized covariance at
+printed precision. The maximum relative sigma difference from `H^-1` is
+1.02474e-7. All parameter estimates also pass the existing printed-precision
+comparison to the unpenalized data-only solution; exact unbiasedness after
+finite iterations is not claimed. Full source hashes and quantitative evidence
+are in `pede_presigma_source_note/` under the audit root. Current multi-sensor
+reports label the data-only covariance and expected Pede stabilized covariance
+separately. Neither is a statistically calibrated coverage measurement.
+
+
+### Demonstrated observer defect and preserved primary retry
+
+The first Scope B primary attempt completed nominal/corrected reconstruction,
+all initial/corrected physical derivatives, the simultaneous eight-parameter Pede
+fit and first post-fit gate. Its optional refined reconstruction then stopped at
+event 355, L2, in the validation-only `FactoryAudit`.
+
+The actual failed ROOT output and an independent reconstruction from immutable
+CellIDs and real refined Geometry agree exactly. Double local coordinates are
+(-17.112654700154234, -9.422352232365252) mm; official `Measurement2D` stores
+binary32 (-17.112655639648438, -9.422351837158203) mm. Legitimate rounding has
+norm 1.019234e-6 mm (**1.019234 nm**), exceeding the observer's fixed
+1e-6 mm (**1 nm**) double-versus-float comparison. Each component is within
+half an ULP; the joint half-ULP norm bound is 1.066240e-6 mm. This is an
+observer representation defect, not a wrong surface or physical Geometry.
+
+`FactoryAudit.h::Process` now requires exact componentwise agreement with the
+official converter's `static_cast<float>` serialization and finite doubles.
+Surface identity remains exact. Independently, the unrounded DD4hep channel
+center must map to and back from its real ACTS plane within the unchanged
+1e-6 mm geometric threshold. The hit-to-surface membership tolerance, official
+measurement converter, calibrated covariance, CKF, Mille equations and physics
+are unchanged. This is not an arbitrary increase of a tolerance: it also rejects
+a deliberately corrupted one-ULP value at 0.25 mm whose 2.98e-8 mm difference
+would have passed the old guard. A regression using the actual installed
+`edm4hep::Vector2f` type passes; the total unit suite now has 91 tests.
+
+All 597 files from the interrupted first attempt remain protected by
+`failed_primary_manifest.json`. Fresh build `build/native_multi_precision_20261024_01`
+contains the observer fix. Retry `result/native_multi_scope_b_seed1_positive_20261024_02`
+retains byte-identical copies of the original Geometry, RawHits and completed
+scientific checkpoints, including their original command records. Only the
+failed refined reconstruction and downstream stages are newly executed.
+This is the same seed/cohort, not a replacement or additional independent
+sample. `primary_retry_provenance.json` explicitly distinguishes reused and
+reexecuted stages. No additional correction is applied: the retry reconstructs
+the same already-proposed refined XML and keeps the one-extra-correction limit.
+The failed attempt is not reclassified as a successful full closure.
+
+Detailed independent evidence is under `measurement_precision_diagnosis/`,
+`scope_b_measurement_precision_review/` and `primary_retry_provenance.json`.
+The earlier independent decoder text-parser mismatch is separately retained in
+`official_binary_scope_b_nominal/parser_incident.json`; official output and
+scientific data were unchanged.
+
+### Scope B primary eight-parameter closure — completed
+
+The independently validated primary cohort is seed 2026102701, 4096 tracks,
+`result/native_multi_scope_b_seed1_positive_20261024_02`. The earlier `_01`
+attempt and its observer failure remain intact. The retry copied only completed
+byte-verified checkpoint stages, then executed refined reconstruction, final
+Pede, control reconstruction/Pede and validation with the fresh precision build.
+It did not regenerate channels or apply an additional third correction.
+
+Initial Pede corrections and data-only marginal nominal errors are distinct
+from cumulative poses, which are read from the actual final matrices. Rotation
+components below are rotation-vector components in mrad, not Euler angles.
+Y values are in micrometers. The small Pede inversion stabilization described
+above remains unchanged; it is not used in the reported data-only covariance.
+
+| Parameter | Injected | Initial Pede | Initial nominal sigma | Final cumulative |
+|---|---:|---:|---:|---:|
+| L1 Y | +80.000000 | +79.961000 | 0.197914 | +79.960389 |
+| L1 Rx | +1.000000 | +1.018000 | 0.020273 | +1.017837 |
+| L1 Ry | +0.500000 | +0.362890 | 0.467939 | +0.318919 |
+| L1 Rz | -0.500000 | -0.673120 | 0.412032 | -0.667791 |
+| L2 Y | -60.000000 | -60.084000 | 0.194368 | -60.084070 |
+| L2 Rx | -1.200000 | -1.229700 | 0.016425 | -1.229801 |
+| L2 Ry | +0.600000 | +0.667800 | 0.353325 | +0.610818 |
+| L2 Rz | +0.600000 | +0.786860 | 0.343284 | +0.790271 |
+
+The initial data-only correlation matrix, in the same row/column order, is:
+
+```text
+ 1.000000  0.000911 -0.011859 -0.202086  0.262949  0.000343 -0.002758 -0.052168
+ 0.000911  1.000000 -0.003446 -0.002018  0.001194  0.256569 -0.000712 -0.000705
+-0.011859 -0.003446  1.000000 -0.020645 -0.002440 -0.000897  0.253675 -0.002750
+-0.202086 -0.002018 -0.020645  1.000000 -0.092931 -0.001058 -0.006473  0.257944
+ 0.262949  0.001194 -0.002440 -0.092931  1.000000  0.005357 -0.007175 -0.360379
+ 0.000343  0.256569 -0.000897 -0.001058  0.005357  1.000000 -0.003205 -0.004682
+-0.002758 -0.000712  0.253675 -0.006473 -0.007175 -0.003205  1.000000 -0.017611
+-0.052168 -0.000705 -0.002750  0.257944 -0.360379 -0.004682 -0.017611  1.000000
+```
+
+The full eight-by-eight covariance in mixed mm/rad units is retained in
+`solve/observability.json` and `validation/report.json`. The cross-sensor
+same-axis correlations are approximately 0.254–0.263; the largest absolute
+off-diagonal correlation is 0.360379 (L2 Y/Rz). Each track has global rank 4,
+which is allowed: the accumulated rank is 8 with diagonal-scaled condition
+3.165386. All recorded prefixes (16–4096 tracks) and the slope/impact subsets
+retain rank 8. The released L1/L2 twelve-component diagnostic has rank 12 and
+scaled condition 3.464460; the selected marginal errors also pass the unchanged
+sensitivity thresholds when X/Z are included as diagnostic nuisance columns.
+These columns are not enabled in the actual fit.
+
+Holding L0/L3/L4 fixed removes the selected-scope gauges. When all five sensors
+are released in the separate 30-column diagnostic, the six common rigid
+directions have projected design norm ratios below 3.12e-16. The released
+design has rank 21 at nominal Geometry and rank 23 after rotation. Its remaining
+null directions are not resolved by priors or interpreted as support for an
+arbitrary thirty-parameter fit.
+
+Both sensitive centers remain fixed in X/Z. Final Y biases relative to Truth
+are -0.039611 and -0.084070 micrometers; L1/L2 orientation distances are
+0.247513 and 0.192894 mrad. Both are smaller than their injected rotation-vector
+norms. All actual eight-corner module/layer checks and unrelated XML whitelist
+checks pass. The actual IDs are preserved independently:
+
+| Sensor | DD4hep Volume ID | ACTS GeometryIdentifier |
+|---|---:|---:|
+| L1 | 272631839 | 216173056991691039 |
+| L2 | 272633887 | 216173194430644511 |
+
+All 4096 tracks are accepted before/after correction and in the control, with
+five measurements, zero outliers and the same two expected holes. ACTS
+chi2/stored-NDF improves from 10.104523004 to 0.593123052; the control is
+0.596316760. Local residual RMS (u,v) improves from (43.955,9.427) to
+(7.704,7.699) micrometers. The first one-step post-fit gate already passes.
+The explicitly selected one extra correction gives a largest final increment
+of 0.000319764 initial nominal sigma; successive-fit uncertainties are never
+combined. Initial joint error Mahalanobis squared is 6.128952, below the
+existing 25 gate.
+
+| Pede stage | chi2 | NDF | chi2/NDF |
+|---|---:|---:|---:|
+| solve | 24293.257615 | 24568 | 0.988817063 |
+| postsolve | 24293.986926 | 24568 | 0.988846749 |
+| refinesolve | 24293.990347 | 24568 | 0.988846888 |
+| controlsolve | 24419.280297 | 24568 | 0.993946609 |
+
+All four Pede executions exit normally with zero rejected local fits, no
+warnings, and no recommended/applied error rescaling. Independent profiled
+chi2 agrees with official Pede. Actual native finite differences check all eight
+columns at three step sizes: 98,304 two-component vector checks per Geometry
+stage. Across nominal, first-corrected and refined stages the maximum angular
+error is 3.290e-8 mm/rad and translation error 4.547e-10 mm/mm, below the
+unchanged 2e-5 gate. The official decoder reads 4096 records/40960 scalar
+measurements with exactly eight selected labels, each occurring 8192 times.
+Fixed layers carry no unintended global labels.
+
+The identical shifted RawHit ROOT file SHA-256 is
+`46a19f92c3ac4e23baefe6698014c0b144fae0862700f1800db4dcd10ced3f99`;
+the channel payload SHA-256 is
+`64dac26410d8572e0c5e2f90a7087196de29e9f4a99a72399720823fe9f38ba0`.
+All three alignment reconstructions read those same bytes. The input frame
+contains only EventHeader and TelescopeChannels; Simulation Truth is used only
+for the independent validation. `validation/rotation.root` contains nine ROOT
+histograms for ACTS chi2 and local residual comparisons.
+
+Read-only summaries and raw command/exit evidence are in
+`result/native_multi_20261024_01_audit/scope_b_primary_final_summary/`.
+Additional predeclared seed/sign results are reported separately below.
+This establishes Geometry, derivative and reconstruction closure; it does not
+establish unbiasedness or nominal-error coverage.
+
+### Consolidated protected regression results
+
+All twelve prior native modes completed their full nominal/Pede/correction/fresh
+reconstruction/control closure, and all six protected contained L1 fixtures
+completed their full one-extra-correction workflow in fresh result directories.
+Their nominal/truth/corrected XML and nominal/corrected/control official Mille
+bytes are exactly identical to the prior protected references. The six contained
+cases also have byte-identical refined XML/Mille records. Scientific reports
+are identical except for the independently checked ROOT container file hash;
+the packed channel payload itself remains identical. ROOT container metadata
+makes newly written ROOT files unsuitable for cross-generation byte identity.
+Within each individual fixture the original input ROOT bytes are immutable.
+
+The 18-case comparison is
+`result/native_multi_20261024_01_audit/baseline_identity.json`; its command was:
+
+```sh
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh python3 -B \
+  result/native_multi_20261024_01_audit/baseline_identity.py
+```
+
+Full old-mode closures used the fresh Scope A build. Separately, the final
+precision plugin passes all 18 configuration checks on four events, producing
+exact existing native Mille prefixes. Full-event final-plugin reconstruction
+replays are recorded separately; their status must be read from
+`final_plugin_full_replay_summary.json`, not inferred from the pilot checks.
+Those replays compare the entire Mille Binary and all fitted-state/audit values;
+only the verified new derivative-gate output path differs in equation-report
+metadata. The first replay comparison stopped on that expected path metadata;
+its original driver and diagnostic are retained without weakening numerical
+comparisons or rerunning its completed reconstruction stage.
+
+The final fresh precision build also completed every command of the independent
+18-command consolidated suite in
+`result/native_multi_regression_l1_l2_y_20261024_01/precision_complete_regressions/`.
+All exit codes are zero: fresh standalone Geometry/CKF builds, actual one-event
+JANA reconstruction, native/legacy mathematical equivalence, official Pede
+mathematical fixture, 91 unit tests (74 existing plus 17 multi-sensor/precision
+tests), safety and preservation. SQLite ResourceWarnings in pre-existing tests
+remain visible in the saved stdout; they did not fail tests. No test result is
+inferred from source inspection.
+
+The historical Geant4/BeamTestReco 100-event regression also executed successfully
+in `result/native_multi_legacy_20261024_01`: 99 accepted tracks, L2 correction
++198.75 micrometers, L2 Rec-Sim -199.571 to -0.821 micrometers, ACTS
+chi2/stored-NDF 45.592234848 to 1.981039768. It reused the unchanged prior legacy
+build; a new legacy compilation is not claimed. The saved simulation dataset
+under `results/reference/physical_alignment_L2_x200um/` remains a local reference
+and is not added to Git.
+
+The original wider negative fixture still produces
+`EXPECTED_PHYSICAL_CONTAINMENT_REFUSAL`, with the same 2.311987-micrometer parent
+overflow. Its fitted result is reproduced exactly, but its invalid candidate is
+not reconstructed or activated. The protected negative test is in
+`result/native_multi_expected_refusal_20261024_01/report.json`; physical closure
+is explicitly false and safety is true. It is not counted as a successful
+physical closure and was not replaced by an enlarged envelope.
+
+Final independent source/preservation evidence is in
+`result/native_multi_20261024_01_audit/final_source_preservation/`: 3347 historical
+files and 597 failed-primary files rehash exactly. Of 161 protected sources,
+159 are byte-identical and exactly two adapters change intentionally:
+`TelescopeMille.cc` selection guards and the `FactoryAudit.h` validation observer.
+NativeMilleModel numerical equations, copied official tracking modules, original
+Geometry/SO(3), legacy fitter/electron hypothesis and Controller are unchanged.
+All nine pinned upstream patches reproduce byte-identically. Separately executed
+safety/preservation commands confirm 221 baseline records plus 2046 relocated
+files and the protected electron change. No external source tree, installed
+library, historical result, or Geometry activation was modified.
+
+The completed final-plugin full-event replay summary now confirms **19/19 cases,
+49,280 events**: the twelve old modes, all six contained fixtures, and Scope A.
+Every official Mille Binary is byte-identical and every fitted-state/audit value
+is exactly equal, with only the independently verified fresh derivative-gate
+path excluded from equation-report metadata. This closes the final-build
+compatibility check rather than relying solely on four-event pilots. Executed
+command:
+
+```sh
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh python3 -B \
+  result/native_multi_20261024_01_audit/final_plugin_full_replay_v2.py
+```
+
+Evidence is `final_plugin_full_replay_summary.json` and each `full_replay_*`
+audit stage. The original path-comparison incident and first driver remain
+available in the same audit directory. These are current-milestone validation
+replays of fresh regression cases, not modifications of historical references.
+
+### Scope B four-fixture validation — completed
+
+All four predeclared fixtures pass, with 4096 accepted tracks per fixture.
+There are **two independent seeds (2026102701 and 2026102702), not four
+independent statistical samples**: opposite rotation signs share the same
+generated rays within each seed. The translations stay +80/-60 micrometers;
+negative fixtures reverse both rotation vectors. The 8192 distinct ray draws
+produce 16384 signed-fixture events; repeated reconstruction/control records
+are not counted as additional independent data. Scope A has one full positive
+cohort, plus both signs of its prospective Geometry-only preflight.
+
+All four initial one-step post-update gates pass. Each follows the same
+predeclared protocol with one explicit additional correction and no further
+iteration. Maximum final increment is 0.000673995 initial sigma (maximum
+fraction of an angular final gate 0.00269598). No successive-fit covariance is
+added. The original observer-failed primary attempt remains one retained
+failed execution of the same seed, not an extra sample or a failed physical
+closure after the demonstrated software fix. No additional fixture failed.
+
+| Seed | Sign | ACTS chi2/stored-NDF before → final | L1/L2 orientation error [mrad] | L1/L2 center Y bias [um] | Min fitted module clearance [um] |
+|---|---|---|---|---|---|
+| 2026102701 | positive | 10.104523004 → 0.593123052 | 0.247513 / 0.192894 | -0.039611 / -0.084070 | 119.153319 |
+| 2026102701 | negative | 10.151074565 → 0.601026869 | 0.418621 / 0.221817 | -0.065317 / -0.092541 | 120.241183 |
+| 2026102702 | positive | 10.120347257 → 0.604577774 | 0.194667 / 0.334748 | -0.127122 / -0.337961 | 120.285504 |
+| 2026102702 | negative | 10.175597063 → 0.604759650 | 0.855724 / 0.296875 | +0.004390 / +0.041115 | 119.403935 |
+
+All sixteen Pede fits exit 0 with zero rejected local fits, no warnings or error
+rescaling. Their chi2/NDF spans 0.9888170635–1.0082473763, with NDF=24568.
+Selected accumulated rank is 8 in every solve; the diagonal-scaled condition
+spans 3.16497465–3.29604556. The twelve-column diagnostic retains rank 12 and
+passes the inherited selected-sensitivity bounds. Six released common rigid
+motions have maximum norm ratio 7.10e-16. No gauge prior is added.
+
+The twelve actual-Geometry finite-difference gates cover 1179648 two-component
+vectors across four fixtures and three Geometry stages. Maximum errors are
+3.309721208e-8 mm/rad and 5.459127594e-10 mm/mm. All eight sensitive corners
+remain within the unchanged actual parent boxes and cylindrical layer bounds;
+minimum fitted-pose module clearance is 119.153319 micrometers. Every input
+file/channel SHA matches across the three alignment reconstructions of its
+fixture. All four ROOT files reopen with nine histograms each: 4096 chi2
+entries and 20480 residual entries per relevant histogram.
+
+The full eight-parameter initial estimates and original nominal uncertainties
+for the three additional fixtures are retained below. Units are mm/rad, and
+cumulative rotations are actual matrix-log values, not sums of fit vectors.
+The primary table above uses micrometers/mrad instead.
+
+#### Seed 2026102701, negative rotations
+
+| Parameter | Initial Pede | Initial nominal sigma | Final cumulative | Unit |
+|---|---:|---:|---:|---|
+| L1 Y | +0.079934 | 0.000197911838698 | +0.07993468274 | mm |
+| L1 Rx | -0.00099698 | 2.02726831405e-05 | -0.000996730327978 | rad |
+| L1 Ry | -0.0006306 | 0.000467941251798 | -0.000589358994729 | rad |
+| L1 Rz | +9.9087e-05 | 0.000412026095449 | +9.10409780758e-05 | rad |
+| L2 Y | -0.060093 | 0.00019436619453 | -0.06009254131 | mm |
+| L2 Rx | +0.00119 | 1.64250446116e-05 | +0.00119010404238 | rad |
+| L2 Ry | -0.00055499 | 0.000353329063259 | -0.000500979057898 | rad |
+| L2 Rz | -0.00039488 | 0.00034328517176 | -0.000401758769205 | rad |
+
+Run: `result/native_multi_scope_b_seed1_negative_20261024_01`.
+
+#### Seed 2026102702, positive rotations
+
+| Parameter | Initial Pede | Initial nominal sigma | Final cumulative | Unit |
+|---|---:|---:|---:|---|
+| L1 Y | +0.079873 | 0.000198894026102 | +0.07987287807 | mm |
+| L1 Rx | +0.00099691 | 2.03291008456e-05 | +0.000997039354926 | rad |
+| L1 Ry | +0.00074675 | 0.000466112353184 | +0.000693402123935 | rad |
+| L1 Rz | -0.00048226 | 0.000417956866842 | -0.00047804016219 | rad |
+| L2 Y | -0.060336 | 0.000195749744763 | -0.0603379609 | mm |
+| L2 Rx | -0.0011941 | 1.63528975533e-05 | -0.00119415105565 | rad |
+| L2 Ry | +0.00061003 | 0.000350935209256 | +0.000553360373447 | rad |
+| L2 Rz | +0.00092368 | 0.000345093847846 | +0.0009314311572 | rad |
+
+Run: `result/native_multi_scope_b_seed2_positive_20261024_01`.
+
+#### Seed 2026102702, negative rotations
+
+| Parameter | Initial Pede | Initial nominal sigma | Final cumulative | Unit |
+|---|---:|---:|---:|---|
+| L1 Y | +0.080003 | 0.000198895375536 | +0.0800043895 | mm |
+| L1 Rx | -0.0010131 | 2.03290557574e-05 | -0.00101301873612 | rad |
+| L1 Ry | -0.00071513 | 0.000466118283947 | -0.000662886372334 | rad |
+| L1 Rz | +0.0013551 | 0.000417963359174 | +0.00133997743926 | rad |
+| L2 Y | -0.05996 | 0.000195751299859 | -0.0599588848 | mm |
+| L2 Rx | +0.001212 | 1.6352843653e-05 | +0.00121186421965 | rad |
+| L2 Ry | -0.00053435 | 0.0003509400544 | -0.000475999160388 | rad |
+| L2 Rz | -0.00032862 | 0.000345097424703 | -0.000330523426501 | rad |
+
+Run: `result/native_multi_scope_b_seed2_negative_20261024_01`.
+
+The complete English read-only audit is
+`result/native_multi_20261024_01_audit/scope_b_four_fixture_summary/`: `SUMMARY.md`,
+`summary.json` (all eight-by-eight covariance/correlation matrices, actual IDs,
+RawHit hashes, Geometry chains, prefixes/subsets and all sixteen solver logs)
+and `containment.json`. Every executed command has its exit status and stdout.
+These local generated datasets are excluded from Git; the maintained CLI,
+beam/configuration JSON and generation source reproduce them in fresh paths.
+
+The executed additional commands use the exact flags/mode/beam/result table in
+`TELESCOPE_ALIGNMENT_USER_GUIDE.md`; the primary checkpoint retry is explicitly
+distinguished from a fresh `--step all` reproduction. No original data, partial
+failure, checkpoint, install or external archive was deleted or overwritten.
+
+#### Changed code paths and supported boundary
+
+| Maintained path/function | Change |
+|---|---|
+| `TelescopeMille.cc::Init` | Exact five/eight-label whitelists and L2 rotation validation; `Process`/native equations unchanged |
+| `FactoryAudit.h::Process` | Demonstrated double/float observer defect fixed with exact serialization plus independent strict geometric check |
+| `closure.py::displaced_xml`, `solve`, `main` | Selected L2 correction, explicit new modes, accumulated native rank/sensitivity gates, original Pede steering and covariance conventions |
+| `rotation.py` selection, `physical_derivatives`, `correct`, `refine`, `check` | Both sensors use the existing SO(3) implementation and original correction gates |
+| `multi_sensor.py` | Bounded label/sensor mappings, fixed fixtures, pose increments and independent XML whitelist |
+| `multi_information.py::analyze` | Read-only local-four-parameter elimination, covariance, gauge, prefix and slope/impact diagnostics |
+| `multi_preflight.py` | Prospective correlated engineering perturbations, actual DD4hep/ACTS reload and module/layer containment |
+| Four alignment/beam JSON files | Explicit actual L1/L2 identities and two fixed seeds; unchanged beam recipe |
+| `test_native_multi_sensor.py` | Seventeen tests including actual EDM precision, sensor isolation and two-sensor composition |
+| User Guide, Code Map, this parity report | Actual commands, provenance, numerical results and limitations |
+
+The SourceLink/CellID → DD4hep VolumeContext → official SurfaceMap → native ACTS
+state path is unchanged. Configuration selects labels for the actual matched
+sensor; fixed layers contribute local tracking information but no selected
+global columns. Both selected physical sensitive centers/rotations are updated
+from one Pede result using the original left-Global matrix update and fresh
+Geometry reload. Shared module definitions are cloned independently and the
+unrelated XML, segmentation, material and reference sensors remain unchanged.
+
+Scope A and Scope B are validated **experimental** capabilities within the
+existing zero-field, quantized-channel, unassigned-ACTS-material test. The
+largest final orientation error is 0.855724 mrad and the Ry/Rz nominal errors
+are of order 0.35–0.48 mrad: numerical convergence is not proof of exact Truth
+recovery. Two seeds and paired signs do not validate bias or uncertainty
+coverage. No arbitrary six-DOF, additional free layer, material-aware physics
+performance, original Geant4-channel compatibility, automatic Controller loop
+or production Geometry activation is claimed. Those remain separate gated
+development/validation steps. The legacy scientific implementation is retained.
