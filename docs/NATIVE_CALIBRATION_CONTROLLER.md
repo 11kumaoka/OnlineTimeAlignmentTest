@@ -1,11 +1,44 @@
 # Bounded native Calibration Controller
 
+For the maintained complete npsim-to-calibration command, start with the
+[practical user guide](TELESCOPE_ALIGNMENT_USER_GUIDE.md). The new public
+`calibration.workflow` entry calls this Controller; it does not replace it.
+The configured `l1_y` example selects only Global Y on SiMAPS L1.
+
+The established strict policy remains the default. Explicit
+`start --validation-mode diagnostic --geometry-aware-holes` enables an offline
+investigation: actual finite sensitive crossings replace the synthetic-only
+hole expectation, and a recognized high-chi2 Pede advisory can be retained while
+evaluating an unapproved physical candidate. Zero local-fit rejection, exact
+detector associations, RawHit integrity, finite/full-rank information,
+independent Pede agreement and containment remain hard requirements. Precision
+targets are reported as quality warnings; no error scaling is performed.
+Unknown solver warnings and statuses still stop.
+
+Diagnostic terminal reports distinguish `engineering_success` from
+`physics_validation: not_validated`. A bounded `iteration_limit` can publish an
+unapproved technical candidate only after at least one correction and a fresh
+completed reconstruction. No diagnostic candidate is activated. Same-data
+convergence alone does not establish accuracy or uncertainty coverage. The
+[current workflow report](NATIVE_WORKFLOW_VALIDATION.md) is separate from the
+historical numerical protocols retained below.
+
 The native Controller operates on one immutable `EventHeader,TelescopeChannels`
 ROOT file, an initial DD4hep XML file, and an already validated alignment
 configuration. It does not read injected displacements, generate channels,
 implement a track fitter, or activate Geometry. This milestone is a sequential,
 offline technical prototype, with zero field and no assigned ACTS material.
 It does not establish beam-test input compatibility or uncertainty coverage.
+
+The independent [native npsim/Digitization adapter](NATIVE_GEANT4_WORKFLOW.md)
+can now supply explicitly selected Geant4-derived RawHits. Pass its receipt
+with `--input-provenance`: the Controller verifies the exact ROOT/payload hashes,
+snapshots and seals the receipt, and marks subsequent reconstruction audits as
+Geant4 input. Its metadata is not an alignment observation or stopping target.
+The numerical operations and established strict acceptance gates are retained. The linked
+report distinguishes actual transport/integration results from successful
+calibration and records any refusal; earlier sections retain their original
+synthetic milestone scope.
 
 ## Executable flow
 
@@ -54,10 +87,11 @@ accumulation order, equations, steering, serializers and fitter settings.
 
 ## Supported selection and input
 
-`--config` must equal one of the four existing configured native scopes:
+`--config` must equal one of the maintained explicit configured native scopes:
 
 | Configuration in `validation/telescope_alignment/` | Free components |
 | --- | --- |
+| `l1_global_y.json` | L1 Global Y only |
 | `l1_y_rx_ry_rz_l2_y.json` | L1 Y/Rx/Ry/Rz; L2 Y |
 | `l1_l2_y_rx_ry_rz.json` | L1/L2 Y/Rx/Ry/Rz |
 | `l1_l2_y_rx_ry_rz_l3_y.json` | L1/L2 Y/Rx/Ry/Rz; L3 Y |

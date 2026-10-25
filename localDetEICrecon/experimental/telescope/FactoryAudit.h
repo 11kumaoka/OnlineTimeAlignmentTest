@@ -12,17 +12,24 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <mutex>
+#include <string>
+#include "NavigationAudit.h"
 namespace eicrecon::telescope {
 class FactoryAudit : public JEventProcessor {
   std::string output;
+  std::string inputOrigin="synthetic";
   bool multipleEvents=false;
+  bool geometryAwareHoles=false;
   nlohmann::json events=nlohmann::json::array();
   std::mutex mutex;
 public:
   void Init() override {
     GetApplication()->SetDefaultParameter("TelescopeAudit:output", output, "New JSON audit output (required)");
     GetApplication()->SetDefaultParameter("TelescopeAudit:multipleEvents",multipleEvents,"Aggregate per-event native track diagnostics; preserve single-event default");
+    GetApplication()->SetDefaultParameter("TelescopeAudit:inputOrigin",inputOrigin,"Input provenance: synthetic or geant4; reconstruction remains material-free");
+    GetApplication()->SetDefaultParameter("TelescopeAudit:geometryAwareHoles",geometryAwareHoles,"Validate native holes against actual sensitive bounds and official ACTS navigation");
     if(output.empty() || std::filesystem::exists(output)) throw std::runtime_error("Audit output must be a new path");
+    if(inputOrigin!="synthetic" && inputOrigin!="geant4") throw std::runtime_error("Unsupported TelescopeAudit input origin");
   }
   void Process(const std::shared_ptr<const JEvent>& event) override {
     std::lock_guard<std::mutex> guard(mutex);
@@ -39,9 +46,13 @@ public:
         std::make_shared<Acts::ConstVectorMultiTrajectory>(*states.front()));
     auto provider=GetApplication()->GetService<ACTSGeo_service>()->actsGeoProvider();
     const auto& context=provider->getActsGeometryContext();
-    nlohmann::json report={{"synthetic_input",true},{"material_free",true},
+    nlohmann::json report={{"synthetic_input",inputOrigin=="synthetic"},{"material_free",true},
       {"hits",hits->size()},{"measurements",measurements->size()},{"seeds",seeds->size()},
       {"native_tracks",native.size()},{"edm_tracks",tracks->size()},{"edm_trajectories",trajectories->size()}};
+    if(inputOrigin=="geant4") {
+      report["input_origin"]="geant4_digitized";
+      report["material_free_scope"]="ACTS reconstruction model";
+    }
     report["event_number"]=event->GetEventNumber();
     report["run_number"]=event->GetRunNumber();
     if(multipleEvents && native.size()==0 && tracks->empty()) {
@@ -66,11 +77,13 @@ public:
     const auto track=native.getTrack(0);
     report["chi2"]=track.chi2(); report["stored_ndf"]=track.nDoF();
     report["outliers"]=track.nOutliers(); report["holes"]=track.nHoles();
-    if(multipleEvents && (track.nMeasurements()!=5 || track.nOutliers()!=0 || track.nHoles()!=2)) {
+    const bool invalidStates=track.nMeasurements()!=5 || track.nOutliers()!=0 || (!geometryAwareHoles && track.nHoles()!=2);
+    if(multipleEvents && invalidStates) {
       report["accepted"]=false;report["reason"]="Incomplete SiMAPS track or unexpected holes/outliers";
       events.push_back(report);return;
     }
-    if(track.nMeasurements()!=5 || track.nOutliers()!=0 || track.nHoles()!=2) throw std::runtime_error("Unexpected CKF states");
+    if(invalidStates) throw std::runtime_error("Unexpected CKF states");
+    if(geometryAwareHoles) report["navigation_audit"]=auditSensitiveNavigation(track,*provider,*measurements);
     for(const auto& measurement:*measurements) {
       const auto hit=measurement.getHits()[0];
       const auto converter=algorithms::GeoSvc::instance().cellIDPositionConverter();
@@ -97,6 +110,8 @@ public:
       report["measurement_details"].push_back({{"cell_id",hit.getCellID()},{"volume_id",volume->identifier},
         {"geometry_id",measurement.getSurface()},{"position_mm",{point.x,point.y,point.z}},{"loc_mm",{measurement.getLoc().a,measurement.getLoc().b}},
         {"covariance_mm2",{cov.xx,cov.yy,cov.xy}}});
+      if(geometryAwareHoles)
+        report["measurement_details"].back()["serialization_audit"]=auditMeasurementSerialization(hit,measurement,*provider);
     }
     for(const auto state:track.trackStatesReversed()) {
       const auto flags=state.typeFlags();

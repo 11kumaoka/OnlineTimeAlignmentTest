@@ -1,6 +1,65 @@
 # Telescope alignment: source and processing map
 
+## Public Geant4-to-calibration entry
+
+`calibration/workflow.py` orchestrates existing independent modules; it contains
+no simulator, fitter, alignment solver or Geometry correction mathematics.
+The practical commands are in the [user guide](TELESCOPE_ALIGNMENT_USER_GUIDE.md).
+The later sections retain the detailed historical native fixture scopes.
+
+```text
+workflow configuration + Truth/Survey XML
+  -> simulation.native: installed npsim / DD4hep / Geant4
+  -> digitization.native: TelescopeDigitization.so / installed SiliconTrackerDigi
+  -> Raw-only projection: immutable EventHeader + TelescopeChannels
+  -> native_controller: geometry -> reconstruct -> derivatives -> solve
+       -> native_operations.correct -> fresh reconstruct (same RawHit bytes)
+  -> verified checkpoints -> unapproved candidate + JSON/Markdown/ROOT report
+```
+
+The installed `ActsGeometryProvider`, TrackingGeometry and SurfaceMap are used
+throughout. Existing adapted official Measurement2D-to-ACTS and CKF source modules
+and unchanged ActsToTracks perform reconstruction. `NativeMilleModel` and official
+Mille/Pede retain their existing equations and steering.
+
+The remaining telescope adapters are explicit: seven-plane barrel metadata/XML
+preparation; official digitization factory registration for the local readouts;
+one-cell-per-SiMAPS Raw projection; channel-to-Hit reconstruction and the existing
+electron seed; NativeMilleModel integration/physical Geometry Correction; and
+observer/reporting checks. These adapters do not replace the official provider,
+navigator or track fitter.
+
+`NavigationAudit.h::auditSensitiveNavigation` reads the actual last measured
+filtered track state and verifies holes with the installed `Acts::Navigator`
+plus independent intersections with the real finite SurfaceMap bounds. The
+`TelescopeAudit:geometryAwareHoles` switch defaults false for historical fixtures;
+the public Geant4 path enables it. It changes validation, not tracking.
+
+That opt-in observer also records `measurement_details.serialization_audit`.
+It checks the installed Hit Reconstruction global-float32 and official-style
+measurement local-float32/covariance representations exactly for each Geometry.
+The Controller compares direct segmentation coordinates and pixel dimensions
+across versions. This avoids treating a legitimate one-ULP representation change
+after rotation as movement of an immutable Raw channel. The legacy comparison
+and its 2e-6 mm bound remain unchanged when the option is disabled.
+
+`native_policy.py` isolates the optional offline quality policy. Only a known
+high-chi2 Pede advisory can continue diagnostically with zero rejected local fits
+and independently verified finite, full-rank output. Resolution targets become
+reported warnings in that mode; requested rank, condition, IDs, immutable input,
+Pede/Schur agreement and physical containment remain mandatory. Strict criteria
+remain the default. Candidates are never approved or activated automatically.
+
+The new `l1_y` configured scope selects only label 700102. Its unrequested
+six-DOF nuisance diagnostic need not be observable; the actually requested
+one-dimensional profiled information must be positive and full rank. Other
+configured scopes retain their existing nuisance-rank checks. Numerical
+NativeMilleModel, ACTS errors, seed, SO(3) composition and Pede steering are
+unchanged.
+
 Start with the [user guide](TELESCOPE_ALIGNMENT_USER_GUIDE.md).
+The independent [native Geant4 input guide](NATIVE_GEANT4_WORKFLOW.md) records
+the npsim/official Digitization adapter and its actual validation boundary.
 This map describes the actual opt-in telescope chain. It is distinct from the
 production/reference BeamTestReco path and from standard ePIC reconstruction.
 Official source comparisons use pinned EICrecon Git objects at
@@ -19,6 +78,7 @@ Official source comparisons use pinned EICrecon Git objects at
 | `localDetEICrecon/alignment/` | preserved historical BeamTestMilleWriter, used only for independent equivalence checks here |
 | `geometry/`, `reconstruction/`, `alignment/`, `calibration/` | original stages and Python Controller; not replaced or activated |
 | `environment/` | fixed Docker bridge and external dependency setup |
+| `simulation/native.py`, `digitization/native.py` | isolated genuine npsim transport, installed official Digitization and explicitly ledgered Raw-only projection; legacy stage interfaces remain available |
 | `result/`, `build/` | ignored execution artifacts; historical names remain unchanged |
 
 ## Actual processing flow
@@ -26,6 +86,10 @@ Official source comparisons use pinned EICrecon Git objects at
 ```mermaid
 flowchart TD
   G[Offline: nominal and displaced Truth XML] --> D[TelescopeChannels: actual sensor intersection and segmentation]
+  G --> GS[npsim / Geant4: actual radial Geometry]
+  GS --> GD[Installed SiliconTrackerDigi: full SimHit and RawHit output]
+  GD --> GP[Raw-only layer ordering and explicit single-cell acceptance]
+  GP --> R
   D --> R[RawTrackerHit ROOT: immutable channels]
   R --> J[Fresh eicrecon: nominal Geometry]
   J --> H[Installed TrackerHitReconstruction]
@@ -56,6 +120,9 @@ Paths below are relative to the repository root. `T/` means
 | `V/telescope_geometry/BarrelMetadata.cc` | `initializeBarrelMetadata`: Tube layer metadata, sensor axis definitions, actual tracker/barrel flags | DD4hep XML initialization in each geometry process |
 | `V/telescope_closure/TelescopeChannels.cc` | `main`: actual VolumeContext transforms, ray/sensor intersection, segmentation and ID checks | separate offline executable |
 | `V/telescope_closure/closure.py` | `geometry_step`, `data_step`, `pack`: Truth XML and RawTrackerHit ROOT, separate Truth JSON | external Python |
+| `simulation/native.py` | `simulate`, `simulation_geometry`, `inspect_simulation`: installed npsim gun/transport, private MC-retention metadata and post-transport QA | external Python/npsim |
+| `T/TelescopeDigitization.cc` | `InitPlugin`: register three installed `SiliconTrackerDigi_factory` instances with retained detector-response settings | separate eicrecon Digitization process |
+| `digitization/native.py` | `digitize`, `geometry_contract`, `select_channels`, `project`: full official output and exact Raw-only projection/provenance, no Truth-based selection | external Python/eicrecon |
 | `T/TelescopeTracking.cc` | `InitPlugin`: JOmniFactoryGeneratorT collection wiring | eicrecon |
 | installed `factories/tracking/TrackerHitReconstruction_factory.h` | official algorithm `process`: channels to TrackerHit, pitch/sqrt(12) errors and RawHit relations | eicrecon |
 | `T/algorithms/tracking/TrackerMeasurementFromHits.{h,cc}` | `init`, `process`: SurfaceMap association, local Measurement2D and covariance | eicrecon |
@@ -97,6 +164,8 @@ one-event benchmark remains independent. Reproducible commands use one thread.
 | Category | Components and reasons |
 |---|---|
 | Reused unchanged, installed | DD4hep_service, ACTSGeo_service, ActsGeometryProvider, DD4hep converter, TrackingGeometry, SurfaceMap; TrackerHitReconstruction factory/algorithm; actual CKFTrackingFunction with EigenStepper/Navigator/filter/smoother; ActsToTracks; JOmniFactory/JOmniFactoryGeneratorT |
+| Geant4 input, reused installed | npsim/DDSim, Geant4 transport and EDM4hep output; `SiliconTrackerDigi_factory` and actual algorithm in `algorithms_digi_library` |
+| Geant4 input, telescope-specific | collection/response registration; private MC particle-retention region constants with actual sensor-identity check; Raw-only exact-five-cell/layer-order adapter and provenance. This is not general clustering or a replacement transport/digitization algorithm |
 | Unchanged pinned header copies | `extensions/edm4eic/EDM4eicToActs.h` and `upstream_support/algorithms/meta/CollectionCollector.h`; installation lacks these headers. Replace with installed includes when provided and regression-tested |
 | Official measurement copy, locally modified | optional B0 constant lookup avoids inventing an absent detector; missing VolumeContext guard; system31/SiMAPSHits CartesianGridXZ covariance projection maps packed sensor X/Z variances into ACTS u/v through J C J^T. Upstream needs equivalent optional detector handling and covariance semantics before direct replacement |
 | Official CKF wrapper copy, locally modified | namespace/includes and installed interface adaptation; each seed's perigee is honored instead of assuming origin; electronHypothesis option defaults false, explicitly true for this telescope. Installed numerical CKF is reused. Replace when upstream respects the same seed reference and particle hypothesis |

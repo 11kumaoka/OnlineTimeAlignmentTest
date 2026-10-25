@@ -32,7 +32,8 @@ class ControllerFixture(unittest.TestCase):
         self.serial = 0
 
     @contextmanager
-    def initialized(self, *, collections=('EventHeader', 'TelescopeChannels'), channel_count=5):
+    def initialized(self, *, collections=('EventHeader', 'TelescopeChannels'), channel_count=5,
+                    geant4_provenance=False):
         """Patch only external discovery and ROOT reading for a structural run."""
         self.serial += 1
         directory = self.root / str(self.serial)
@@ -60,6 +61,12 @@ class ControllerFixture(unittest.TestCase):
             maximum_corrections=3, max_abs_y_mm=2e-5,
             max_angular_sigma_ratio=.25, max_joint_sigma=.25,
             max_scaled_condition=100.)
+        if geant4_provenance:
+            provenance = directory / 'producer.json'
+            provenance.write_text(json.dumps({'schema': 'native-geant4-input-v1',
+                'input_origin': 'geant4_digitized', 'raw_root_sha256': digest(raw),
+                'channel_payload_sha256': '0' * 64}))
+            args.input_provenance = provenance
         with ExitStack() as stack:
             stack.enter_context(patch.dict('sys.modules', {
                 'calibration.native_operations': module, 'podio': podio}))
@@ -192,6 +199,18 @@ class AtomicControllerArtifacts(ControllerFixture):
 
 
 class ImmutableControllerInputs(ControllerFixture):
+    def test_geant4_provenance_is_snapshotted_sealed_and_checked_on_resume(self):
+        with self.initialized(geant4_provenance=True) as state:
+            self.assertEqual(state.manifest['input_origin'], 'geant4')
+            controller.verify(state.run / 'input')
+            controller.validate_run_inputs(state.manifest)
+            snapshot = Path(state.manifest['input']['provenance']['path'])
+            source = Path(state.manifest['input']['provenance_source']['path'])
+            self.assertEqual(snapshot.read_bytes(), source.read_bytes())
+            source.write_bytes(source.read_bytes() + b'changed')
+            with self.assertRaisesRegex(RuntimeError, 'Immutable identity changed'):
+                controller.validate_run_inputs(state.manifest)
+
     def test_truth_collections_or_missing_channels_are_not_accepted_as_native_input(self):
         with self.assertRaisesRegex(ValueError, 'only EventHeader,TelescopeChannels'):
             with self.initialized(collections=('EventHeader', 'TelescopeChannels', 'MCParticles')):

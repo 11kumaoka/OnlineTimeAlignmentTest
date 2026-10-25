@@ -236,8 +236,10 @@ def channel_digest(values):
         for cell,charge,time in hits:data+=struct.pack('<Qiq',cell,charge,time)
     return hashlib.sha256(data).hexdigest()
 
-def reconstruct(build,output,geometry,source,config,events,cut=None):
+def reconstruct(build,output,geometry,source,config,events,cut=None,input_origin='synthetic',geometry_aware_holes=False):
     """Run the maintained native chain on one immutable channel file."""
+    if input_origin not in ('synthetic','geant4'):
+        raise ValueError('Unsupported native input origin')
     p=stage(output.parent,output.name);env=environment(build)
     gate=stage(p,'gate')
     execute([build/'TelescopeMilleDerivatives',geometry,'geometry-center',gate/'derivatives.json'],gate,env=env)
@@ -252,6 +254,8 @@ def reconstruct(build,output,geometry,source,config,events,cut=None):
       f'-PTelescopeMille:config={config}',
       f'-PTelescopeMille:derivativeGate={gate}/derivatives.json',f'-Ppodio:output_file={p}/reco.root',
       '-Ppodio:output_collections=EventHeader,TelescopeChannels,TelescopeHits,TelescopeHitAssociations,TelescopeMeasurements,TelescopeSeeds,TelescopeSeedParameters,TelescopeTrajectories,TelescopeTrackParameters,TelescopeTracks,TelescopeTrackLinks,TelescopeTrackAssociations']
+    if input_origin=='geant4':command.append('-PTelescopeAudit:inputOrigin=geant4')
+    if geometry_aware_holes:command.append('-PTelescopeAudit:geometryAwareHoles=true')
     if cut is not None:command.append(f'-PTelescopeTracking:TelescopeCKF:Chi2CutOff={cut}')
     command.append(source)
     execute(command,p,env=env)
@@ -264,9 +268,13 @@ def reconstruct(build,output,geometry,source,config,events,cut=None):
 
 
 
-def solve(build,output,reconstruction,mode,events):
+def solve(build,output,reconstruction,mode,events,diagnostic=False):
     """Run unchanged profiling and official Pede after the caller's FD gate."""
     from validation.telescope_closure.multi_sensor import is_multi,mapping
+    from calibration.native_policy import require_precision
+    quality_warnings=[]
+    def precision(passed,message):
+        require_precision(passed,message,diagnostic,quality_warnings)
     rotation=mode!='l1_l2_y'
     selected=LABELS
     if rotation:
@@ -295,18 +303,18 @@ def solve(build,output,reconstruction,mode,events):
         if is_four(mode):
             selected_design=last['selected_Y_Rx_Ry_Rz']
             assert selected_design['rank']==4 and selected_design['diagonal_scaled_condition']<100
-            assert selected_design['sigma'][0]<.001 and max(selected_design['sigma'][1:])<.0005
+            precision(selected_design['sigma'][0]<.001 and max(selected_design['sigma'][1:])<.0005,'Selected translation/rotation resolution target not met')
             full=design['all_translation_diagnostic']
             assert full['rank']==6 and full['diagonal_scaled_condition']<100
-            assert full['sigma'][1]<.001 and max(full['sigma'][3:])<.0005
+            precision(full['sigma'][1]<.001 and max(full['sigma'][3:])<.0005,'Extended translation/rotation resolution target not met')
         elif is_three(mode):
-            assert max(last['sigma'][2:5])<.0005,'Three-axis rotation unresolved before Pede'
-            assert max(design['all_translation_diagnostic']['sigma'][3:6])<.0005
+            precision(max(last['sigma'][2:5])<.0005,'Three-axis rotation resolution target not met')
+            precision(max(design['all_translation_diagnostic']['sigma'][3:6])<.0005,'Extended three-axis resolution target not met')
             assert last['selected_Rx_Ry_Rz']['rank']==3 and last['selected_Rx_Ry_Rz']['diagonal_scaled_condition']<100
         elif is_coupled(mode):
-            assert max(last['sigma'][3:5])<.0005,'Coupled tilt unresolved before Pede'
-            assert max(design['all_translation_diagnostic']['sigma'][4:6])<.0005
-        else:assert last['sigma'][index]<.001,'Native selected tilt unresolved before Pede'
+            precision(max(last['sigma'][3:5])<.0005,'Coupled tilt resolution target not met')
+            precision(max(design['all_translation_diagnostic']['sigma'][4:6])<.0005,'Extended coupled tilt resolution target not met')
+        else:precision(last['sigma'][index]<.001,'Selected tilt resolution target not met')
     if is_multi(mode):
         from validation.telescope_closure.multi_information import analyze
         design=analyze(reconstruction/'mille.json',selected)
@@ -316,11 +324,14 @@ def solve(build,output,reconstruction,mode,events):
         actual=design['selected']
         assert np.allclose(normal,actual['information'],rtol=1e-10,atol=1e-6),'Mille/native profiled information mismatch'
         assert actual['rank']==dimension and actual['diagonal_scaled_condition']<100
-        assert all(v<(.001 if mapping(k)[1]==1 else .0005) for k,v in zip(selected,actual['sigma']))
+        precision(all(v<(.001 if mapping(k)[1]==1 else .0005) for k,v in zip(selected,actual['sigma'])),'Selected resolution target not met')
         full=design['omitted_X_Z_diagnostic']
         layers=sorted({mapping(k)[0] for k in selected})
-        assert full['rank']==6*len(layers) and full['diagonal_scaled_condition']<100
-        assert all(full['sigma'][6*layers.index(mapping(k)[0])+mapping(k)[1]]<(.001 if mapping(k)[1]==1 else .0005) for k in selected),'Selected sensitivity unresolved with omitted-translation diagnostic columns'
+        # A one-translation example need not identify unrequested rotations.
+        # Existing multi-DOF scopes retain their established nuisance-rank gate.
+        if mode!='l1_y':
+            assert full['rank']==6*len(layers) and full['diagonal_scaled_condition']<100
+            precision(all(full['sigma'][6*layers.index(mapping(k)[0])+mapping(k)[1]]<(.001 if mapping(k)[1]==1 else .0005) for k in selected),'Selected resolution target not met with diagnostic nuisance columns')
 
     text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n700102 0.0 1.0\n700202 0.0 1.0\n\nprintcounts\nend\n'
     if rotation:
@@ -329,14 +340,18 @@ def solve(build,output,reconstruction,mode,events):
     execute([REPO/'external/install/bin/pede','pede.txt'],p,env=environment(build))
     status=(p/'millepede.end').read_text().strip()
     if status.split()[0] not in ('0','1'):raise ValueError('Pede failed: '+status)
+    solver_diagnostic=None
+    if diagnostic:
+        from calibration.native_policy import solver_diagnostics
+        solver_diagnostic=solver_diagnostics((p/'stdout.log').read_text(),status,diagnostic=True)
     parameters=read_pede(p/'millepede.res')
     expected=np.linalg.solve(normal,rhs)
     if rotation:
         from decimal import Decimal
         printed={int(row.split()[0]):row.split() for row in (p/'millepede.res').read_text().splitlines() if row.split() and row.split()[0].isdigit()}
         for k,value in zip(selected,expected):
-            precision=10.**Decimal(printed[k][1]).as_tuple().exponent
-            assert abs(parameters[k]-value)<.51*precision+1e-10,'Pede/independent solution beyond printed precision'
+            printed_resolution=10.**Decimal(printed[k][1]).as_tuple().exponent
+            assert abs(parameters[k]-value)<.51*printed_resolution+1e-10,'Pede/independent solution beyond printed precision'
     else:
         assert np.allclose([parameters[k] for k in selected],expected,atol=6e-6)
     log=(p/'millepede.log').read_text();assert 'No rank defect of the symmetric matrix' in log
@@ -354,11 +369,13 @@ def solve(build,output,reconstruction,mode,events):
         correlation=covariance/np.outer(sigma,sigma)
         scaled=normal/np.sqrt(np.outer(np.diag(normal),np.diag(normal)))
         assert np.linalg.cond(scaled)<100,'Insufficient selected information'
-        assert all(v<(.001 if k%100 in (4,5,6) else .02) for k,v in zip(selected,sigma)),'Insufficient angular/linear sensitivity'
+        assert np.isfinite(expected).all() and np.isfinite(sigma).all() and np.all(sigma>0),'Invalid selected estimate/covariance'
+        precision(all(v<(.001 if k%100 in (4,5,6) else .02) for k,v in zip(selected,sigma)),'Angular/linear resolution target not met')
         write_json(p/'independent.json',{'parameters':parameters,'schur_solution':expected.tolist(),
           'parameter_units':{k:('rad' if k%100 in (4,5,6) else 'mm') for k in selected},'nominal_sigma':sigma.tolist(),'pede_reported_sigma':reported.tolist(),
           'rank':dimension,'condition':float(np.linalg.cond(normal)),'condition_diagonal_scaled':float(np.linalg.cond(scaled)),
           'correlation':correlation.tolist(),'normal':normal.tolist(),'status':status,'records':len(blocks),
+          **({'validation_mode':'diagnostic','quality_warnings':quality_warnings,'solver_diagnostics':solver_diagnostic,'error_rescaling_applied':False} if diagnostic else {}),
           **({'covariance_source':'Inverse data-only locally profiled native information; no stabilization or prior',
               'pede_presigma':{k:float(printed[k][2]) for k in selected},
               'pede_expected_stabilized_covariance_mixed_units':stabilized_covariance.tolist(),
@@ -408,7 +425,7 @@ def physical_derivatives(build,output,reconstruction,geometry,base_sensors,mode)
             assert error<2e-5,(column,step,error)
             (translation_errors if column==1 else errors)[(f'{layer}_' if multi.is_multi(mode) else '')+f'{column}_{step}']=error
     report={'passed':True,'checks':checks,'errors_mm_per_rad':errors,
-        'maximum_error_mm_per_rad':max(errors.values()),'model_sha256':native['model_sha256'],
+        'maximum_error_mm_per_rad':max(errors.values()) if errors else None,'model_sha256':native['model_sha256'],
         'method':'independent actual DD4hep/ACTS perturbations; selected left-Global columns, original native reference'}
     if is_four(mode) or multi.is_multi(mode):report.update(translation_errors_mm_per_mm=translation_errors,maximum_translation_error_mm_per_mm=max(translation_errors.values()))
     write_json(p/'report.json',report)

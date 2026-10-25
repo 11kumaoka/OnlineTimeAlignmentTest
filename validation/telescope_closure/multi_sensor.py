@@ -7,6 +7,7 @@ from pathlib import Path
 MODE_CONFIG = {name: name for name in (
     'l1_y_rx_ry_rz_l2_y', 'l1_l2_y_rx_ry_rz',
     'l1_l2_y_rx_ry_rz_l3_y', 'l1_l2_l3_y_rx_ry_rz')}
+MODE_CONFIG['l1_y'] = 'l1_global_y'
 
 
 def is_multi(mode):

@@ -109,7 +109,7 @@ def build_identity(build):
 
 
 def selected_mode(config):
-    """Accept only the four already validated configured multi-sensor scopes."""
+    """Accept maintained explicit-sensor configurations without inferring Truth."""
     from validation.telescope_closure.multi_sensor import MODE_CONFIG, configuration
     value = json.loads(config.read_text())
     found = [mode for mode in MODE_CONFIG if configuration(mode) == value]
@@ -166,12 +166,15 @@ def worker(request_path):
         operations.geometry_audit(build, output, Path(request['geometry']))
     elif action == 'reconstruct':
         operations.reconstruct(build, output, Path(request['geometry']), Path(request['raw']),
-                               Path(request['config']), request['events'], request['chi2_cut'])
+                               Path(request['config']), request['events'], request['chi2_cut'],
+                               input_origin=request.get('input_origin', 'synthetic'),
+                               geometry_aware_holes=request.get('geometry_aware_holes', False))
     elif action == 'derivatives':
         operations.physical_derivatives(build, output, Path(request['reconstruction']),
             Path(request['geometry']), request['sensors'], request['mode'])
     elif action == 'solve':
-        operations.solve(build, output, Path(request['reconstruction']), request['mode'], request['events'])
+        operations.solve(build, output, Path(request['reconstruction']), request['mode'], request['events'],
+                         diagnostic=request.get('validation_mode', 'strict') == 'diagnostic')
     elif action == 'correct':
         output.mkdir()
         operations.correct(build, output / 'candidate.xml', Path(request['geometry']),
@@ -193,14 +196,62 @@ def run_stage(directory, action, manifest, lock_fd, **arguments):
         failure = destination / 'failure.json'
         if failure.exists():
             record = json.loads(failure.read_text())
-            raise RuntimeError('Native ' + action + ' failed: ' + record['type'] + ': ' + record['message'] +
+            from calibration.native_policy import QualityGateError
+            failure_type = QualityGateError if record['type'] == 'QualityGateError' else RuntimeError
+            raise failure_type('Native ' + action + ' failed: ' + record['type'] + ': ' + record['message'] +
                                '; see ' + str(destination / 'stdout.log')) from error
         raise
     seal(destination, action=action, passed=True)
     return destination / 'artifacts'
 
 
-def summarize(reconstruction, solve, sensors, selected, baseline=None):
+def checked_measurement(hit, geometry_aware=False):
+    """Keep intrinsic Raw coordinates distinct from rounded EDM coordinates.
+
+    The official path serializes the global Hit position and local Measurement
+    as binary32 separately. A changed Geometry can therefore move a stored
+    local value by one ULP without changing its physical channel. The opt-in
+    observer verifies each serialization exactly against the actual DD4hep/
+    ACTS transforms; compare direct segmentation coordinates across versions.
+    """
+    result = {key: hit[key] for key in ('loc_mm', 'covariance_mm2')}
+    if not geometry_aware:
+        return result
+    proof = hit.get('serialization_audit', {})
+    if proof.get('passed') is not True:
+        raise RuntimeError('Missing/failed intrinsic channel serialization audit')
+    shapes = {'canonical_sensor_local_mm': 3, 'canonical_cell_dimensions_mm': 2,
+              'expected_global_float32_mm': 3, 'expected_measurement_local_float32_mm': 2,
+              'expected_measurement_covariance_float32_mm2': 3}
+    for key, size in shapes.items():
+        values = proof.get(key)
+        if (not isinstance(values, list) or len(values) != size
+                or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in values)):
+            raise RuntimeError('Invalid intrinsic channel serialization field: ' + key)
+    if not all(v > 0 for v in proof['canonical_cell_dimensions_mm']):
+        raise RuntimeError('Invalid intrinsic channel dimensions')
+    for expected, actual in (('expected_global_float32_mm', 'position_mm'),
+                             ('expected_measurement_local_float32_mm', 'loc_mm'),
+                             ('expected_measurement_covariance_float32_mm2', 'covariance_mm2')):
+        if proof[expected] != hit.get(actual):
+            raise RuntimeError('Serialized measurement differs from its actual Geometry/channel audit: ' + actual)
+    result.update({key: proof[key] for key in ('canonical_sensor_local_mm', 'canonical_cell_dimensions_mm')})
+    return result
+
+
+def compare_measurements(current, original, geometry_aware=False):
+    """Require immutable intrinsic channels, or retain the legacy strict check."""
+    import numpy as np
+    if geometry_aware:
+        for key in ('canonical_sensor_local_mm', 'canonical_cell_dimensions_mm'):
+            if current[key] != original[key]:
+                raise RuntimeError('Intrinsic channel coordinates/dimensions changed across Geometry versions')
+    else:
+        np.testing.assert_allclose(current['loc_mm'], original['loc_mm'], atol=2e-6, rtol=0)
+    np.testing.assert_allclose(current['covariance_mm2'], original['covariance_mm2'], atol=1e-12, rtol=0)
+
+
+def summarize(reconstruction, solve, sensors, selected, baseline=None, diagnostic=False, geometry_aware_holes=False):
     """Data-only identity, covariance, binary and solver diagnostics."""
     import numpy as np
     from validation.telescope_alignment.check import records, profile
@@ -225,7 +276,7 @@ def summarize(reconstruction, solve, sensors, selected, baseline=None):
             if sensor_ids.get(hit['volume_id']) != hit['geometry_id']:
                 raise RuntimeError('Measurement VolumeID/GeometryIdentifier mismatch')
             ids.append([hit[k] for k in ('cell_id', 'volume_id', 'geometry_id')])
-            measurements.append({key: hit[key] for key in ('loc_mm', 'covariance_mm2')})
+            measurements.append(checked_measurement(hit, geometry_aware_holes))
         associations.append([event['run_number'], event['event_number'], ids,
                              [s['geometry_id'] for s in event['smoothed_states']]])
         residuals.extend(s['residual_mm'] for s in event['smoothed_states'])
@@ -251,17 +302,13 @@ def summarize(reconstruction, solve, sensors, selected, baseline=None):
         if association_sha != baseline['association_sha256']: raise RuntimeError('Track/measurement association changed')
         if len(measurements) != len(baseline['measurements']): raise RuntimeError('Measurement count changed')
         for current, original in zip(measurements, baseline['measurements']):
-            np.testing.assert_allclose(current['loc_mm'], original['loc_mm'], atol=2e-6, rtol=0)
-            np.testing.assert_allclose(current['covariance_mm2'], original['covariance_mm2'], atol=1e-12, rtol=0)
-    log = (solve / 'stdout.log').read_text(); rejected = []
-    for line in log.splitlines():
-        parts = line.split()
-        if len(parts) >= 7 and parts[0].isdigit() and parts[1].isdigit() and parts[-1] in ('FMS', 'FM', 'F', 'MS') and parts[-2].isdigit():
-            rejected.append(int(parts[-3]))
+            compare_measurements(current, original, geometry_aware_holes)
+    log = (solve / 'stdout.log').read_text()
     status = (solve / 'millepede.end').read_text().strip()
-    warnings = [line for line in log.splitlines() if re.search(r'warning|multiply all input standard deviations', line, re.I)]
-    if status.split()[0] != '0' or not rejected or max(rejected) != 0 or warnings:
-        raise RuntimeError('Pede warning/failure/rejected local fits: ' + status)
+    from calibration.native_policy import solver_diagnostics
+    solver = solver_diagnostics(log, status, diagnostic=diagnostic)
+    if not diagnostic:
+        solver.pop('diagnostic_continuation')
     match = re.search(r'Sum\(Chi\^2\)/Sum\(Ndf\)\s*=\s*([0-9.Ee+\-]+)\s*/\s*\(\s*(\d+)\s*-\s*(\d+)\s*\)', log)
     if not match or int(match[2]) != 6 * len(blocks) or int(match[3]) != len(selected):
         raise RuntimeError('Missing/inconsistent Pede chi2/NDF')
@@ -272,16 +319,43 @@ def summarize(reconstruction, solve, sensors, selected, baseline=None):
     if abs(chi2 - float(match[1])) >= 1e-5: raise RuntimeError('Pede/profiled chi2 mismatch')
     residuals = np.array(residuals); ndf = sum(e['stored_ndf'] for e in audit['events'])
     chi = sum(e['chi2'] for e in audit['events'])
+    navigation = [event.get('navigation_audit') for event in audit['events']]
+    navigation_summary = {}
+    if geometry_aware_holes and any(item is None for item in navigation):
+        raise RuntimeError('Missing required geometry-aware navigation audit')
+    if any(item is not None for item in navigation):
+        for event, item in zip(audit['events'], navigation):
+            if (item is None or item.get('passed') is not True
+                    or item.get('navigator_end_of_world') is not True
+                    or len(item['actual_hole_geometry_ids']) != event['holes']
+                    or sorted(item['actual_hole_geometry_ids']) != sorted(item['expected_hole_geometry_ids'])
+                    or sorted(item['navigator_sensitive_geometry_ids']) != sorted(item['bounded_forward_geometry_ids'])):
+                raise RuntimeError('Incomplete or inconsistent geometry-aware navigation audit')
+        navigation_summary = {'navigation': {'passed': True, 'tracks': len(navigation),
+            'hole_count_distribution': {str(k): sum(e['holes'] == k for e in audit['events'])
+                                        for k in sorted({e['holes'] for e in audit['events']})},
+            'method': 'Actual filtered tangent, official ACTS Navigator and finite sensitive bounds'}}
     return {'tracks': audit['accepted'], 'rejected': audit['rejected'], 'processed': audit['processed'],
             'chi2_sum': chi, 'stored_ndf_sum': ndf, 'chi2_ratio': chi / ndf,
             'residual_rms_uv_mm': np.sqrt(np.mean(residuals ** 2, axis=0)).tolist(),
             'residual_norm': float(np.linalg.norm(np.sqrt(np.mean(residuals ** 2, axis=0)))),
             'association_sha256': association_sha, 'measurements': measurements,
-            'pede': {'status': status, 'rejected_local_fits': rejected, 'warnings': warnings,
+            'pede': {**solver,
                      'chi2': float(match[1]), 'ndf': int(match[2]) - int(match[3]),
                      'chi2_per_ndf': float(match[1]) / (int(match[2]) - int(match[3])),
                      'independent_profiled_chi2': float(chi2), 'error_rescaling_applied': False},
-            'official_mille_records': len(blocks), 'official_mille_coefficient_audit_passed': True}
+            'official_mille_records': len(blocks), 'official_mille_coefficient_audit_passed': True,
+            **navigation_summary}
+
+
+def input_provenance(path, raw_sha256, payload_sha256):
+    """Validate producer identity; no Truth values enter the calibration model."""
+    value = json.loads(path.read_text())
+    if value.get('schema') != 'native-geant4-input-v1' or value.get('input_origin') != 'geant4_digitized':
+        raise ValueError('Unsupported native input provenance')
+    if value.get('raw_root_sha256') != raw_sha256 or value.get('channel_payload_sha256') != payload_sha256:
+        raise ValueError('Geant4 provenance does not identify the immutable RawHits')
+    return value
 
 
 def initialize(args):
@@ -292,10 +366,14 @@ def initialize(args):
     from podio import reading
     for frame in reading.get_reader(str(raw)).get('events'):
         if set(frame.getAvailableCollections()) != {'EventHeader', 'TelescopeChannels'}:
-            raise ValueError('This native milestone requires only EventHeader,TelescopeChannels; real RawHit adaptation is separate')
+            raise ValueError('Native calibration requires only EventHeader,TelescopeChannels; keep Truth in separate files')
     payload = channel_values(raw)
     if not payload or len(payload) != args.events: raise ValueError('Event count must match immutable native input exactly')
     if any(len(hits) != 5 for _, hits in payload): raise ValueError('Native input requires five SiMAPS channels per event')
+    provenance = getattr(args, 'input_provenance', None)
+    if provenance is not None:
+        provenance = provenance.resolve()
+        input_provenance(provenance, digest(raw), channel_digest(payload))
     run = args.run.resolve()
     if run.exists(): raise FileExistsError('Use an unused run directory; resume explicitly instead')
     run.mkdir(parents=True); inputs = run / 'input'; inputs.mkdir()
@@ -305,6 +383,12 @@ def initialize(args):
         target = inputs / {'raw': 'channels.root', 'geometry': 'initial.xml', 'config': 'alignment.json'}[key]
         shutil.copyfile(source, target); snapshots[key] = identity(target)
         if snapshots[key]['sha256'] != original[key]['sha256']: raise RuntimeError('Input changed while snapshotting')
+    if provenance is not None:
+        original['provenance'] = identity(provenance)
+        target = inputs / 'provenance.json'
+        shutil.copyfile(provenance, target); snapshots['provenance'] = identity(target)
+        if snapshots['provenance']['sha256'] != original['provenance']['sha256']:
+            raise RuntimeError('Input provenance changed while snapshotting')
     manifest = {'schema': 'native-calibration-v1', 'mode': mode, 'events': args.events,
         'chi2_cut': args.chi2_cut, 'minimum_corrections': args.minimum_corrections,
         'maximum_corrections': args.maximum_corrections,
@@ -317,6 +401,12 @@ def initialize(args):
         'build_dir': str(args.build.resolve()), 'build': build_identity(args.build.resolve()),
         'sources': source_identity(), 'geometry_activated': False,
         'iteration_convention': 'At most maximum_corrections applied updates; one extra fresh fit certifies the last candidate. Initial covariance is retained, never summed across fits.'}
+    if provenance is not None:
+        manifest['input_origin'] = 'geant4'
+    if getattr(args, 'validation_mode', 'strict') != 'strict':
+        manifest['validation_mode'] = args.validation_mode
+    if getattr(args, 'geometry_aware_holes', False):
+        manifest['geometry_aware_holes'] = True
     atomic_json(run / 'manifest.json', manifest); seal(inputs, passed=True)
     atomic_json(run / 'manifest.seal.json', identity(run / 'manifest.json'))
     return run
@@ -335,6 +425,25 @@ def publish_report(run, attempt, status, reason, chain, error=None):
               'completed_iterations': len(chain), 'applied_corrections': last['applied_corrections'] if last else 0,
               'last_valid_geometry': last['next_geometry'] if last else initial,
               'last_checkpoint': last['marker'] if last else None, 'error': error}
+    manifest = json.loads((run / 'manifest.json').read_text())
+    diagnostic = manifest.get('validation_mode', 'strict') == 'diagnostic'
+    engineering_success = (error is None and status in ('converged', 'iteration_limit')
+                           and len(chain) >= 2 and report['applied_corrections'] >= 1
+                           and last['geometry'] == last['next_geometry'])
+    if diagnostic:
+        report.update(validation_mode='diagnostic', engineering_success=engineering_success,
+            physics_validation='not_validated', approval_status='unapproved',
+            integrity_status='passed' if engineering_success else ('failed' if status == 'failed' else 'incomplete'),
+            interpretation='Offline technical demonstration; same-data convergence does not establish bias, coverage or a material-aware uncertainty model')
+        report['quality_warnings'] = []
+        for item in chain:
+            metrics = json.loads(Path(item['metrics']).read_text())
+            information = json.loads(Path(item['current_information']['path']).read_text())
+            report['quality_warnings'].extend(information.get('quality_warnings', []))
+            if metrics.get('pede', {}).get('diagnostic_continuation'):
+                report['quality_warnings'].append({'iteration': item['sequence'], 'pede': metrics['pede']})
+        if status != 'converged':
+            report['quality_warnings'].append('Demonstration convergence criteria not met')
     if last:
         from geometry.transforms import rotation_log
         import numpy as np
@@ -347,7 +456,7 @@ def publish_report(run, attempt, status, reason, chain, error=None):
             for a, b in zip(original, actual)]
     destination = attempt / ('failure.json' if (attempt / 'report.json').exists() else 'report.json')
     atomic_json(destination, report)
-    if status == 'converged':
+    if (not diagnostic and status == 'converged') or (diagnostic and engineering_success):
         final = run / 'final'
         if final.exists():
             verify(final)
@@ -397,10 +506,14 @@ def calibrate(run):
                         'sensor_poses': sensors, 'geometry_activated': False})
                 reconstruction = run_stage(directory, 'reconstruct', manifest, lock_fd,
                     geometry=str(current), raw=manifest['input']['raw']['path'], config=manifest['input']['config']['path'],
-                    events=manifest['events'], chi2_cut=manifest['chi2_cut'])
+                    events=manifest['events'], chi2_cut=manifest['chi2_cut'],
+                    **({'input_origin': manifest['input_origin']} if 'input_origin' in manifest else {}),
+                    **({'geometry_aware_holes': True} if manifest.get('geometry_aware_holes') else {}))
                 run_stage(directory, 'derivatives', manifest, lock_fd, reconstruction=str(reconstruction),
                           geometry=str(current), sensors=sensors)
-                solution = run_stage(directory, 'solve', manifest, lock_fd, reconstruction=str(reconstruction), events=manifest['events'])
+                diagnostic = manifest.get('validation_mode', 'strict') == 'diagnostic'
+                solution = run_stage(directory, 'solve', manifest, lock_fd, reconstruction=str(reconstruction), events=manifest['events'],
+                    **({'validation_mode': 'diagnostic'} if diagnostic else {}))
                 independent = json.loads((solution / 'independent.json').read_text())
                 import numpy as np
                 atomic_json(directory / 'parameter_information.json', {
@@ -413,7 +526,9 @@ def calibrate(run):
                     'successive_covariances_combined': False,
                     'initial_information': str(initial_information or solution / 'independent.json')})
                 baseline = json.loads(initial_metrics.read_text()) if initial_metrics else None
-                metrics = summarize(reconstruction, solution, sensors, selected, baseline)
+                metrics = summarize(reconstruction, solution, sensors, selected, baseline,
+                                    **({'diagnostic': True} if diagnostic else {}),
+                                    **({'geometry_aware_holes': True} if manifest.get('geometry_aware_holes') else {}))
                 atomic_json(directory / 'metrics.json', metrics)
                 if initial_metrics is None:
                     initial_metrics = directory / 'metrics.json'; baseline = metrics
@@ -450,7 +565,9 @@ def calibrate(run):
                 if decision['status'] != 'continue':
                     return publish_report(run, attempt, decision['status'], decision['status'], chain)
         except BaseException as error:
-            status = 'interrupted' if isinstance(error, (KeyboardInterrupt, InterruptedError)) else 'failed'
+            from calibration.native_policy import QualityGateError
+            status = ('interrupted' if isinstance(error, (KeyboardInterrupt, InterruptedError)) else
+                      ('quality_blocked' if isinstance(error, QualityGateError) else 'failed'))
             report = publish_report(run, attempt, status, type(error).__name__, chain, str(error))
             print(json.dumps(report, indent=2), file=sys.stderr)
             raise
@@ -462,11 +579,17 @@ def main():
     start = commands.add_parser('start', help='Start from one immutable TelescopeChannels ROOT file; no Truth input')
     start.add_argument('--run', type=Path, required=True)
     start.add_argument('--raw', type=Path, required=True)
+    start.add_argument('--input-provenance', type=Path,
+                       help='Producer receipt for Geant4-digitized RawHits; copied and verified, never used as Truth')
     start.add_argument('--geometry', type=Path, required=True)
     start.add_argument('--config', type=Path, required=True)
     start.add_argument('--build', type=Path, required=True)
     start.add_argument('--events', type=int, required=True)
     start.add_argument('--chi2-cut', type=float, required=True)
+    start.add_argument('--validation-mode', choices=('strict', 'diagnostic'), default='strict',
+                       help='Strict gates by default; offline diagnostic mode retains recognized high-chi2 warnings and never approves Geometry')
+    start.add_argument('--geometry-aware-holes', action='store_true',
+                       help='Validate actual bounded sensitive-surface crossings using ACTS Navigator')
     start.add_argument('--minimum-corrections', type=int, default=1, help='Predeclare an evaluation protocol; default1, maximum3')
     start.add_argument('--maximum-corrections', type=int, default=3, help='At most3 applied updates plus a final verification fit')
     start.add_argument('--max-abs-y-mm', type=float, default=2e-5, help='Strict remaining Y limit; may tighten the validated2e-5mm bound')
@@ -510,7 +633,7 @@ def main():
     def interrupted(signum, _frame): raise InterruptedError('Controller interrupted by signal ' + str(signum))
     signal.signal(signal.SIGTERM, interrupted)
     report = calibrate(run); print(json.dumps(report, indent=2))
-    if report['status'] != 'converged': raise SystemExit(2)
+    if report['status'] != 'converged' and not report.get('engineering_success', False): raise SystemExit(2)
 
 
 if __name__ == '__main__': main()
