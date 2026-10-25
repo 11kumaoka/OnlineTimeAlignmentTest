@@ -4200,3 +4200,185 @@ The next priorities remain a bounded native Calibration Controller with
 Geometry versioning/rollback, actual Geant4/RawHit input compatibility, and a
 separate bias/uncertainty-coverage study for weak tilts. X/Z translations and
 other unvalidated scopes are not enabled by these diagnostic rank results.
+
+## Bounded native Calibration Controller milestone
+
+Starting point: clean `feature/upstream-acts-geometry` at
+`e452b7328f4d18100b334536f1a978feff7a7792`. The bounded native Controller now
+operates on immutable channel data without injected Geometry. The
+[Controller guide](NATIVE_CALIBRATION_CONTROLLER.md) gives the exact commands,
+source/API flow, output/version contract, convergence rules and executed Scope D
+results. This section supersedes the historical statement above that a native
+Controller is still the next implementation priority.
+
+### Concise retained-Controller mapping
+
+| Retained implementation | Native milestone treatment |
+| --- | --- |
+| `queue_manager.exclusive/recover_guard` | Reused directly, including `jobs/**/process.json` process-group safety and explicit dead-owner recovery. |
+| `runner.stage` | Reused directly for fresh child processes, inherited lock, process groups, command/log/exit records and interruption handling. |
+| `convergence.evaluate/evaluate_rotation` | Original code remains byte-identical; additive `evaluate_native` uses the fixed initial information and native safety checks. |
+| `geometry_manager.Geometries` | Review/activation remains separate and unchanged. Registration alone is not physical validation, is not an atomic checkpoint transaction, and identical XML reuses an existing record's parent. Native iteration edges therefore use a small atomic sealed-chain protocol rather than duplicating the registry or calling activation. |
+| `input_monitor` | Ready-file/hash/order logic remains available for the legacy contract. Native `EventHeader,TelescopeChannels` is explicitly distinct; no false legacy RawHit metadata is manufactured. |
+| `controller` / `iteration` | Preserved for the standalone/Geant4 path. Their stage arguments and scientific configuration are legacy-specific; they are not copied into the new bounded single-file loop. |
+
+All 38 retained legacy calibration function ASTs remain identical to the
+starting commit. This milestone does not claim watch/queue/retry/activation
+parity. It provides a genuine bounded, resumable single-file operation using the
+existing numerical native components.
+
+### Shared numerical operation and Truth boundary
+
+`calibration/native_operations.py` contains the maintained reconstruction command,
+Mille profiling/information gates, official Pede execution and precision checks,
+actual Geometry finite differences, physical world-Y/SO(3) correction, and
+actual constructor verification. Existing closure/rotation wrappers delegate to
+these same functions and retain their fixture guards and explicit one-extra-
+correction contract. The four moved I/O/placement helper ASTs and complete
+profiling/Pede/FD numerical suffixes are unchanged after path-argument
+substitution. C++ tracking/model/writer code, Geometry, alignment configuration,
+uncertainties, particle hypothesis, selection cuts and installed libraries are
+unchanged.
+
+The operational module reads a RawTrackerHit ROOT file, initial XML and canonical
+alignment configuration. It has no Truth argument and does not call fixture,
+injection or Truth-error validation functions. A zero-event `TelescopeChannels`
+invocation reads actual DD4hep/ACTS poses; it generates no RawHits. Validation
+alone reads the known-injection reference after operational completion.
+
+`calibration/native_controller.py` applies at most three corrections, with a
+fresh reconstruction/Pede evaluation needed to certify the last candidate.
+Atomic seals, immutable input snapshots, verified source/build identities,
+parent/child XML hashes, full matrices/centers, initial/current information,
+track associations, solver diagnostics and fresh attempts establish the native
+version chain. `last_valid_geometry` denotes a physically/ID-verified internal
+candidate, not production approval. No active Geometry pointer is modified.
+
+The existing strict remaining-update gates are Y below `2e-5 mm` and rotations
+below one-quarter of their original formal errors. The additional joint bound
+`sqrt(delta.T H0 delta) < 0.25` and fixed-initial reconstruction quality checks
+are explicit, independently unit-tested demonstration policies. Full current
+rank/sensitivity/conditioning, stable selection/associations/covariance, normal
+Pede/no rejects/warnings, containment and unchanged IDs must also pass. Errors
+from repeated fits on the same RawHits are never combined as independent data.
+
+### Executed operational and restart results
+
+The default Scope D run uses all 4,096 immutable events and stops after one
+correction. ACTS chi2/stored-NDF changes from `12.360222868341953` to
+`0.607925838664596`; joint remaining significance is `0.17677795358280826`.
+The corresponding manual first-corrected states, entire Mille Binary,
+information/Pede result and XML are exact matches. Official decoding confirms
+4,096 records and 40,960 scalars for both evaluated passes.
+
+The separate, prospectively declared minimum-two protocol interrupts an actual
+EICrecon process in the next evaluation, preserves 467 prior files, and resumes
+from the sealed first candidate into a fresh attempt. It completes two
+corrections and three evaluations with exact nominal/corrected/refined manual
+equivalence. Final ACTS chi2/stored-NDF is `0.6079249182432249`; remaining joint
+significance is `0.001216376157777717`, maximum component/initial-sigma ratio
+`0.0008664032236462719`. All passes retain 4,096 tracks, Pede exit 0, no rejected
+fits/warnings, fixed IDs/associations and identical input channels.
+
+Default and restart outputs are respectively
+`result/native_controller_scope_d_default_20261025_02` and
+`result/native_controller_scope_d_restart_20261025_02`. Their independent
+comparison reports and ROOT histograms use the matching `_comparison_..._02`
+paths in the Controller guide. Same-data improvement is not calibrated coverage:
+the independently measured L1 orientation error becomes slightly larger after
+the second correction. No operational decision reads this Truth result.
+
+### Preserved adapter defect and correction
+
+The first regression attempt exposed an added XML whitelist rejecting the old
+translation-only serializer's harmless `0` versus `0*mm` spelling in fixed
+component coordinates. Nominal states, Mille bytes, Pede outputs and the
+candidate XML already matched the reference exactly. The fix checks exact
+physical equality of nonselected y/z coordinates before normalizing only their
+units spelling for the whole-tree comparison. Seven focused tests reject even
+`1e-30 mm` actual nonselected motion and reject rotation/material/shape/fixed-
+sensor mutations. No serializer, physical gate or scientific tolerance changed.
+
+The first two regression cases and the controlled-interruption pilot remain
+preserved, with an explicit failed-summary correction distinguishing planned
+campaign totals from actual execution. A separate 387-file / 119,307,925-byte
+seal pins those failure artifacts. The fresh `_02` campaign uses a second
+frozen source identity; no partial result is silently relabeled as successful.
+
+The complete separate 18-command suite has passed, including all 154 unit
+tests, fresh Geometry/benchmark builds, actual one-event JANA reconstruction,
+native/legacy mathematical equivalence and canonical safety/preservation.
+Its independent artifact/exit/report seal is
+`result/native_controller_20261025_01_audit/full_suite_v2_independent_seal/`.
+
+The actual historical-proposal refusal also passes independently: a real Scope D
+fit finishes normally, then the original immutable invalid XML is injected at
+the proposal boundary and reloaded by the actual constructor. L1 module
+clearance is `-0.002311986569322577 mm`, while layer containment passes. The
+Controller records a failed iteration, preserves the verified initial Geometry
+and fitted results, and performs no invalid reconstruction, checkpoint promotion
+or activation. The test report is
+`result/native_controller_refusal_check_20261025_02/report.json`; the operational
+failed status is deliberately retained in the separate run's attempt report.
+The entire sequential default/comparison/interruption/resume/refusal execution
+is sealed in `result/native_controller_20261025_01_audit/controller_integration_v2/`.
+
+### Consolidated executed regression results
+
+The frozen v2 historical campaign passes 28/28 cases: the complete 23-case
+historical set, the additional Scope C fixture and all four Scope D fixtures.
+It executes 100 fresh reconstruction passes, with 323,968 accepted track records
+including controls and repeated processing. Its 86,144 fixture events are reused
+inputs counted across cases, not independent new Simulation samples. All 400
+protected artifacts and every scientific report field match their frozen
+references exactly. No field exclusion, diagnostic addition or numerical
+tolerance change is used to pass these comparisons.
+
+The historical Pede outputs retain 94 normal status-0 solves and six identical
+status-1 bad-measurement warnings: initial/postsolve for the old 32-event
+`l1_l2_y`, `l1_rx` and `l1_y_rx_l2_y` cases. The original `.res`/`.end` bytes are
+preserved. These known reference warnings are not hidden or confused with the
+six completed new Scope D Controller fits, all of which finish normally without
+warnings/rejected local fits. The operational Controller rejects warnings.
+
+| Executed check | Result/evidence |
+| --- | --- |
+| Fresh native CMake configure/build | Exit 0; `build/native_controller_20261025_01`; formal `external/install/lib/libMille2.so` selected by CMake/link/RUNPATH/ldd |
+| Native Controller, default protocol | One correction/two fits; full manual first-candidate equivalence |
+| Native Controller, actual interruption/resume | Two corrections/three committed evaluations; fresh attempt; 467 earlier files preserved |
+| Historical invalid proposal | Real Scope D fit followed by exact historical-XML refusal; no invalid reconstruction/promotion/activation |
+| Historical native regressions | 28/28 cases, 100 passes, all scientific fields/400 artifacts exact |
+| Complete separate regression suite | 18/18 command exits 0; all 154 unit tests pass |
+| Historical electron reference | 99 tracks; L2 +198.75 um; Rec-Sim -199.571376 -> -0.821365 um; ACTS stored-NDF ratio 45.592235 -> 1.981040 |
+| Native/legacy mathematics and official binary | Executed suite/oracle comparisons and independent decoding pass |
+| Copied upstream-source reproduction | All nine patches reproduce byte-identically against read-only pinned EICrecon source |
+
+The complete public commands, input/configuration/build identities and local
+receipts are listed in the [Controller guide](NATIVE_CALIBRATION_CONTROLLER.md).
+Current/new audit outputs remain under
+`result/native_controller_20261025_01_audit/`; numerical reruns use distinct
+`result/native_controller_regression_*_20261025_02/` directories. They do not
+overwrite historical references. This milestone does not add Geant4 input
+adaptation, automatic multi-file watch/queue delivery, arbitrary alignment
+parameters, a new tracking/solver model, installed-software modifications or
+production Geometry activation. Legacy scientific capabilities remain available.
+
+The independent campaign seal also passes, verifying all 272 complete stage
+hash sets as well as the 400 protected-artifact comparisons and complete
+scientific reports. Its report and literal host/inner command records are in
+`regression_v2/full_regression_independent_seal/report.json` and
+`regression_v2/final_execution_receipt/report.json` under the audit root.
+The latter records every case's seed, event/accepted counts, solver status and
+provenance. The 86-source/four-binary campaign-specific freeze and the separate
+261-source full implementation freeze both pass; their distinct scopes are
+retained rather than conflating the two inventory counts.
+
+Final frozen preservation passes in `final_preservation/` under the audit root:
+25,805 historical files / 13,778,666,326 bytes, 28 exact prior trees, seven
+symlinks and the separately pinned 387 failed-development files all retain their
+hashes. All 261 frozen execution sources, 38 retained legacy function ASTs,
+four relocated helper ASTs and two complete numerical suffixes remain exact.
+The separate `final_installed_libraries/` check confirms all nine installed ACTS
+45.3.0 libraries and 13 prior local binaries unchanged. Final documentation
+hashes are sealed separately after recording these results. No physics source,
+historical expectation or measurement uncertainty changes.

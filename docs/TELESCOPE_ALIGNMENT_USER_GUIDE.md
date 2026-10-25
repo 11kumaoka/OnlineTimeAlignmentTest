@@ -1,5 +1,11 @@
 # EICrecon-based telescope alignment user guide
 
+The bounded native Calibration Controller is described in the
+[Controller guide](NATIVE_CALIBRATION_CONTROLLER.md). It uses the shared native
+numerical operations without Truth and preserves the manual closure protocols
+below. Statements about missing Controller support in earlier milestone
+sections describe their historical scope.
+
 Start here for the opt-in, 32-track channel-based Alignment Closure Test on
 `feature/upstream-acts-geometry`. See the [code map](TELESCOPE_ALIGNMENT_CODE_MAP.md)
 for the actual source flow and the [historical closure report](BARREL_CHANNEL_ALIGNMENT_CLOSURE.md)
@@ -712,3 +718,29 @@ incident and both its failed and corrected receipts. Existing data, numerical
 tracking/alignment sources, measurement settings and installed libraries are
 preserved; only the three technical documents change after the C implementation
 commit. All generated outputs stay local under `result/`.
+
+## Native iterative Calibration Controller
+
+The bounded native implementation is available through
+`python3 -m calibration.native_controller`, separately from the retained legacy
+`calibration.controller`. Use the [complete Controller guide](NATIVE_CALIBRATION_CONTROLLER.md)
+for build/start/status/verify/resume commands and independently executable
+manual-equivalence, real interruption/restart and physical-refusal tests.
+It requires only immutable native channel data, an initial Geometry and a
+validated sensor/parameter configuration; Truth is read only by independent
+post-completion validation. It does not activate Geometry.
+
+The four existing configured scopes A/B/C/D are accepted. Scope D fits L1/L2/L3
+Y/Rx/Ry/Rz with fixed L0/L4 and fixed X/Z translations. The default maximum is
+three corrections, with one final fresh evaluation needed to certify the last
+candidate. Default minimum one stops the 4,096-event reference after one
+correction; an explicit minimum-two validation protocol matches the manual
+two-correction contract. Their final chi2/stored-NDF values are respectively
+`0.607925838664596` and `0.6079249182432249`, starting at `12.360222868341953`.
+Both preserve 4,096 tracks and exact manual states/Mille/Geometry equivalence.
+
+Initial data-only information, covariance and formal errors remain fixed for
+convergence; no Euler-angle or successive-fit covariance summation is used.
+Remaining-update consistency is distinct from Truth accuracy and uncertainty
+coverage. The Controller guide records the thresholds, complete pose matrices,
+weak-angle limitations and actual interrupted/failed outputs.

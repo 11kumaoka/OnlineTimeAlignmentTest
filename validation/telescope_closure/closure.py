@@ -24,63 +24,23 @@ MODULE_TO_GLOBAL=((0.,0.,1.),(-1.,0.,0.),(0.,-1.,0.))
 
 
 def displaced_xml(nominal,output,shifts,rotations=None,rotation_axis='x',allowed_layers=(1,2)):
-    """Apply selected physical Y shifts and center-preserving rotations."""
-    if output.exists():raise ValueError('Geometry output must be new')
-    root=ET.parse(nominal).getroot()
-    detector=root.find("./detectors/detector[@name='SiMAPS']")
-    for layer in sorted(set(shifts)|set(rotations or {})):
-        delta=shifts.get(layer,0.)
-        if int(layer) not in allowed_layers or int(layer) not in (1,2,3) or not math.isfinite(delta):
-            raise ValueError('Only finite explicitly selected SiMAPS Global Y supported')
-        placement=detector.find(f"./layer[@id='{int(layer)}']")
-        original=detector.find(f"./module[@name='{placement.get('module')}']")
-        module=copy.deepcopy(original);module.set('name',original.get('name')+f'_L{layer}')
-        component=module.find('./module_component')
-        position=component.find('position')
-        offset=matvec(transpose(MODULE_TO_GLOBAL),(0.,delta,0.))
-        for axis,value in zip('xyz',offset):
-            # Rotation fixtures preserve untouched XML attributes exactly.
-            # The original translation-only serialization remains unchanged.
-            if rotations is not None and value==0:continue
-            current=float(position.get(axis,'0').replace('*mm',''))
-            position.set(axis,f'{current+value:.17g}*mm')
-        # Reject changes to sensor shape, material, rotation, or segmentation.
-        original_component=copy.deepcopy(original.find('./module_component'))
-        comparison=copy.deepcopy(component)
-        comparison.remove(comparison.find('position'));original_component.remove(original_component.find('position'))
-        assert ET.tostring(comparison)==ET.tostring(original_component)
-        if rotations and layer in rotations:
-            from validation.telescope_closure.rotation import rotate_component
-            rotate_component(component,rotations[layer],axis=rotation_axis)
-        detector.append(module);placement.set('module',module.get('name'))
-    ET.indent(root);ET.ElementTree(root).write(output,encoding='unicode')
+    from calibration.native_operations import displaced_xml as operation
+    return operation(nominal,output,shifts,rotations,rotation_axis,allowed_layers)
 
 
 def environment(build):
-    env=os.environ.copy()
-    env['LD_LIBRARY_PATH']=f'{build}:{REPO}/external/install/lib:'+env.get('LD_LIBRARY_PATH','')
-    env['JANA_PLUGIN_PATH']=str(build)+':'+env.get('JANA_PLUGIN_PATH','')
-    env['PYTHONDONTWRITEBYTECODE']='1'
-    return env
+    from calibration.native_operations import environment as operation
+    return operation(build)
 
 
 def channel_values(path):
-    import ROOT
-    from podio import reading
-    reader=reading.get_reader(str(path));values=[]
-    for frame in reader.get('events'):
-        header=frame.get('EventHeader')[0]
-        channels=frame.get('TelescopeChannels')
-        values.append((int(header.getEventNumber()),[(int(h.getCellID()),int(h.getCharge()),int(h.getTimeStamp())) for h in channels]))
-    return values
+    from calibration.native_operations import channel_values as operation
+    return operation(path)
 
 
 def channel_digest(values):
-    data=b''
-    for event,hits in values:
-        data+=struct.pack('<qI',event,len(hits))
-        for cell,charge,time in hits:data+=struct.pack('<Qiq',cell,charge,time)
-    return hashlib.sha256(data).hexdigest()
+    from calibration.native_operations import channel_digest as operation
+    return operation(values)
 
 
 def pack(source,output):
@@ -154,136 +114,17 @@ def reconstruct(args,name,geometry,input_name,limit=None,cut=None):
     if getattr(args,'mode','l1_l2_y')!='l1_l2_y':
         from validation.telescope_closure.rotation import config_name
         config=config_name(args.mode)
-    p=stage(args.result,name);env=environment(args.build)
-    gate=stage(p,'gate')
-    execute([args.build/'TelescopeMilleDerivatives',geometry,'geometry-center',gate/'derivatives.json'],gate,env=env)
-    source=args.result/'data'/f'{input_name}.root';before=digest(source)
-    # This invocation has no Truth trajectories, placements or MC collections.
-    command=['eicrecon','-Pplugins_to_ignore=default',
-      '-Pplugins=log,dd4hep,evaluator,acts,algorithms_init,beam,podio,TelescopeTracking,TelescopeMille',
-      '-Pnthreads=1',f'-Pjana:nevents={limit or args.events}',f'-Pdd4hep:xml_files={geometry}',
-      '-Pacts:MaterialMap=','-PTelescopeTracking:channelInput=true','-PTelescopeAudit:multipleEvents=true',
-      '-PTelescopeMille:multipleEvents=true',f'-PTelescopeAudit:output={p}/audit.json',
-      f'-PTelescopeMille:output={p}/mille.dat',f'-PTelescopeMille:report={p}/mille.json',
-      f'-PTelescopeMille:config={REPO}/validation/telescope_alignment/{config}.json',
-      f'-PTelescopeMille:derivativeGate={gate}/derivatives.json',f'-Ppodio:output_file={p}/reco.root',
-      '-Ppodio:output_collections=EventHeader,TelescopeChannels,TelescopeHits,TelescopeHitAssociations,TelescopeMeasurements,TelescopeSeeds,TelescopeSeedParameters,TelescopeTrajectories,TelescopeTrackParameters,TelescopeTracks,TelescopeTrackLinks,TelescopeTrackAssociations']
-    if cut is not None:command.append(f'-PTelescopeTracking:TelescopeCKF:Chi2CutOff={cut}')
-    command.append(source)
-    execute(command,p,env=env)
-    assert digest(source)==before
-    audit=json.loads((p/'audit.json').read_text())
-    payload=channel_values(p/'reco.root');original=channel_values(source)[:limit or args.events]
-    assert payload==original
-    done(p,input_sha256=before,channel_payload_sha256=channel_digest(payload),processed=audit['processed'],
-         accepted=audit['accepted'],rejected=audit['rejected'],measurement_selector_chi2_cut=cut or 15.)
+    from calibration.native_operations import reconstruct as operation
+    return operation(args.build,args.result/name,geometry,args.result/'data'/f'{input_name}.root',
+                     REPO/'validation/telescope_alignment'/f'{config}.json',limit or args.events,cut=cut)
 
 
 def solve(args,reconstruction,name):
-    from validation.telescope_closure.multi_sensor import is_multi,mapping
-    rotation=getattr(args,'mode','l1_l2_y')!='l1_l2_y'
-    selected=LABELS
-    if rotation:
-        from validation.telescope_closure.rotation import labels,physical_derivatives
-        selected=labels(args.mode)
-        if name in ('solve','postsolve','refinesolve'):physical_derivatives(args,reconstruction)
-    require(args.result,reconstruction);p=stage(args.result,name)
-    binary=args.result/reconstruction/'mille.dat'
-    blocks=list(records(binary));assert len(blocks)==args.events and all(len(b)==10 for b in blocks)
-    import numpy as np
-    dimension=len(selected)
-    normal=np.zeros((dimension,dimension));rhs=np.zeros(dimension)
-    for block in blocks:
-        a,b,_=profile(block,selected,require_global_rank=not is_multi(args.mode) and getattr(args,'mode','l1_l2_y') not in ('l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative'));normal+=a;rhs+=b
-    assert np.linalg.matrix_rank(normal)==dimension
-    if getattr(args,'mode','l1_l2_y') in ('l1_ry','l1_ry_negative','l1_rz','l1_rz_negative','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative'):
-        # Refuse to run Pede before the actual native design resolves this tilt.
-        # Include transverse translations and other rotations as diagnostic nuisance
-        # columns; none of these additional columns is enabled in the Mille fit.
-        from validation.telescope_closure.observability import analyze
-        design=analyze(args.result/reconstruction/'mille.json')
-        last=design['prefix_designs'][str(args.events)]
-        assert last['rank']==5 and last['diagonal_scaled_condition']<100
-        from validation.telescope_closure.rotation import axis,is_coupled,is_three,is_four
-        index=3 if axis(args.mode)=='y' else 4
-        write_json(p/'observability.json',design)
-        if is_four(args.mode):
-            selected_design=last['selected_Y_Rx_Ry_Rz']
-            assert selected_design['rank']==4 and selected_design['diagonal_scaled_condition']<100
-            assert selected_design['sigma'][0]<.001 and max(selected_design['sigma'][1:])<.0005
-            full=design['all_translation_diagnostic']
-            assert full['rank']==6 and full['diagonal_scaled_condition']<100
-            assert full['sigma'][1]<.001 and max(full['sigma'][3:])<.0005
-        elif is_three(args.mode):
-            assert max(last['sigma'][2:5])<.0005,'Three-axis rotation unresolved before Pede'
-            assert max(design['all_translation_diagnostic']['sigma'][3:6])<.0005
-            assert last['selected_Rx_Ry_Rz']['rank']==3 and last['selected_Rx_Ry_Rz']['diagonal_scaled_condition']<100
-        elif is_coupled(args.mode):
-            assert max(last['sigma'][3:5])<.0005,'Coupled tilt unresolved before Pede'
-            assert max(design['all_translation_diagnostic']['sigma'][4:6])<.0005
-        else:assert last['sigma'][index]<.001,'Native selected tilt unresolved before Pede'
-    if is_multi(args.mode):
-        from validation.telescope_closure.multi_information import analyze
-        design=analyze(args.result/reconstruction/'mille.json',selected)
-        write_json(p/'observability.json',design)
-        assert design['fixed_reference_selected_design_full_rank'] and design['fixed_reference_rows_have_no_selected_global_columns']
-        assert design['released_reference_gauge_diagnostic']['common_rigid_gauge_is_null']
-        actual=design['selected']
-        assert np.allclose(normal,actual['information'],rtol=1e-10,atol=1e-6),'Mille/native profiled information mismatch'
-        assert actual['rank']==dimension and actual['diagonal_scaled_condition']<100
-        assert all(v<(.001 if mapping(k)[1]==1 else .0005) for k,v in zip(selected,actual['sigma']))
-        full=design['omitted_X_Z_diagnostic']
-        layers=sorted({mapping(k)[0] for k in selected})
-        assert full['rank']==6*len(layers) and full['diagonal_scaled_condition']<100
-        assert all(full['sigma'][6*layers.index(mapping(k)[0])+mapping(k)[1]]<(.001 if mapping(k)[1]==1 else .0005) for k in selected),'Selected sensitivity unresolved with omitted-translation diagnostic columns'
-
-    text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n700102 0.0 1.0\n700202 0.0 1.0\n\nprintcounts\nend\n'
-    if rotation:
-        text=f'Cfiles\n{binary}\n\nentries 5\nmethod inversion 3 0.001\n\nParameter\n'+''.join(f'{label} 0.0 1.0\n' for label in selected)+'\nprintcounts\nend\n'
-    (p/'pede.txt').write_text(text)
-    execute([REPO/'external/install/bin/pede','pede.txt'],p,env=environment(args.build))
-    status=(p/'millepede.end').read_text().strip()
-    if status.split()[0] not in ('0','1'):raise ValueError('Pede failed: '+status)
-    parameters=read_pede(p/'millepede.res')
-    expected=np.linalg.solve(normal,rhs)
-    if rotation:
-        from decimal import Decimal
-        printed={int(row.split()[0]):row.split() for row in (p/'millepede.res').read_text().splitlines() if row.split() and row.split()[0].isdigit()}
-        for k,value in zip(selected,expected):
-            precision=10.**Decimal(printed[k][1]).as_tuple().exponent
-            assert abs(parameters[k]-value)<.51*precision+1e-10,'Pede/independent solution beyond printed precision'
-    else:
-        assert np.allclose([parameters[k] for k in selected],expected,atol=6e-6)
-    log=(p/'millepede.log').read_text();assert 'No rank defect of the symmetric matrix' in log
-    covariance=np.linalg.inv(normal)
-    if rotation:
-        sigma=np.sqrt(np.diag(covariance))
-        reported=np.array([float(printed[k][4]) for k in selected])
-        assert np.allclose(reported,sigma,rtol=5e-5,atol=0),'Pede nominal errors differ from unscaled information'
-        if is_multi(args.mode):
-            presigmas=np.array([float(printed[k][2]) for k in selected])
-            assert np.all(presigmas==1.),'Maintained official parameter pre-sigmas changed'
-            stabilized_covariance=np.linalg.inv(normal+np.diag(1/presigmas**2))
-            assert np.allclose(reported,np.sqrt(np.diag(stabilized_covariance)),rtol=5e-5,atol=0),'Pede inversion errors differ from retained diagonal stabilization'
-
-        correlation=covariance/np.outer(sigma,sigma)
-        scaled=normal/np.sqrt(np.outer(np.diag(normal),np.diag(normal)))
-        assert np.linalg.cond(scaled)<100,'Insufficient selected information'
-        assert all(v<(.001 if k%100 in (4,5,6) else .02) for k,v in zip(selected,sigma)),'Insufficient angular/linear sensitivity'
-        write_json(p/'independent.json',{'parameters':parameters,'schur_solution':expected.tolist(),
-          'parameter_units':{k:('rad' if k%100 in (4,5,6) else 'mm') for k in selected},'nominal_sigma':sigma.tolist(),'pede_reported_sigma':reported.tolist(),
-          'rank':dimension,'condition':float(np.linalg.cond(normal)),'condition_diagonal_scaled':float(np.linalg.cond(scaled)),
-          'correlation':correlation.tolist(),'normal':normal.tolist(),'status':status,'records':len(blocks),
-          **({'covariance_source':'Inverse data-only locally profiled native information; no stabilization or prior',
-              'pede_presigma':{k:float(printed[k][2]) for k in selected},
-              'pede_expected_stabilized_covariance_mixed_units':stabilized_covariance.tolist(),
-              'pede_regularization_enabled':False,
-              'pede_error_note':'Unchanged positive presigmas stabilize the solver diagonal and inversion errors; no regularization objective enabled. Printed errors agree with data-only errors at the checked precision.'} if is_multi(args.mode) else {})})
-    else:
-        write_json(p/'independent.json',{'parameters_mm':parameters,'schur_solution_mm':expected.tolist(),
-          'nominal_sigma_mm':np.sqrt(np.diag(covariance)).tolist(),'rank':2,'condition':float(np.linalg.cond(normal)),
-          'normal':normal.tolist(),'status':status,'records':len(blocks)})
-    done(p,records=len(blocks),pede_status=status)
+    from calibration.native_operations import solve as operation
+    if getattr(args,'mode','l1_l2_y')!='l1_l2_y' and name in ('solve','postsolve','refinesolve'):
+        from validation.telescope_closure.rotation import physical_derivatives
+        physical_derivatives(args,reconstruction)
+    return operation(args.build,args.result/name,args.result/reconstruction,getattr(args,'mode','l1_l2_y'),args.events)
 
 
 def correct(args):
@@ -295,18 +136,12 @@ def correct(args):
     shifts={1:parameters[700102],2:parameters[700202]}
     # Correction reads nominal Geometry and solver output only, never Truth.
     nominal=args.result/'geometry/fixtures/nominal.xml'
-    displaced_xml(nominal,p/'corrected.xml',shifts)
+    from calibration.native_operations import correct as operation,GeometrySafetyError
+    nominal_audit=json.loads((args.result/'data/control/channels_truth.json').read_text())['sensors']
+    try:operation(args.build,p/'corrected.xml',nominal,nominal_audit,parameters,'l1_l2_y')
+    except GeometrySafetyError as error:raise AssertionError(str(error)) from error
     write_json(p/'provenance.json',{'parent_sha256':digest(nominal),'pede_sha256':digest(args.result/'solve/millepede.res'),
       'physical_global_y_mm':shifts,'truth_used':False,'activated':False})
-    q=stage(p,'geometry_audit')
-    execute([args.build/'TelescopeChannels',p/'corrected.xml','0',q/'geometry.json'],q,env=environment(args.build))
-    nominal_audit=json.loads((args.result/'data/control/channels_truth.json').read_text())['sensors']
-    corrected=json.loads((q/'geometry.json').read_text())['sensors']
-    for before,after in zip(nominal_audit,corrected):
-        assert before['volume_id']==after['volume_id'] and before['geometry_id']==after['geometry_id']
-        assert before['acts_rotation']==after['acts_rotation']
-        delta=shifts.get(before['layer'],0.)
-        assert max(abs(after['center_mm'][i]-before['center_mm'][i]-(delta if i==1 else 0.)) for i in range(3))<1e-9
     done(p,physical_global_y_mm=shifts)
 
 

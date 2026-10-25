@@ -989,3 +989,139 @@ diagnostic correction.
 All required technical checks are complete. Only the authorized local Scope D
 commit remains pending at this documentation checkpoint; this record does not
 claim a commit SHA or push. No candidate Geometry is activated.
+
+## Native iterative Controller: operational architecture
+
+`calibration/native_controller.py` adds bounded iteration around the same native
+operations used by closure validation. Its starting reference is the completed
+Scope D commit `e452b7328f4d18100b334536f1a978feff7a7792`. The operational input is
+one immutable `EventHeader,TelescopeChannels` ROOT file, an initial XML Geometry,
+one of the existing configured multi-sensor selections and the declared native
+build. It does not generate a sample, read injected parameters or accept Truth
+Geometry as an operational input. The current input adapter requires five
+SiMAPS channels per event; adapting general Geant4/beam-test RawHits remains a
+separate milestone.
+
+### Shared operations and retained validation wrappers
+
+| Source/function | Operational responsibility |
+|---|---|
+| `calibration/native_operations.py::reconstruct(build, output, geometry, source, config, events, cut)` | Existing native derivative executable and fresh `eicrecon` invocation; identical factories, selection settings, output collections and immutable channel read-back |
+| same, `physical_derivatives(build, output, reconstruction, geometry, base_sensors, mode)` | Existing coupled actual-DD4hep finite-difference loops, step sizes, reference states and numerical tolerances |
+| same, `solve(build, output, reconstruction, mode, events)` | Existing official Mille decoding, local profiling/accumulation order, native information comparison, sensitivity checks, Pede steering and printed-precision comparisons |
+| same, `geometry_audit(build, output, xml, config=None)` | Real installed-provider reload through `TelescopeChannels XML 0 output.json`; no trajectory-generation loop executes |
+| same, `validate_geometry(sensors, config=None)` | Seven unique ordered sensor identities, the five measured SiMAPS layers, finite proper poses, selected configured IDs and unchanged physical containment bounds |
+| same, `correct(build, output, current_xml, current_sensors, parameters, mode)` | Existing physical translation/SO(3) serialization, whole-XML whitelist, zero-event reload, stable identities and actual pose checks; `output` is the candidate XML filename |
+| same, `environment`, `channel_values`, `channel_digest`, `displaced_xml` | Shared execution environment, exact immutable channel identity and unchanged XML update implementation |
+| `validation/telescope_closure/closure.py` | Original fixture/mode/event/selection guards and public validation entry points; delegates reconstruction, solving and correction to the shared operations |
+| `validation/telescope_closure/rotation.py` | Retains independent injected-Geometry checks, composition/inverse tests, Truth comparison and the explicit one-extra-correction validation contract; delegates the shared numerical work |
+
+The reconstruction argument to `solve` and `physical_derivatives` is a completed
+reconstruction directory. Other operation outputs are fresh stage directories,
+apart from `correct`'s explicit XML output. The Controller explicitly runs the
+physical derivative stage before solving; extracting the solver does not waive
+that prerequisite. Baseline sensor poses come from the supplied XML's actual
+zero-event audit, rather than a synthetic sample's accompanying records.
+`geometry_safety.json` retains corner coordinates, module clearances, cylindrical
+layer clearances and precise failure classifications before an unsafe candidate
+raises `GeometrySafetyError`. The original `pose_checks` equations remain
+unchanged. Historical validation wrappers preserve their expected assertion
+interface for physical refusals.
+
+### Actual process and Geometry-version flow
+
+1. `main` dispatches `start`, `resume`, `status`, `verify` or explicit lock
+   recovery. `initialize` snapshots the input ROOT/XML/configuration, verifies
+   their hashes and records source, executable, plugin and actual runtime-library
+   identities. `selected_mode` accepts the existing bounded selections; it does
+   not enable arbitrary six-DOF configurations.
+2. `calibrate` holds the existing exclusive queue guard and creates a fresh
+   attempt/iteration directory. `run_stage` uses the existing supervised runner
+   to invoke `worker` in a separate Python process. Each reconstruction launches
+   a fresh EICrecon process with the current XML; the installed official ACTS
+   provider/SurfaceMap/Navigator/CKF and the existing native Mille observer remain
+   the numerical chain described earlier in this document.
+3. Geometry reload, reconstruction, physical finite differences and native
+   information/Pede run in that order. `summarize` checks track selection,
+   measured covariance, sensor/measurement association, every official Mille
+   coefficient, residual whitening and independently profiled Pede chi2. It
+   rejects solver warnings and rejected local fits before a version is promoted.
+4. `evaluate_native` in `calibration/convergence.py` evaluates the current
+   remaining correction without injected values. If another correction is
+   required and the declared limit allows it, `correct` writes a separate
+   candidate XML, applies `c_new=c_current+(0,dY,0)` and
+   `R_new=Exp(dw_global) R_current`, and validates the real candidate before it
+   can become the next iteration's input. All seven poses/identities remain in
+   the audit; only configured SiMAPS components may change.
+5. `checkpoint.json` records the exact parent/child XML hashes, actual sensor
+   matrices, initial/current information references and previous checkpoint
+   identity. Geometry version names derive from XML SHA256. `seal` publishes an
+   atomic, exclusive completion record only after all supervised child work and
+   safety checks succeed. Shared operations retain their historical nested
+   completion records; the enclosing Controller seal is authoritative.
+6. `publish_report` reports the last valid Geometry on failure or interruption.
+   Successful termination copies the evaluated Geometry into a separately sealed
+   `final/` result. `checkpoints` and `verify` validate the complete artifact set,
+   hashes and parent chain before a restart; partial attempts remain preserved
+   and are not treated as valid Geometry versions. No production Geometry is
+   activated.
+
+The bounded protocol permits at most three applied corrections plus a final
+fresh evaluation fit. Its minimum correction count is explicit, so comparison
+with the historical manual driver must use the same declared iteration
+convention. Component gates retain strict Y updates below `2e-5 mm` and angular
+updates below one quarter of the initial data-only formal error. The additional
+joint gate `sqrt(delta.T H0 delta) < 0.25` is a configurable demonstration
+criterion; it is distinct from the validation driver's Truth-based initial
+recovery statistic. Selected rank/conditioning, physical containment, unchanged
+track/measurement association and improved chi2/residual behavior must also
+pass. Initial information/errors remain fixed for convergence evaluation;
+successive-fit covariance matrices are never added. Small remaining updates
+establish same-data self-consistency, not unbiased Truth recovery or calibrated
+uncertainty coverage.
+
+### Reused legacy capabilities and remaining differences
+
+The native Controller directly reuses `queue_manager.exclusive`,
+`queue_manager.recover_guard` and `runner.stage` for locking and supervised
+process execution. It extends the existing convergence module with a separate
+native policy. It does not copy the legacy queue/database subsystem or invoke
+`iteration.reconstruction_args`, legacy standalone fitting, or
+`geometry_manager.Geometries`. The retained legacy Controller, sequential input
+monitor, queue selection and explicit activation/approval functionality remain
+available for their original workflow; automatic directory monitoring, a
+multi-file native queue and production activation are not claimed here. This
+bounded batch Controller is not an online real-time calibration service.
+
+The extraction checkpoint passes 53 targeted tests and fifteen mechanical
+source-equivalence checks. Real zero-event operations reproduce the historical
+Scope D first/refined XML bytes and all seven actual pose records exactly; the
+historical invalid candidate's XML also matches while its physical refusal,
+parameters and safety diagnostics are preserved. These receipts are under
+`result/native_controller_20261025_01_audit/operations_{targeted_tests,extraction_identity,candidate_equivalence}/`.
+The executed default Scope D run completes one correction and two fresh fits.
+The actual interruption/resume test preserves 467 existing files and completes
+two corrections with three committed fits. Independent audits match the native
+records, Mille Binary and Pede results, information/covariance metadata and
+real-Geometry finite-difference reports to the corresponding manual stages.
+Official decoding finds 4096 records and 40960 scalar measurements per fit, with
+all twelve selected labels. The default/restart comparison ROOT files contain
+the expected six/nine histogram keys. The historical-proposal fault-injection
+test preserves its valid nominal fit and safe initial Geometry, refuses the
+physical module overflow, and neither promotes nor reconstructs the invalid
+candidate. No Geometry is activated. Evidence is under
+`result/native_controller_20261025_01_audit/controller_{default_i0_v2,default_i1_v2,restart_i0_v2,restart_i1_v2,restart_i2_v2}_{native_root,official_binary}/`,
+`controller_restart_independent_driver_v2/` and
+`controller_historical_negative_independent_v2_02/` in the same audit directory.
+
+The complete eighteen-command suite and all 154 unit tests pass, with command
+receipts and an independent output-hash seal under that audit directory's
+`full_suite_v2/` and `full_suite_v2_independent_seal/`. The separate 28-case
+campaign also passes: 100 fresh reconstruction passes and 323,968 accepted
+records, counting controls and repeated processing. All 400 protected artifacts
+and every scientific report field reproduce their frozen references. An
+independent disk-level seal also verifies all 272 completed stage hash sets;
+per-case counts, solver statuses and exact commands are recorded in
+`regression_v2/final_execution_receipt/report.json` under the same audit root. See the
+[Native Calibration Controller guide](NATIVE_CALIBRATION_CONTROLLER.md) for the
+final consolidated validation status and limitations.

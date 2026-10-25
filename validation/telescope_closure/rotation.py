@@ -197,13 +197,13 @@ def correct(args):
     rotations=({} if multi.is_multi(args.mode) else {1:[values[k] for k in rotation_labels(args.mode)] if is_coupled(args.mode) else values[rotation_label(args.mode)]})
     if multi.is_multi(args.mode):shifts,rotations=multi.pose_increments(values)
     nominal=args.result/'geometry/fixtures/nominal.xml'
-    displaced_xml(nominal,p/'corrected.xml',shifts,rotations=rotations,rotation_axis=axis(args.mode),allowed_layers=multi.aligned_sensors(args.mode) if multi.is_multi(args.mode) else (1,2))
+    from calibration.native_operations import correct as operation,GeometrySafetyError
+    base=json.loads((args.result/'data/control/channels_truth.json').read_text())['sensors']
+    try:operation(args.build,p/'corrected.xml',nominal,base,values,args.mode)
+    except GeometrySafetyError as error:raise AssertionError(str(error)) from error
     write_json(p/'provenance.json',{'parent_sha256':digest(nominal),'pede_sha256':digest(args.result/'solve/millepede.res'),
        'physical_global_y_mm':shifts,'physical_global_r'+axis(args.mode)+'_rad':rotations,'pivot':'current sensitive center',
        'composition':('per-sensor cnew=ccurrent+(0,dY,0); Rnew=Exp([dRx,dRy,dRz]) Rcurrent; current sensitive-center pivot' if multi.is_multi(args.mode) else (('Rnew=Exp([dRx,dRy,dRz]) Rcurrent; bounded L1 full rotation-vector update' if is_three(args.mode) else 'Rnew=Exp([0,dRy,dRz]) Rcurrent; current full pose, not a closed two-axis subgroup') if is_coupled(args.mode) else 'Rnew=Exp(dw_global) Rcurrent; selected '+axis(args.mode)+' subgroup')),'truth_used':False,'activated':False})
-    q=stage(p,'geometry_audit');execute([args.build/'TelescopeChannels',p/'corrected.xml',0,q/'geometry.json'],q,env=environment(args.build))
-    base=json.loads((args.result/'data/control/channels_truth.json').read_text())['sensors']
-    pose_checks(base,json.loads((q/'geometry.json').read_text())['sensors'],shifts,rotations,axis=axis(args.mode))
     done(p,physical_global_y_mm=shifts,physical_rotation_rad=rotations,rotation_axis=axis(args.mode))
 
 
@@ -217,10 +217,10 @@ def refine(args):
     if multi.is_multi(args.mode):shifts,rotations=multi.pose_increments(values)
     else:shifts={1:values[700102]};rotations={1:[values[k] for k in rotation_labels(args.mode)]}
     parent=args.result/'correction/corrected.xml'
-    displaced_xml(parent,p/'refined.xml',shifts,rotations=rotations,rotation_axis='xyz',allowed_layers=multi.aligned_sensors(args.mode) if multi.is_multi(args.mode) else (1,2))
-    q=stage(p,'geometry_audit');execute([args.build/'TelescopeChannels',p/'refined.xml',0,q/'geometry.json'],q,env=environment(args.build))
+    from calibration.native_operations import correct as operation,GeometrySafetyError
     previous=json.loads((args.result/'correction/geometry_audit/geometry.json').read_text())['sensors']
-    actual=json.loads((q/'geometry.json').read_text())['sensors'];pose_checks(previous,actual,shifts,rotations,axis='xyz')
+    try:operation(args.build,p/'refined.xml',parent,previous,values,args.mode)
+    except GeometrySafetyError as error:raise AssertionError(str(error)) from error
     first=json.loads((args.result/'solve/independent.json').read_text());selected=labels(args.mode)
     thresholds={k:(2e-5 if k%100==2 else first['nominal_sigma'][selected.index(k)]/4) for k in selected}
     write_json(p/'provenance.json',{'parent_sha256':digest(parent),'pede_sha256':digest(args.result/'postsolve/millepede.res'),
@@ -569,41 +569,9 @@ def coupled_physical_derivatives(args,reconstruction):
     if reconstruction=='nominal':
         if (args.result/'coupled_pose').exists():require(args.result,'coupled_pose')
         else:coupled_pose_gate(args)
-    p=stage(args.result,'physical_derivatives' if reconstruction=='nominal' else ('refined_physical_derivatives' if reconstruction=='refined' else 'corrected_physical_derivatives'))
-    native=json.loads((args.result/reconstruction/'mille.json').read_text())
+    from calibration.native_operations import physical_derivatives as operation
+    output=args.result/('physical_derivatives' if reconstruction=='nominal' else ('refined_physical_derivatives' if reconstruction=='refined' else 'corrected_physical_derivatives'))
     geometry=args.result/('geometry/fixtures/nominal.xml' if reconstruction=='nominal' else ('refinement/refined.xml' if reconstruction=='refined' else 'correction/corrected.xml'))
     base_path=args.result/('data/control/channels_truth.json' if reconstruction=='nominal' else ('refinement/geometry_audit/geometry.json' if reconstruction=='refined' else 'correction/geometry_audit/geometry.json'))
-    base=json.loads(base_path.read_text())['sensors'];errors={};translation_errors={};checks=0
-    columns=(1,3,4,5) if is_four(args.mode) else ((3,4,5) if is_three(args.mode) else (4,5))
-    selected_columns=[multi.mapping(k) for k in labels(args.mode)] if multi.is_multi(args.mode) else [(1,c) for c in columns]
-    for layer,column in selected_columns:
-        for step in ((1e-3,1e-4,1e-5) if column==1 else (1e-4,1e-5,1e-6)):
-            poses=[]
-            for sign in (1,-1):
-                delta=[0.]*(3 if is_three(args.mode) or multi.is_multi(args.mode) else 2)
-                if column!=1:delta[column-(3 if is_three(args.mode) or multi.is_multi(args.mode) else 4)]=sign*step
-                shifts={layer:sign*step} if column==1 else {}
-                rotations=None if column==1 else {layer:delta}
-                q=stage(p,(f'layer_{layer}_' if multi.is_multi(args.mode) else '')+f'column_{column}_step_{step:g}_{sign:+d}')
-                displaced_xml(geometry,q/'geometry.xml',shifts,rotations=rotations,rotation_axis=axis(args.mode),allowed_layers=multi.aligned_sensors(args.mode) if multi.is_multi(args.mode) else (1,2))
-                execute([args.build/'TelescopeChannels',q/'geometry.xml',0,q/'geometry.json'],q,env=environment(args.build))
-                sensors=json.loads((q/'geometry.json').read_text())['sensors']
-                pose_checks(base,sensors,shifts, {} if column==1 else {layer:delta},axis=axis(args.mode));poses.append(sensors[layer])
-            error=0.
-            for event in native['events']:
-                point=np.array(event['reference_position_mm']);direction=np.array(event['reference_direction']);predictions=[]
-                for sensor in poses:
-                    r=np.array(sensor['acts_rotation']);center=np.array(sensor['center_mm']);normal=r[:,2]
-                    intersection=point+direction*(normal@(center-point))/(normal@direction)
-                    predictions.append((r.T@(intersection-center))[:2])
-                finite=(predictions[0]-predictions[1])/(2*step)
-                equation=next(e for e in event['equations'] if e['layer']==layer)
-                error=max(error,float(np.max(np.abs(finite-np.array(equation['global'])[:,column]))));checks+=1
-            assert error<2e-5,(column,step,error)
-            (translation_errors if column==1 else errors)[(f'{layer}_' if multi.is_multi(args.mode) else '')+f'{column}_{step}']=error
-    report={'passed':True,'checks':checks,'errors_mm_per_rad':errors,
-        'maximum_error_mm_per_rad':max(errors.values()),'model_sha256':native['model_sha256'],
-        'method':'independent actual DD4hep/ACTS perturbations; selected left-Global columns, original native reference'}
-    if is_four(args.mode) or multi.is_multi(args.mode):report.update(translation_errors_mm_per_mm=translation_errors,maximum_translation_error_mm_per_mm=max(translation_errors.values()))
-    write_json(p/'report.json',report)
-    done(p,passed=True)
+    base=json.loads(base_path.read_text())['sensors']
+    return operation(args.build,output,args.result/reconstruction,geometry,base,args.mode)
