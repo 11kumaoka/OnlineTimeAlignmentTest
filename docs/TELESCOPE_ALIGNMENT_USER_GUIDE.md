@@ -57,21 +57,21 @@ and result names for a rerun.
 export TESTBENCH_CONTAINER=sweet_mahavira
 
 bash environment/run.sh cmake -S /work/localDetEICrecon/experimental/telescope \
-  -B /work/build/native_workflow_20261025_02 \
+  -B /work/build/native_telescope \
   -DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON
-bash environment/run.sh cmake --build /work/build/native_workflow_20261025_02 -j2
+bash environment/run.sh cmake --build /work/build/native_telescope -j2
 
 # Small, nonzero single-L1 Global Y displacement; explicit offline diagnostic mode.
 bash environment/run.sh python3 -B -m calibration.workflow run \
   --config calibration/config/native_workflow_smoke.json \
-  --output-dir result/native_workflow_smoke_20261025_03 \
-  --build build/native_workflow_20261025_02 --validation-mode diagnostic
+  --output-dir result/native_smoke \
+  --build build/native_telescope --validation-mode diagnostic
 
 # Independent larger example using the same public interface.
 bash environment/run.sh python3 -B -m calibration.workflow run \
   --config calibration/config/native_workflow_example.json \
-  --output-dir result/native_workflow_example_20261025_02 \
-  --build build/native_workflow_20261025_02 --validation-mode diagnostic
+  --output-dir result/native_example \
+  --build build/native_telescope --validation-mode diagnostic
 ```
 
 The examples inject L1 Global Y +0.080 mm in simulation Truth Geometry; initial
@@ -120,12 +120,12 @@ Each public step can run separately with the same sealed configuration:
 ```bash
 bash environment/run.sh python3 -B -m calibration.workflow prepare \
   --config calibration/config/native_workflow_smoke.json \
-  --output-dir result/native_workflow_steps_01 \
-  --build build/native_workflow_20261025_02 --validation-mode diagnostic
-bash environment/run.sh python3 -B -m calibration.workflow simulate --run-dir result/native_workflow_steps_01
-bash environment/run.sh python3 -B -m calibration.workflow digitize --run-dir result/native_workflow_steps_01
-bash environment/run.sh python3 -B -m calibration.workflow calibrate --run-dir result/native_workflow_steps_01
-bash environment/run.sh python3 -B -m calibration.workflow report --run-dir result/native_workflow_steps_01
+  --output-dir result/native_steps \
+  --build build/native_telescope --validation-mode diagnostic
+bash environment/run.sh python3 -B -m calibration.workflow simulate --run-dir result/native_steps
+bash environment/run.sh python3 -B -m calibration.workflow digitize --run-dir result/native_steps
+bash environment/run.sh python3 -B -m calibration.workflow calibrate --run-dir result/native_steps
+bash environment/run.sh python3 -B -m calibration.workflow report --run-dir result/native_steps
 ```
 
 For lower-level debugging, `simulation.native`, `digitization.native` and
@@ -139,7 +139,7 @@ An interrupted Controller can resume its last completed checkpoint:
 
 ```bash
 bash environment/run.sh python3 -B -m calibration.native_controller resume \
-  --run result/native_workflow_steps_01/controller
+  --run result/native_steps/controller
 ```
 
 Resume requires unchanged input, source set, runtime libraries and build bytes.
@@ -160,10 +160,10 @@ than enabling unvalidated degrees of freedom.
 ```bash
 bash environment/run.sh python3 -B -m calibration.workflow run \
   --config calibration/config/native_workflow_multi.json \
-  --output-dir result/native_workflow_multi_01 \
-  --build build/native_workflow_20261025_02 --validation-mode diagnostic
+  --output-dir result/native_multi \
+  --build build/native_telescope --validation-mode diagnostic
 
-root --web=off -l 'visualization/browse.C("result/native_workflow_smoke_20261025_03/report/diagnostics.root")'
+root --web=off -l 'visualization/browse.C("result/native_smoke/report/diagnostics.root")'
 ```
 
 The ROOT file contains native alignment/chi2/residual histories and Geometry

@@ -1,4 +1,10 @@
-# Source-based architecture and workflow guide
+> Legacy +Z BeamTestReco architecture. Start current +X native studies with
+> [the practical telescope guide](TELESCOPE_ALIGNMENT_USER_GUIDE.md) and
+> [the native code map](TELESCOPE_ALIGNMENT_CODE_MAP.md). The one-sided endcap
+> limitations below describe this retained backend, not the working native
+> barrel-compatible Geometry. Historical provider experiments remain evidence.
+
+# Legacy source-based architecture and workflow guide
 
 Current Geometry reconstruction uses the original local surface path.
 The optional Blueprint implementation and `--geometry-provider` selector were
@@ -18,7 +24,7 @@ No substitute provider or tracking/alignment expansion was added.
 | `geometry/` | Immutable nominal XML, scenario JSONs, `prepare.py`, placement and SO(3) transform helpers. Nominal + scenario → exclusive step1 XML/GDML/QA. |
 | `simulation/` | `simulate.py`/wrapper; beam/events/seed JSON + physical XML → step2 EDM4hep events. `--sim-input` reuses saved data instead of Geant4. |
 | `digitization/` | `digitize.py`, `contract.py`, wrapper; Simulation + readout → step2_digitization RawHit-only ROOT and v2 checksum/provenance/units/topology contract. |
-| `reconstruction/` | `reconstruct.py`, before/after wrappers, `runtime.py`, particle-setting JSONs; RawHits + contract + selected XML → step3 or step6 reco.root and mille.dat. |
+| `reconstruction/` | `reconstruct.py`, one wrapper with `--after`, `runtime.py`, particle-setting JSONs; RawHits + contract + selected XML → step3 or step6 reco.root and mille.dat. |
 | `alignment/` | `align.py`, wrapper and canonical mode-specific steering; Mille → official Pede output/log/end status under step4. The writer is in the C++ Plugin. |
 | `correction/` | `correct_geometry.py`, `scope.py`, wrapper; Pede + current/reference XML + explicit signed scope → inactive step5/corrected.xml. |
 | `validation/` | Historical reference/preservation manifests, unit/derivative/information/Geometry diagnostics, `run_regression.sh`, `run_closure.sh`, `validate.py` and metrics. Standard closure produces step7 summary and invokes ROOT rendering. |

@@ -1,10 +1,30 @@
-# Python Calibration Controller
+# Calibration entry points
+
+## Primary native workflow
+
+Use `python3 -B -m calibration.workflow run` for the maintained npsim -> official
+Digitization -> native ACTS/Mille -> Pede -> Geometry Correction chain. Start with
+`config/native_workflow_smoke.json` and the
+[practical User Guide](../docs/TELESCOPE_ALIGNMENT_USER_GUIDE.md).
+`native_controller.py` manages one immutable native RawHit dataset and its
+verified correction checkpoints. Its strict/diagnostic policies never approve
+or activate candidate Geometry. See the
+[native Controller guide](../docs/NATIVE_CALIBRATION_CONTROLLER.md).
+
+## Retained legacy +Z queue Controller
+
+Everything below describes `calibration.controller`, the separate BeamTestReco
+queue/registry interface. It retains sequential delivery, once/watch, retry and
+explicit review/activation capabilities and legacy alignment scopes that the
+native one-file Controller does not replace. Its lock and process-supervision
+helpers are also reused by the native path. Historical commands and limits are
+retained here; do not use this configuration schema for `calibration.workflow`.
 
 This single-worker prototype discovers complete RawHit deliveries, reconstructs each file, and optionally runs fixed-dataset selected SiMAPS alignment iterations. It invokes the existing C++ Plugin and official Millepede-II through the independent stage modules. It does not implement numerical tracking or solving in Python.
 
 ## Environment and configuration
 
-Use the same initialized EIC container and compiled `BeamTestReco.so` as the maintained workflow. Start with `calibration/config/demo.json`. Set `build_dir` to the validated build directory. Paths in this JSON resolve against the repository root. Configuration and dependency checksums are pinned to a controller state: changed settings or binaries require a **new** state directory.
+For this retained +Z path, use the initialized EIC container and compiled `BeamTestReco.so`. Start with `calibration/config/demo.json`. Set `build_dir` to the validated build directory. Paths in this JSON resolve against the repository root. Configuration and dependency checksums are pinned to a controller state: changed settings or binaries require a **new** state directory.
 
 Calibration is disabled by default. Enable it only with an explicit reference/survey fallback and compatible RawHit readout/channel definitions. **No true physical Geometry is required.** `calibration.measured_geometry` is retained solely as an optional legacy simulation-provenance check; leave it null for truth-free operation. It never provides correction values.
 

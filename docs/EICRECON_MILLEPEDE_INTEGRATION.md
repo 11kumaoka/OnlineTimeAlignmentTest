@@ -1,3 +1,7 @@
+> Retained +Z BeamTestReco integration guide. For the primary native +X
+> calibration workflow, use [the telescope guide](TELESCOPE_ALIGNMENT_USER_GUIDE.md)
+> and [native code map](TELESCOPE_ALIGNMENT_CODE_MAP.md).
+
 > RawHit boundary update: the maintained command now uses separate Digitization
 > and truth-independent RawHit Reconstruction. See [RAWHIT_BOUNDARY.md](RAWHIT_BOUNDARY.md)
 > for profiles, input/conditions contract and combined/split equivalence results.
@@ -171,7 +175,7 @@ reconstruction and pede. Standalone upstream utilities also need this runtime
 library path in the inspected installation; see the tested inspector command below.
 
 The stage architecture and independent Geometry scenario files are documented in
-the [Workflow Guide](WORKFLOW.md#geometry-scenario-selection). Multi-layer Simulation
+the [Workflow Guide](WORKFLOW.md#geometry). Multi-layer Simulation
 Geometry can be prepared, but correction/full Closure explicitly reject scenarios
 with nonzero shifts outside L2. No solver or writer model was extended.
 
@@ -745,7 +749,7 @@ alignment stage above for the subsequent correction steps.
 ```bash
 bash environment/run.sh bash correction/correct_geometry.sh \
   --result-dir result/mille_demo_001
-bash environment/run.sh bash reconstruction/reconstruct_corrected.sh \
+bash environment/run.sh bash reconstruction/reconstruct.sh --after \
   --result-dir result/mille_demo_001
 bash environment/run.sh bash validation/validate.sh \
   --result-dir result/mille_demo_001 --reference validation/reference_metrics.json

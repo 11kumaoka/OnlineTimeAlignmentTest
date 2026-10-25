@@ -57,5 +57,5 @@ bash "$repo/digitization/digitize.sh" --result-dir "$result_dir" "${digitization
 bash "$repo/reconstruction/reconstruct.sh" --result-dir "$result_dir" "${reconstruction_args[@]}" "${reconstruction_config_args[@]}"
 bash "$repo/alignment/align.sh" --result-dir "$result_dir" "${alignment_args[@]}"
 bash "$repo/correction/correct_geometry.sh" --result-dir "$result_dir" "${correction_args[@]}"
-bash "$repo/reconstruction/reconstruct_corrected.sh" --result-dir "$result_dir" "${reconstruction_args[@]}" "${reconstruction_config_args[@]}"
+bash "$repo/reconstruction/reconstruct.sh" --after --result-dir "$result_dir" "${reconstruction_args[@]}" "${reconstruction_config_args[@]}"
 bash "$repo/validation/validate.sh" --result-dir "$result_dir" "${validation_args[@]}"

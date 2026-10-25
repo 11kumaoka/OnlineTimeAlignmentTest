@@ -2,7 +2,7 @@
 > Start new native EICrecon telescope studies with the
 > [Telescope Alignment User Guide](TELESCOPE_ALIGNMENT_USER_GUIDE.md).
 > See the [implementation audit](TELESCOPE_IMPLEMENTATION_AUDIT.md) for the exact
-> unreplaced rotation, RawHit/Geant4 and Controller capabilities.
+> unique legacy alignment scopes, input contracts and queue lifecycle.
 
 # Independent Research Workflow
 
@@ -52,7 +52,8 @@ are exclusively under `localDetEICrecon/`. The external solver is under
 `alignment/`. `research_common.py` contains infrastructure only, with no detector
 or physics model. Each wrapper executes its own Python module; direct module
 invocation such as `python3 -m geometry.prepare --help` is also supported.
-No central Python workflow or old-path compatibility package remains.
+This retained backend uses independent stage modules rather than the native
+`calibration.workflow` entry. No old-path compatibility package remains.
 
 ### Geometry
 
@@ -178,7 +179,7 @@ bash environment/run.sh bash digitization/digitize.sh --result-dir result/manual
 bash environment/run.sh bash reconstruction/reconstruct.sh --result-dir result/manual_001 --config reconstruction/configs/electron_1GeV.json
 bash environment/run.sh bash alignment/align.sh --result-dir result/manual_001 --steering alignment/pede_template.txt
 bash environment/run.sh bash correction/correct_geometry.sh --result-dir result/manual_001
-bash environment/run.sh bash reconstruction/reconstruct_corrected.sh --result-dir result/manual_001
+bash environment/run.sh bash reconstruction/reconstruct.sh --after --result-dir result/manual_001
 bash environment/run.sh bash validation/validate.sh --result-dir result/manual_001
 ```
 

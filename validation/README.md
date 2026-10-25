@@ -4,6 +4,34 @@ The repository tracks validation code, expected metrics, checksums, and migratio
 metadata. It does not distribute ROOT datasets, Mille Binary files, analysis logs,
 external dependencies, build outputs, or backups.
 
+## Primary native workflow validation
+
+The maintained +X telescope entry point is `python3 -B -m calibration.workflow
+run`. Follow the [practical User Guide](../docs/TELESCOPE_ALIGNMENT_USER_GUIDE.md)
+for the fresh 64-event Geant4 smoke test, independent stages and ROOT reports.
+The [technical validation report](../docs/NATIVE_WORKFLOW_VALIDATION.md) records
+executed engineering checks and distinguishes them from physics-quality validation.
+Native outputs use `preparation/`, `simulation/`, `raw/`, `controller/` and
+`report/`; they do not use the legacy numbered step directories below.
+
+Run focused interface, policy and serialization tests inside the fixed container:
+
+```bash
+bash environment/run.sh python3 -B -m unittest \
+  validation.test_native_workflow validation.test_native_diagnostic \
+  validation.test_native_serialization -v
+```
+
+Several modules under `validation/telescope_closure/` and
+`validation/telescope_alignment/check.py` are also runtime dependencies of the
+native Controller's Geometry, information and Mille checks. Their location does
+not make them disposable test fixtures. Synthetic Closure tests and independent
+mathematical references remain available for regression.
+
+The remaining sections document retained legacy +Z workflows, shared Geometry
+foundations and local historical data. They are not prerequisites for generating
+a new native sample from scratch.
+
 ## Historical 99-track regression
 
 The minimum external input is:
@@ -26,7 +54,7 @@ Expected results are 99 accepted tracks before/after, L2 Geometry Correction
 +198.75 μm, L2 Rec−Sim −199.571→−0.821 μm, and Σχ²/Σstored ACTS nDoF
 45.592→1.981. Tolerances are in `reference_metrics.json`.
 
-## Fresh electron Closure
+## Legacy +Z fresh electron Closure
 
 A fresh checkout can generate new events without the historical dataset:
 
@@ -70,15 +98,15 @@ The safety checker creates a new temporary result subdirectory and exercises CLI
 refusal paths. It does not execute reconstruction or overwrite reference data.
 
 
-## Current task architecture
+## Legacy +Z step1–step7 architecture
 
-New runs use `result/<name>/step1` through `step7`. Numerical extraction is in
+Legacy +Z runs use `result/<name>/step1` through `step7`. Numerical extraction is in
 `validation/metrics.py`; `validate.py` compares provenance and runs the ROOT
 renderer in `visualization/`. Historical `results/` remains untouched. See the
 [Workflow Guide](../docs/WORKFLOW.md) for seven independent commands and the
 [architecture report](../docs/TASK_ARCHITECTURE.md) for migration validation.
 
-## RawHit split validation
+## Legacy RawHit split and shared foundation validation
 
 The historical Closure helper now inserts `digitization/digitize.sh` between
 steps2/3 and reconstructs the same saved RawHits at steps3/6. Simulation Hit
@@ -100,7 +128,7 @@ python3 -m unittest validation.test_transforms validation.test_raw_metadata vali
 
 Run fresh-DD4hep and Mille finite-difference probes inside the EIC container; see [XY validation](../docs/XY_FOUNDATION_VALIDATION.md) for executed commands and results. Global Z translation and individual L1 tilts use their explicit gated modes, documented below; opt-in L1/L2 Rz modes are documented in [rotation validation](../docs/ROTATION_ALIGNMENT_VALIDATION.md). [Geometry conventions](../docs/GEOMETRY_CONVENTIONS.md) distinguish sensor axes, ACTS planes, reference/survey Geometry and optional simulation truth.
 
-## Global Z checks
+## Legacy Global Z checks
 
 `python3 -m unittest validation.test_z_alignment` tests Global Z placement,
 physical correction sign/composition, unsupported scopes, evidence freshness and
@@ -113,7 +141,7 @@ rescaling. `python3 -m visualization.z_alignment --help` produces ROOT-only
 Geometry, matched X/Y/Z Hit Residuals, profiled track residuals and closure plots.
 Truth is read only by post-fit validation. See [Z validation](../docs/Z_ALIGNMENT_VALIDATION.md).
 
-## Tilt checkpoint
+## Legacy tilt checkpoint
 
 `test_tilt_alignment.py` covers matrix composition/serialization, selected scope
 and refusal of scientifically unsupported combined modes.
@@ -130,13 +158,14 @@ Read [the tilt checkpoint report](../docs/TILT_ALIGNMENT_VALIDATION.md) for exac
 commands, final build, preserved failure evidence, numerical regressions and the
 historical scientific stop at fixed-Global two-axis rotations. The successor explicit SO(3) scopes and their evidence are documented in [the coupled-rotation checkpoint](../docs/SO3_ALIGNMENT_VALIDATION.md).
 
-## L3 implementation checkpoint
+## Legacy L3 implementation checkpoint
 
 `validate_tilt_derivatives --layer 3 --coupled` extends the same physical-DD4hep/production-Mille check to all six L3 columns. Optional `--representative` restricts the diagnostic to one mixed orientation and one finite-difference step, retaining the full suite as default. `test_so3_alignment` checks explicit selected labels, fixed references and repeated current-Geometry composition. `so3_closure` additionally includes L3-only and three-layer six-DOF noiseless mathematical fixtures; these are not Geant4/statistical certification. Follow the [manual guide](../docs/L3_SIX_DOF_MANUAL.md) for proof generation and actual-row rank checks.
 
-## Optional official Geometry audit
+## Historical +Z official Geometry audit
 
-`python3 -m validation.official_geometry --help` describes the isolated local, official-provider and official-element modes. The latter is a component comparison, not a TrackingGeometry suitable for reconstruction. The official provider fails explicitly for the current one-sided telescope. See [the pinned-source audit and independent commands](../docs/OFFICIAL_ACTS_GEOMETRY_PHASE1.md). The production fitter and Controller defaults are unchanged.
+`python3 -m validation.official_geometry --help` describes the isolated local, official-provider and official-element modes. The latter is a component comparison, not a TrackingGeometry suitable for reconstruction. The official provider fails explicitly for that legacy one-sided +Z telescope;
+this is not the current native +X barrel Geometry. See [the pinned-source audit and independent commands](../docs/OFFICIAL_ACTS_GEOMETRY_PHASE1.md). The production fitter and Controller defaults are unchanged.
 
 The Blueprint implementation and provider selection were subsequently removed.
 See [the isolated legacy converter experiment](../docs/LEGACY_ENDCAP_SIMPLIFICATION.md)

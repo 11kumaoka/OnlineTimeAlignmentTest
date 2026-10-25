@@ -1,3 +1,10 @@
+> Retained +Z BeamTestReco validation. Start native +X studies with
+> [the telescope guide](TELESCOPE_ALIGNMENT_USER_GUIDE.md).
+> Fresh replays use `geometry/scenarios/L1_x150um_L2_x200um.json`, whose values
+> equal the historical `my_first_test.json` used below. The original bytes remain
+> recoverable from commit `a45164c3d9efbc24bdc9833954407e0cb7cf9fd4` and the
+> cleanup source backup; historical result files and quoted commands are unchanged.
+
 # Simultaneous SiMAPS L1/L2 Global X Alignment
 
 ## Supported scope

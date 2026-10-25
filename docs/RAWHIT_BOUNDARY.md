@@ -1,3 +1,10 @@
+> Historical +Z BeamTestReco contract and validation. The current native
+> Geant4 workflow is documented in [the telescope guide](TELESCOPE_ALIGNMENT_USER_GUIDE.md).
+> The former `reconstruct_corrected.sh` alias is now `reconstruct.sh --after`;
+> the archived scenario `my_first_test.json` is equivalent to the maintained
+> `geometry/scenarios/L1_x150um_L2_x200um.json`. Quoted historical executions
+> and their preserved artifacts below retain their original provenance.
+
 # Common RawHit Boundary: Architecture, Contract, and Validation
 
 Date: 2026-10-21. Starting commit: `2fff299a1958718694cad116cbf767894ed3b363`,

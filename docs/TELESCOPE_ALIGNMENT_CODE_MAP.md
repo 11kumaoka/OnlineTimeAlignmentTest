@@ -244,15 +244,16 @@ official ePIC barrel detector constants. The existing manifest key `barrel_field
 is retained for output-schema compatibility. None implies that the physical
 beam-test telescope is the ePIC barrel detector.
 
-## Consolidation boundary
+## Historical consolidation boundary
 
 The [implementation audit](TELESCOPE_IMPLEMENTATION_AUDIT.md) inventories retained
-modules, dependencies and deleted duplicate build entries. This synthetic-channel
-closure is the active EICrecon-based development workflow. The old endcap backend
-remains a capability/reference implementation: its validated rotations, SO(3),
-Geant4/digitization and sequential Controller lifecycle are not yet replaced by
-these selected material-free native fixtures. Do not infer that those features are
-available in this native chain. No automatic Geometry activation is provided.
+modules, dependencies and deleted duplicate build entries. Synthetic-channel
+closure was the primary workflow at that checkpoint. The current public entry
+above also integrates Geant4 and official Digitization. The old +Z endcap backend
+remains a capability/reference implementation for distinct input contracts,
+alignment scopes and the sequential queue/review lifecycle. It is not
+interchangeable with the native +X workflow. No automatic Geometry activation
+is provided by the native chain.
 
 The Pede text parser now lives in `alignment/pede.py`; it has no dependency on the
 legacy solver CLI or correction scopes. `alignment.align.read_pede` remains an

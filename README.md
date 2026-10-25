@@ -28,13 +28,13 @@ selected with `TESTBENCH_CONTAINER`; otherwise the wrapper launches the pinned i
 
 ```bash
 bash environment/run.sh cmake -S /work/localDetEICrecon/experimental/telescope \
-  -B /work/build/native_workflow_20261025_02 \
+  -B /work/build/native_telescope \
   -DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON
-bash environment/run.sh cmake --build /work/build/native_workflow_20261025_02 -j2
+bash environment/run.sh cmake --build /work/build/native_telescope -j2
 bash environment/run.sh python3 -B -m calibration.workflow run \
   --config calibration/config/native_workflow_smoke.json \
-  --output-dir result/native_workflow_smoke_20261025_03 \
-  --build build/native_workflow_20261025_02 --validation-mode diagnostic
+  --output-dir result/native_smoke \
+  --build build/native_telescope --validation-mode diagnostic
 ```
 
 This example uses 64 independent Geant4 events with a 1 GeV electron gun along
@@ -66,27 +66,33 @@ containment remain mandatory. Unknown warnings or genuine integrity failures sto
 Actual finite sensitive-surface crossings are checked with the installed ACTS
 Navigator, rather than assuming a fixed number of unused-detector holes.
 
-## Repository map
+## Maintained execution path
 
-| Path | Responsibility |
+| Stage | Maintained source / configuration |
 | --- | --- |
-| `localDetEICrecon/` | Native telescope plugins and retained BeamTestReco source |
-| `geometry/` | Physical transforms, nominal Geometry and legacy scenarios |
-| `simulation/`, `digitization/` | Independent transport and official RawHit production |
-| `reconstruction/`, `alignment/`, `correction/` | Retained independent stages and shared alignment utilities |
-| `calibration/` | Public workflow, native Controller, policy and shared operations |
-| `validation/` | Unit/integration tests, sensor configurations and preservation manifests |
-| `visualization/` | ROOT visualization and browser macro |
-| `environment/` | Fixed Docker launcher and dependency/build setup |
-| `docs/` | Practical guide, architecture and detailed research records |
-| `result/`, `build/`, `external/` | Ignored generated runs, local builds and dependencies |
-| `results/` | Ignored historical reference data; preserved unchanged |
+| Public CLI, provenance and ROOT report | `calibration/workflow.py`; `calibration/config/native_workflow_*.json` |
+| Simulation | `simulation/native.py`; real npsim/Geant4 transport |
+| Official Digitization and RawHit projection | `digitization/native.py`; `TelescopeDigitization.cc` |
+| DD4hep/ACTS Geometry, tracking and native Mille | `localDetEICrecon/experimental/telescope/`; `validation/telescope_geometry/` |
+| Alignment, correction and Controller | `calibration/native_{controller,operations,policy}.py`; shared `validation/telescope_closure/` helpers |
+| Physical transforms and Pede parsing | `geometry/transforms.py`; `alignment/pede.py`; `external/install/` solver |
+| Supported parameter scopes and regression tests | `validation/telescope_alignment/`; `validation/test_native_*.py` |
+| Environment and ROOT browsing | `environment/`; `visualization/browse.C` |
+
+Files under `validation/telescope_closure/` also implement shared runtime
+operations; they are required by the public workflow. They are not disposable
+test fixtures. See the code map for exact upstream-versus-local responsibilities.
+`docs/` contains guides and research records; `input/` retains the legacy delivery
+protocol. Ignored `result/`, `results/`, `build/` and `external/` contain generated
+runs, historical data, builds and dependencies. Never overwrite them.
 
 New simulations need no private ROOT input. Historical regressions require local
 reference datasets described in [validation/README.md](validation/README.md);
 they are not stored in Git. Generated ROOT, Mille, logs, builds and installations
 are excluded from version control. Maintained comments and technical documents
 use English.
+
+## Legacy capabilities and historical evidence
 
 The original +Z BeamTestReco workflow remains separately supported, with the
 [legacy Workflow Guide](docs/WORKFLOW.md), [RawHit contract](docs/RAWHIT_BOUNDARY.md)
@@ -98,3 +104,7 @@ Historical native synthetic closure, signed rotations/SO(3), multi-sensor scopes
 and manual protocols are retained in the [fixture manual](docs/NATIVE_FIXTURE_PROTOCOLS.md)
 and linked numerical reports. The [initial npsim audit](docs/NATIVE_GEANT4_WORKFLOW.md)
 preserves earlier failed attempts as well as successful integration evidence.
+
+The [source cleanup inventory](docs/REPOSITORY_CLEANUP.md) explains the two
+redundant files removed, retained scientific references and the separate
+generated-data cleanup proposal.

@@ -1,18 +1,29 @@
-> Start here: [alignment user guide](../../../docs/TELESCOPE_ALIGNMENT_USER_GUIDE.md),
-> [code and upstream map](../../../docs/TELESCOPE_ALIGNMENT_CODE_MAP.md), and
-> [reproduction record](../../../docs/BARREL_ALIGNMENT_VALIDATION.md).
-> The earlier reports below describe their historical milestones; the current
-> original validated channel closure uses L1/L2 Global Y, zero field and no ACTS material.
-> The selected native L1 Global Rx and combined Y/Rx milestone is described in the
-> [parity report](../../../docs/TELESCOPE_ALIGNMENT_LEGACY_PARITY.md); no general six-DOF scope is implied.
+# Native EICrecon telescope plugins
 
-# Experimental EICrecon telescope factory chain
+This directory supplies the C++ plugins for the primary public workflow:
+`python3 -B -m calibration.workflow run`. The historical `experimental/telescope`
+path remains stable. Follow the [practical user guide](../../../docs/TELESCOPE_ALIGNMENT_USER_GUIDE.md)
+for setup, native CMake commands, example configurations, inputs/outputs and ROOT
+diagnostics. The [code map](../../../docs/TELESCOPE_ALIGNMENT_CODE_MAP.md) identifies
+upstream components and telescope-specific adapters; the
+[current validation report](../../../docs/NATIVE_WORKFLOW_VALIDATION.md) records
+executed tests and limitations.
 
-This isolated plugin follows pinned EICrecon source-level module boundaries.
-It is not the production BeamTestReco/Alignment path.
+The public chain uses `TelescopeDigitization`, `TelescopeTracking` and
+`TelescopeMille`: npsim/Geant4 input, official digitization, immutable RawHits,
+native ACTS tracking, official Pede, checked Geometry Correction and fresh
+reconstruction. Configure this directory with `TELESCOPE_BUILD_MILLE_PROBE=ON`
+for the complete chain. ACTS remains zero-field and material-free; technical
+completion does not establish physics-quality validation. Candidate Geometry
+remains unapproved and is never activated automatically.
 
-See [the validation and source comparison](../../../docs/BARREL_FACTORY_RECONSTRUCTION.md)
-for exact commands, provenance, collection contracts, results and limitations.
+The retained +Z `BeamTestReco` backend has its own
+[build and workflow](../../README.md). Its historical inputs and coordinate
+conventions remain separate from this native +X telescope.
+
+## Source provenance
+
+These plugins follow pinned EICrecon source-level module boundaries.
 
 Copied modules retain their upstream headers. `LICENSE.LGPL3` and `NOTICE.md`
 are copied from EICrecon revision
@@ -22,9 +33,25 @@ reproducible unified diffs, including an empty diff for the unchanged,
 non-installed covariance-unit helper. Installed components are linked rather
 than duplicated. Local classes use `eicrecon::telescope` to avoid symbol clashes.
 
-The optional `TELESCOPE_BUILD_MILLE_PROBE=ON` targets add a separate native-state
-Mille observer and mathematical tests. See [the native Mille integration report](../../../docs/BARREL_NATIVE_MILLE_INTEGRATION.md).
-This does not enable alignment in the production plugin or activate Geometry.
+## Historical fixtures and validation
+
+The reports below describe their original milestones. The
+[fixture manual](../../../docs/NATIVE_FIXTURE_PROTOCOLS.md) preserves independent
+synthetic closure and signed-rotation/SO(3) protocols. Current supported parameter
+scopes and validation limits are listed in the practical guide; no general
+six-DOF scope is implied by this directory name.
+
+See [the original factory validation](../../../docs/BARREL_FACTORY_RECONSTRUCTION.md)
+and [early alignment reproduction record](../../../docs/BARREL_ALIGNMENT_VALIDATION.md)
+for their exact commands, provenance and collection contracts. The earlier L1
+Global Rx and combined Y/Rx milestones are retained in the
+[parity report](../../../docs/TELESCOPE_ALIGNMENT_LEGACY_PARITY.md).
+
+The original `TELESCOPE_BUILD_MILLE_PROBE=ON` development milestone introduced
+the native-state Mille observer and mathematical tests; see the
+[native Mille integration report](../../../docs/BARREL_NATIVE_MILLE_INTEGRATION.md).
+The option now builds the native Mille components required by the public workflow
+alongside those retained tests.
 
 The [channel-based alignment closure](../../../docs/BARREL_CHANNEL_ALIGNMENT_CLOSURE.md)
 reconstructs 32 immutable five-SiMAPS channel events through nominal and corrected
