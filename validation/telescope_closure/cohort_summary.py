@@ -16,12 +16,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from research_common import REPO, write_json, digest
 from alignment.pede import read_pede
-from validation.telescope_closure.rotation import rotation_label,labels,is_coupled,is_three
+from validation.telescope_closure.rotation import rotation_label,labels,is_coupled,is_three,is_four
 
 
 def read_run(run):
     fixture = json.loads((run/'geometry/rotation_fixture.json').read_text())
     mode = fixture['mode']
+    if is_four(mode):return read_four_run(run,fixture)
     coupled = is_coupled(mode)
     selected = labels(mode)
     label = None if coupled else rotation_label(mode)
@@ -78,6 +79,35 @@ def read_run(run):
     return item
 
 
+def read_four_run(run,fixture):
+    """Mixed units remain explicit; Truth is used only for offline scoring."""
+    truth=json.loads((run/'data/shifted/channels_truth.json').read_text())
+    recipe=dict(truth['beam_recipe']);seed=recipe.pop('seed');recipe.pop('description',None)
+    rays=[(e['origin_mm'],e['direction']) for e in truth['events']]
+    selected=labels(fixture['mode']);injection=[fixture['injected_global_y_mm']['1'],*fixture['injected_rotation_vector_rad']]
+    item={'run':str(run),'mode':fixture['mode'],'seed':seed,'angular_recipe':recipe,
+        'ray_cohort_sha256':hashlib.sha256(json.dumps(rays).encode()).hexdigest(),
+        'channel_sha256':json.loads((run/'data/shifted_input.json').read_text())['channel_payload_sha256'],
+        'injected_mixed_units':injection,'parameter_labels':selected,'units':['mm','rad','rad','rad'],'passed_closure':False}
+    if (run/'nominal/audit.json').exists():item['accepted_tracks']=json.loads((run/'nominal/audit.json').read_text())['accepted']
+    if (run/'solve/independent.json').exists():
+        solution=json.loads((run/'solve/independent.json').read_text());values=read_pede(run/'solve/millepede.res');value=[values[k] for k in selected];sigma=solution['nominal_sigma']
+        item.update(fitted_mixed_units=value,nominal_sigma_mixed_units=sigma,pede_reported_sigma_mixed_units=solution['pede_reported_sigma'],
+            truth_minus_fit_mixed_units=[a-b for a,b in zip(injection,value)],pull=[(b-a)/v for a,b,v in zip(injection,value,sigma)],
+            covariance_mixed_units=np.linalg.inv(solution['normal']).tolist(),correlation=solution['correlation'],pede_status=solution['status'])
+    final=run/'validation/report.json'
+    if not final.exists():final=run/'refined_validation/report.json'
+    if final.exists():
+        report=json.loads(final.read_text());item.update(passed_closure=report['passed'],accepted_tracks=report['summaries']['nominal']['accepted'],
+            post_update_mixed_units=[report['post_correction'][str(k)] for k in selected],orientation_error_rad=report['orientation_error_rad'],
+            center_bias_mm=report['center_bias_mm'],initial_error_mahalanobis_squared=report['initial_error_mahalanobis_squared'],
+            acts_before=report['summaries']['nominal']['chi2_per_stored_ndf'],acts_after=report['summaries']['corrected']['chi2_per_stored_ndf'],
+            pede_diagnostics=report['pede_diagnostics'],report_sha256=digest(final))
+        if report.get('refinement_count'):item.update(refinement_count=1,cumulative_global_y_mm=report['cumulative_global_y_mm'],cumulative_global_rotation_vector_rad=report['cumulative_global_rotation_vector_rad'],initial_one_step_post_gate_passed=report['initial_one_step_post_gate_passed'])
+    else:item['missing_completed_stages']=[s for s in ('solve','correction','corrected','postsolve','control','controlsolve','validation') if not (run/s/'complete.json').exists()]
+    return item
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runs', type=Path, nargs='+', required=True)
@@ -89,7 +119,15 @@ def main():
     items = [read_run(p.resolve()) for p in args.runs]
     groups = {}
     for item in items:
-        if is_coupled(item['mode']):
+        if is_four(item['mode']):
+            mapping={'injected_rad':'injected_mixed_units','fitted_rad':'fitted_mixed_units','nominal_sigma_rad':'nominal_sigma_mixed_units',
+                'pede_reported_sigma_rad':'pede_reported_sigma_mixed_units','truth_minus_fit_rad':'truth_minus_fit_mixed_units','pull':'pull','post_update_rad':'post_update_mixed_units'}
+            for index,parameter in enumerate(('Y','Rx','Ry','Rz')):
+                row=dict(item);row['unit']=item['units'][index]
+                for key,source in mapping.items():
+                    if source in item:row[key]=item[source][index]
+                groups.setdefault(item['mode']+'_'+parameter,[]).append(row)
+        elif is_coupled(item['mode']):
             for index,parameter in enumerate(('Rx','Ry','Rz') if is_three(item['mode']) else ('Ry','Rz')):
                 row=dict(item)
                 for key in ('injected_rad','fitted_rad','nominal_sigma_rad','pede_reported_sigma_rad',
@@ -112,9 +150,11 @@ def main():
                           'mean_nominal_sigma_rad': statistics.mean(r['nominal_sigma_rad'] for r in fitted) if fitted else None,
                           'pull_mean': statistics.mean(pulls) if pulls else None,
                           'pull_sample_sd': statistics.stdev(pulls) if len(pulls)>1 else None}
+    for mode,group in groups.items():
+        if group[0].get('unit')=='mm':summaries[mode]={k.replace('_rad','_mm'):v for k,v in summaries[mode].items()}
     output.mkdir(parents=True, exist_ok=False)
     write_json(output/'report.json', {'runs': items, 'summaries': summaries,
-               'pull_convention': '(initial Pede fit - injected physical rotation) / initial unscaled nominal sigma',
+               'pull_convention': ('(initial Pede fit - injected physical parameter) / initial unscaled nominal sigma' if any(is_four(r['mode']) for r in items) else '(initial Pede fit - injected physical rotation) / initial unscaled nominal sigma'),
                'independent_seeds': sorted({r['seed'] for r in items}),
                'paired_signs_and_axes_are_independent': False,
                'failed_closures_excluded_from_initial_fit_statistics': False,
@@ -126,13 +166,15 @@ def main():
     for mode, group in groups.items():
         graph = ROOT.TGraphErrors()
         graph.SetName(mode+'_estimates')
-        graph.SetTitle(mode+';Seed suffix (2026102400 + x);Initial Pede rotation [mrad]')
+        seed_base=min(r['seed'] for r in group)//100*100
+        quantity='translation [um]' if group[0].get('unit')=='mm' else 'rotation [mrad]'
+        graph.SetTitle(mode+f';Seed suffix ({seed_base} + x);Initial Pede '+quantity)
         pulls = ROOT.TH1D(mode+'_pulls', mode+';Initial-fit Pull;Cohorts', 40, -5, 5)
         for row in group:
             if 'fitted_rad' not in row:
                 continue
             i = graph.GetN()
-            graph.SetPoint(i, row['seed']-2026102400, row['fitted_rad']*1000)
+            graph.SetPoint(i, row['seed']-seed_base, row['fitted_rad']*1000)
             graph.SetPointError(i, 0, row['nominal_sigma_rad']*1000)
             pulls.Fill(row['pull'])
         graph.Write(); pulls.Write()

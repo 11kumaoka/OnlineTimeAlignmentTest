@@ -69,8 +69,8 @@ public:
         throw std::runtime_error("Unsupported or duplicate selected physical alignment parameter");
     }
     if(labels!=std::set<int>{700102,700202} && labels!=std::set<int>{700104} &&
-       labels!=std::set<int>{700102,700104,700202} && labels!=std::set<int>{700105} && labels!=std::set<int>{700106} && labels!=std::set<int>{700105,700106} && labels!=std::set<int>{700104,700105,700106})
-      throw std::runtime_error("Only two-Y, separate L1 Rx, Ry or Rz, coupled L1 Ry/Rz or Rx/Ry/Rz, or L1 Y/Rx plus L2 Y scopes are enabled");
+       labels!=std::set<int>{700102,700104,700202} && labels!=std::set<int>{700105} && labels!=std::set<int>{700106} && labels!=std::set<int>{700105,700106} && labels!=std::set<int>{700104,700105,700106} && labels!=std::set<int>{700102,700104,700105,700106})
+      throw std::runtime_error("Only two-Y, separate L1 Rx, Ry or Rz, coupled L1 Ry/Rz or Rx/Ry/Rz (with optional L1 Y), or L1 Y/Rx plus L2 Y scopes are enabled");
   }
   void Process(const std::shared_ptr<const JEvent>& event) override {
     std::lock_guard<std::mutex> guard(mutex);++processed;

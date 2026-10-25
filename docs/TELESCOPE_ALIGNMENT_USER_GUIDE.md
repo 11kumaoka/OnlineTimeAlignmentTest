@@ -273,3 +273,99 @@ for exact fresh build/stage commands, mathematical scope and validation evidence
 The historical fixed-ordered Rx/Ry case is separate and has not been resolved
 by changing its parameter definition. No general six-DOF, native Controller or
 Geant4 migration is implied by this selected scope.
+
+## Explicit L1 Global Y plus three rotations
+
+**Experimental, not a promoted robust alignment mode:** five of six declared
+fixtures close with the explicit additional correction; seed 2026102502 with the
+negative vector stops because its first fitted candidate exceeds the unchanged
+module box. The containment guard must not be bypassed. See the parity report.
+
+The bounded validation mode `l1_y_rx_ry_rz` selects only labels 700102 (mm)
+and 700104/700105/700106 (rad). The negative fixture reverses all three rotations
+while retaining Y=+0.150 mm. Global X/Z and other sensors are fixed. These are
+material-free synthetic channel studies, not Geant4 performance or statistical
+coverage measurements.
+
+Use a fresh result path and a freshly configured native build as described
+above. The explicit additional correction requires `--refine-once`; the default
+workflow still performs one correction. It is limited to these four-parameter
+modes, immutable data and at most one additional correction:
+
+```bash
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  python3 validation/telescope_closure/closure.py \
+  --build build/native_y_rotations_20261024_01 \
+  --result result/my_l1_y_rotations_seed1 \
+  --mode l1_y_rx_ry_rz --events 4096 \
+  --beam validation/telescope_alignment/y_rotation_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+```
+
+The exact same capture window applies to every pass. Do not reuse a result
+path. Replace the mode with `l1_y_rx_ry_rz_negative` and select beam seed2/3 for
+the other declared cohorts; paired signs share rays and are not independent.
+The explicit protocol contains `refine`, `refined` and `refinesolve` between
+`postsolve` and `control`. Every stage can also be invoked independently using
+`--step STEP` with the same arguments. `--validation-name NAME` permits a fresh
+check report without modifying previous reports.
+
+The report separates initial Pede parameters/covariance/Pulls from cumulative
+Geometry and final post-updates. Covariance uses
+`nominal_covariance_mixed_units` with parameter units mm/rad/rad/rad. The
+rotation-only schemas retain rad2. Success after the extra correction must not
+be described as one-step success. No covariance is combined across these
+correlated same-channel fits, and no candidate Geometry is activated. Read the
+[parity report](TELESCOPE_ALIGNMENT_LEGACY_PARITY.md) for the predeclared gates,
+first one-step failure, user-approved refinement amendment and actual results.
+
+## Reproducing the unchanged-envelope containment study
+
+The declared smaller fixture has six successful controlled closures. This
+validates only that fixture/range; uncertainty coverage and arbitrary poses
+are not certified. The original experiment remains a separate 5/6 result.
+
+The original +150 um/(+1.8,+2.5,-2.5) mrad experiment remains 5/6 and must not be
+reported as 6/6. Its negative seed 2026102502 is a permanent expected **physical
+refusal**, not a completed physical closure. The separate smaller fixture uses
+Y=+150 um and rotations(+1.8,+1.0,-1.0) mrad, or the opposite rotation vector.
+The module, silicon, detector material and existing containment checks are
+unchanged. Read the latest parity-report section for preflight and outcomes.
+
+```bash
+export TESTBENCH_CONTAINER=sweet_mahavira
+# Geometry-only design, before fitting. Output directories must be new.
+bash environment/run.sh python3 validation/telescope_closure/containment.py \
+  --step preflight \
+  --original-run result/native_y_rotations_seed2_negative_20261024_01 \
+  --prior-checkpoint result/native_y_rotations_20261024_01_audit/final_checkpoint.json \
+  --build build/native_containment_20261024_01 \
+  --output-dir result/my_containment_preflight
+
+# Permanent safety regression: reproduces Pede, never starts invalid tracking.
+bash environment/run.sh python3 validation/telescope_closure/containment.py \
+  --step expected-refusal \
+  --original-run result/native_y_rotations_seed2_negative_20261024_01 \
+  --build build/native_containment_20261024_01 \
+  --output-dir result/my_expected_physical_refusal
+
+# New, independent closure experiment; same four-label inference configuration.
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/native_containment_20261024_01 \
+  --result result/my_contained_positive_seed1 \
+  --mode l1_y_rx_ry_rz_contained --events 4096 \
+  --beam validation/telescope_alignment/contained_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+```
+
+Use `l1_y_rx_ry_rz_contained_negative` for the opposite signed fixture and
+`contained_beam_seed2.json`/`contained_beam_seed3.json` for the other declared
+seeds. `--step` can execute each independent stage, as documented above.
+Preflight and the permanent regression require the preserved original local
+run, its original initial-summary JSON and the previous `final_checkpoint.json`.
+These are reference datasets excluded from Git; copy them explicitly from the original local research storage when using
+another checkout. This milestone does not verify external-archive coverage. A new closure regenerates
+its own segmented channels from its explicit seed and physically displaced XML.
+Use `cohort_summary.py --runs ... --output-dir result/NEW` to retain **all**
+attempted fits in ROOT and JSON summaries, including physically refused fits.
+No command activates a Geometry or adjusts an uncertainty to force closure.

@@ -1,6 +1,9 @@
 # Legacy/native telescope alignment parity
 
-Latest scope: [three-axis native SO(3)](#three-axis-native-so3-milestone).
+Latest controlled validated fixture: [unchanged-envelope four-parameter study](#unchanged-envelope-four-parameter-containment-milestone).
+Previous validated scope: [three-axis native SO(3)](#three-axis-native-so3-milestone).
+Original experimental checkpoint: [L1 Y plus three rotations](#l1-global-y-plus-three-axis-native-so3-milestone),
+5/6 closures; a physical candidate-containment failure prevents promotion.
 Previous coupled baseline: [Ry/Rz](#coupled-native-ryrz-so3-milestone).
 Previous signed baseline: [single-axis Ry/Rz](#signed-single-axis-ryrz-completion).
 
@@ -1906,3 +1909,773 @@ bash environment/run.sh python3 validation/telescope_closure/bias.py \
   --runs "${runs[@]}" --output result/NEW_DIAGNOSTIC/ry_attribution.json
 bash environment/run.sh python3 -m unittest discover -s validation -p "test_*.py"
 ```
+
+## L1 Global Y plus three-axis native SO(3) milestone
+
+**Checkpoint status: experimental, five of six complete closures.** The final
+negative-vector seed 2026102502 is stopped by the unchanged physical module-box
+containment gate. The requested all-fixture validation is not complete, so the
+four-parameter implementation is not promoted or committed as validated. The
+separate read-only diagnostic commit remains valid.
+
+Audit root: `result/native_y_rotations_20261024_01_audit/` (abbreviated
+`audit/` in this section). Result and build products are local, excluded from Git.
+
+The feature follows the separate read-only Ry diagnostic commit. It enables
+exactly L1 Global Y (700102, mm) and Global Rx/Ry/Rz (700104/700105/700106, rad).
+L1 X/Z and all other sensor poses remain fixed. The physical contract is
+
+```
+c_new = c_current + (0, dY, 0)
+R_new = Exp([dRx,dRy,dRz]) R_current
+```
+
+These are world coordinates and active left-Global rotations about the actual
+current sensitive center. The center is not rotated about the world origin,
+and no independent Euler increments are added. Full target matrices are
+serialized with the existing bounded constructor-compatible SO(3) charts.
+Parent mounting, detector flags, envelope, material, pitch and segmentation
+are unchanged. No provider, navigator, fitter or inference solver is added.
+NativeMilleModel, ACTS transport/alignment columns, covariance whitening,
+electron seed/hypothesis and CKF selection are unchanged.
+
+### Geometry feasibility, scope and prospective gates
+
+Actual geometry-only preflight `audit/geometry_preflight_02/` validates the
+previous +150 um displacement with both rotation vectors. All eight sensitive
+corners fit the unchanged module box and cylindrical layer envelopes, and
+DD4hep/ACTS centers, matrices, VolumeID and GeometryIdentifier agree. The
+minimum module-Y margin is approximately 10 um, so the displacement is not
+reduced. This decision precedes four-parameter Pede recovery.
+
+The fixed fixtures are `(Y,Rx,Ry,Rz)=(+0.150 mm,+1.8,+2.5,-2.5 mrad)` and
+`(+0.150 mm,-1.8,-2.5,+2.5 mrad)`. Only the rotation vector changes sign.
+4096 rays per fixture use fresh independent seeds 2026102501/02/03, declared
+in `validation/telescope_alignment/y_rotation_beam_seed{1,2,3}.json` with the
+same bounded uniform beam distribution. Paired signs share rays within each
+seed and are not independent repetitions.
+
+`audit/prospective_plan.json` fixes the gates before the first fit: accumulated
+selected rank 4; diagonal-scaled condition<100 for the selected and omitted-X/Z
+six-column diagnostic; marginal Y sigma<1 um and angular sigmas<0.5 mrad,
+including the six-column diagnostic; each recovery error<5 initial nominal
+sigmas and full-four-coordinate squared Mahalanobis error<25. Actual center
+error must be below both 150 um and five Y sigmas; actual orientation error
+must be below both the injected rotation norm and five times the square root
+of the largest eigenvalue of the **angular covariance sub-block**. Mixed
+mm/rad eigenvalues are never used for an angular tolerance. Remaining Y must
+be below 2e-5 mm and rotations below one quarter their initial sigma. Existing
+scientific gates remain unchanged for all previous modes.
+
+A prospective calculation from previous actual native rows gives selected
+rank 4, normalized condition 1.5190, Y sigma 0.19083 um, and Rx/Ry/Rz sigmas
+(0.019424,0.444386,0.395084) mrad. The largest translation/rotation correlation
+is approximately-0.20544 for Y/Rz. This is an initial feasibility check, not the
+new fit; the actual new native states are rechecked before Pede. Original
+four-local-parameter rank 4 is mandatory for every track. Individual tracks
+need not have full global rank; the summed selected matrix must.
+
+### Source responsibilities and mixed-unit diagnostics
+
+- `localDetEICrecon/experimental/telescope/alignment/TelescopeMille.cc::Init`
+  admits one additional exact label set; original physical columns 1/3/4/5
+  and numerical equation construction remain unchanged.
+- `validation/telescope_alignment/l1_global_y_rx_ry_rz.json` records the exact
+  units, center pivot, update contract and fixed references.
+- `rotation.py::is_four/rotation_labels/fixture_shifts` separate translation
+  from the three-component rotation vector; old routes remain explicit.
+- `correct/check` apply the center and matrix updates, score full mixed-unit
+  covariance, and use its angular sub-block for orientation bounds.
+- `coupled_pose_gate` checks nonparallel translation/rotation composition and
+  inverse-center recovery using actual reloaded DD4hep/ACTS poses.
+- `coupled_physical_derivatives` checks Y at 1e-3/1e-4/1e-5 mm and rotations
+  at 1e-4/1e-5/1e-6 rad around nominal and corrected poses. The small Y steps
+  respect the unchanged tight box margin. The original 2e-5 absolute derivative
+  tolerance is retained, with mm/mm and mm/rad errors reported separately.
+- `closure.py::geometry_step/solve/main` records the new fixture and enforces
+  selected-four and diagnostic-six sensitivity before Pede.
+- `observability.py::analyze` adds four-coordinate prefix matrices, covariance,
+  correlations and per-track ranks while retaining all existing diagnostics.
+- `cohort_summary.py` keeps full mixed-unit covariance, labels and units, and
+  draws Y estimates in um and angular estimates in mrad. Existing rotational
+  summaries retain their original field semantics.
+- `validation/test_native_y_rotations.py` independently checks center-preserving
+  composition/inversion, three-versus-four parameter routing and exact units.
+
+All full-four covariance entries have explicit parameter units: mm2 for Y/Y,
+mm*rad for Y/angle, and rad2 for angle/angle. The feature uses
+`nominal_covariance_mixed_units`, retaining the old `nominal_covariance_rad2`
+key only for rotation-only scopes. The first development run was started before
+this diagnostic-key correction; it is preserved separately and not counted as
+an independent cohort. The identical-seed retry uses fresh outputs and unchanged
+physics, amplitudes and engineering gates. This is an output-label correction,
+not a numerical-model correction.
+
+### Explicit one-time relinearization amendment
+
+The first positive four-parameter fit did **not** pass the original one-step
+closure gate: its post-correction Ry update was -117.32 urad, or 0.26054 of the
+initial 450.2924 urad nominal sigma. The predeclared quarter-sigma bound was
+112.5731 urad. This failure is retained; the bound is not relaxed. Initial Y,
+Rx and Rz post-updates were +6.1337 nm, +0.99082 urad and -17.827 urad.
+
+The user explicitly authorized at most one additional correction. The amendment
+is recorded prospectively in `audit/prospective_refinement_plan.json`, before
+executing it. The declared protocol for every four-parameter cohort is the same:
+initial fit/correction, same-channel reconstruction/Pede, **one** simultaneous
+Y/SO(3) update, and a fresh reconstruction/Pede evaluation using the original
+thresholds. A Geometry failure stops the case before further reconstruction;
+five cases complete the protocol and one stops at its first candidate. This is
+an explicit validation operation, not an automatic
+Calibration Controller loop. No Geometry version is activated.
+
+`--refine-once` is refused outside the four-parameter modes. `rotation.refine`
+verifies immutable completed parents and creates an exclusive `refinement/`
+stage; an existing or partial stage cannot be reused. The corrected XML is
+reloaded through actual DD4hep/ACTS and checked at its current sensitive center.
+`refined`, `refined_physical_derivatives` and `refinesolve` are separate stages.
+Initial and final Pede diagnostics remain separate. The final pose is composed
+as matrices; cumulative rotations are `Log(R_final R_nominal^T)`, never summed
+Euler angles. Initial-fit uncertainties and Pulls remain initial-fit quantities;
+uncertainties from fits on the same channels are not combined.
+
+### Independent commands for the four-parameter milestone
+
+The following commands use the fixed Docker container. Build and output paths
+must be new for a repeat; the paths below identify the actual recorded run.
+
+```bash
+export TESTBENCH_CONTAINER=sweet_mahavira
+bash environment/run.sh cmake \
+  -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_y_rotations_20261024_01 \
+  -DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON
+bash environment/run.sh cmake --build /work/build/native_y_rotations_20261024_01 -j2
+
+# All stages for a new case; never reuse an existing result directory.
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/native_y_rotations_20261024_01 \
+  --result result/my_four_parameter_positive_seed1 \
+  --mode l1_y_rx_ry_rz --events 4096 \
+  --beam validation/telescope_alignment/y_rotation_beam_seed1.json \
+  --chi2-cut 1000 --refine-once --step all
+
+# Alternatively, invoke each independent stage with identical arguments.
+for step in geometry data nominal solve correct corrected postsolve refine refined refinesolve control controlsolve check; do
+  bash environment/run.sh python3 validation/telescope_closure/closure.py \
+    --build build/native_y_rotations_20261024_01 \
+    --result result/my_four_parameter_stagewise_seed1 \
+    --mode l1_y_rx_ry_rz --events 4096 \
+    --beam validation/telescope_alignment/y_rotation_beam_seed1.json \
+    --chi2-cut 1000 --refine-once --step "$step" || break
+done
+
+# Unit tests, safety and historical-data preservation are independent.
+bash environment/run.sh python3 -m unittest discover -s validation -p 'test_*.py'
+bash environment/run.sh python3 validation/check_safety.py
+bash environment/run.sh python3 validation/verify_preservation.py
+
+# Consolidated suite: use a completed original two-Y closure and a fresh name.
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/native_y_rotations_20261024_01 \
+  --result result/native_y_rotations_regression_l1_l2_y_20261024_01 \
+  --mode l1_l2_y --events 32 --chi2-cut 1000 \
+  --step regressions --validation-name my_four_parameter_regressions
+
+# Standalone official decoder, with the same dependency environment as tracking.
+bash environment/run.sh python3 -c 'import subprocess; from pathlib import Path; from validation.telescope_closure.closure import environment; subprocess.run(["/work/external/install/bin/inspectMilleBinary", "/work/result/native_y_rotations_seed1_positive_20261024_02/nominal/mille.dat"], env=environment(Path("/work/build/native_y_rotations_20261024_01")), check=True)'
+```
+
+The existing 12 modes use the same stagewise driver without `--refine-once`:
+32 events for `l1_l2_y`, `l1_rx`, `l1_rx_negative`, `l1_y_rx_l2_y`; 1024 events
+for `l1_ry`, `l1_ry_negative`, `l1_rz`, `l1_rz_negative`; 4096 for
+`l1_ry_rz`, `l1_ry_rz_negative`, `l1_rx_ry_rz`, `l1_rx_ry_rz_negative`.
+For the last eight, add `--beam validation/telescope_alignment/tilt_beam_validation.json`.
+All recorded runs use `--chi2-cut 1000`. Their exact arguments, outputs and exit
+codes are preserved under each result's `driver/`. The diagnostic module has
+its own `--help` and consumes only the original completed three-rotation runs;
+`audit/guarded_bias_diagnostic/command.json` records all six exact inputs.
+
+### Preserved unsuccessful invocations and warning policy
+
+- `audit/geometry_preflight/positive/` failed because the technical probe received
+  a relative XML path from its own stage directory. The absolute-path retry in
+  `geometry_preflight_02/` passed before four-parameter fits. No Geometry
+  envelope or physical amplitude was changed.
+- `native_y_rotations_seed1_positive_20261024_01/` is a development execution
+  started before the mixed-unit covariance key was corrected. It is retained,
+  and its numerical fit agrees with the identical-seed fresh execution `_02`.
+  It is not another independent seed. Both original one-step drivers report the
+  Ry gate failure; neither result is relabeled as one-step success.
+- The fresh `_02/validation/` remains an unsuccessful original check. Approved
+  additional stages and `refined_validation/` preserve that separation; the
+  original driver exit remains1. Its successful refinement has its own
+  `refinement_driver/` commands, exit codes and immutable markers.
+- `audit/refinement_refusals/` intentionally records exit 1 for an attempted
+  duplicate refinement and exit 2 for an unsupported-mode CLI request. Parent
+  and final-stage hashes remain intact. These are expected safety successes.
+- Existing SQLite unclosed-connection ResourceWarnings, fixed-container `stty`
+  messages and CMake developer warnings remain in logs. Tests are not altered
+  to suppress them, and no input-error rescaling is performed.
+
+### Representative full covariance and correlations
+
+For seed 2026102501, positive injection, the initial four-coordinate covariance
+is shown below. Row/column units are explicit; entries have the product of the
+corresponding units. This is the original unscaled nominal covariance, not a
+covariance for the cumulative two-correction pose.
+
+| Coordinate | Y [mm] | Rx [rad] | Ry [rad] | Rz [rad] |
+|---|---:|---:|---:|---:|
+| Y [mm] | 3.679816222e-08 | 7.919222823e-12 | -1.287961812e-11 | -1.718244153e-08 |
+| Rx [rad] | 7.919222823e-12 | 3.803909120e-10 | -1.426979876e-11 | -4.859617754e-11 |
+| Ry [rad] | -1.287961812e-11 | -1.426979876e-11 | 2.027632445e-07 | -2.746609063e-09 |
+| Rz [rad] | -1.718244153e-08 | -4.859617754e-11 | -2.746609063e-09 | 1.537336144e-07 |
+
+Its marginal sigmas are (0.191828 um,0.019504,0.450292,0.392089 mrad).
+The accumulated selected rank is 4; diagonal-scaled condition is 1.594324.
+The largest cross-correlation is Y/Rz=-0.228448. The complete correlation
+matrix, omitted-X/Z six-column diagnostic, prefix track-count scaling,
+slope/impact subsets and per-track rank counts are in each case's
+`solve/observability.json`. Every selected and omitted-axis sensitivity gate
+is checked before Pede; no prior is introduced and no extra column is fitted.
+
+### Completed historical regression evidence
+
+All 12 original native modes passed fresh reconstruction closures using the new
+native build. Every mode was then checked again with the final Python source,
+writing `final_source_validation/` independently. All 72 comparison artifacts
+(12 times nominal/Truth/corrected XML and nominal/corrected/control Mille Binary)
+are byte-identical to the previous three-axis milestone's corresponding runs.
+Scientific report JSON values are also identical after excluding only
+`immutable_input_file_sha256`: regenerated ROOT container metadata changes that
+whole-file checksum. Actual channel-payload checksums remain identical, and each
+new ROOT input remains immutable within its own run. No numerical assertion or
+reference value was weakened. Full hashes and exclusions are recorded in
+`audit/all_twelve_final_baseline_identity.json`.
+
+The final 18-command suite passed in
+`result/native_y_rotations_regression_l1_l2_y_20261024_01/y_rotations_complete_regressions/`.
+It uses fresh standalone Geometry and benchmark builds, actual Geometry reload
+and integration checks, standalone ACTS reconstruction, one-event official-style
+plugin reconstruction, original/native mathematical and official-Pede checks,
+all 70 unit tests (62 original, 3 diagnostic, 5 four-parameter/safety), safety and
+preservation checks. Its command/exit record is
+`audit/complete_regression_driver/`. An earlier full suite also passed and is
+retained separately. `audit/official_binary_inspection/` successfully decodes
+4096 new native records with 40960 scalar measurements and all four labels.
+
+`audit/historical99/` reruns the original electron reference with the unchanged
+existing legacy build `build/native_three_rotation_legacy_20261024_01`; it is
+not described as a new legacy compilation. It reproduces 99 tracks, +198.75 um,
+L2 mean Rec-Sim -199.5713755 to -0.8213645 um and ACTS chi2/stored-NDF
+45.59223485 to 1.981039768. Output is
+`result/native_y_rotations_legacy_20261024_01/`. The independent command is:
+
+```bash
+TESTBENCH_CONTAINER=sweet_mahavira bash environment/run.sh \
+  bash validation/run_regression.sh \
+  /work/result/my_four_parameter_historical99 \
+  /work/build/native_three_rotation_legacy_20261024_01
+```
+
+All nine maintained upstream patches were reproduced on the host against the
+pinned read-only EICrecon checkout and are byte-identical; see
+`audit/upstream_patch_identity.json`. The numerical source/Geometry/configuration
+contract additionally verifies 160 files byte-identical to the starting commit,
+with the exact Mille whitelist as the sole C++ exception
+(`audit/protected_source_identity.json`). New beam recipes change only seeds
+and descriptions. No installed library, historical result or Controller is
+modified; no push, merge or Geometry activation is performed.
+
+### Final six-case checkpoint: five closures, one physical stop
+
+Exactly three independent beam seeds were attempted: 2026102501,2026102502 and
+2026102503. Each has both signed rotation vectors, 4096 reconstructed nominal
+tracks per fixture. The paired signs share identical ray cohorts. The failed
+case remains in every initial-fit statistic; there is no seed replacement or
+selection on closure success. Development duplicates are excluded.
+
+Initial Pede estimates (Y in um, rotations in mrad):
+
+| Seed | Sign | Y | Rx | Ry | Rz | Full closure |
+|---|---|---:|---:|---:|---:|---|
+| 2026102501 | + | 150.130000 | 1.796600 | 2.489500 | -2.404600 | pass after explicit refinement |
+| 2026102501 | - | 149.990000 | -1.801700 | -2.864700 | 1.565500 | pass after explicit refinement |
+| 2026102502 | + | 149.660000 | 1.800300 | 2.398800 | -1.717900 | pass after explicit refinement |
+| 2026102502 | - | 150.020000 | -1.803700 | -3.042000 | 3.004300 | STOP: module containment |
+| 2026102503 | + | 149.940000 | 1.779900 | 2.000700 | -3.449500 | pass after explicit refinement |
+| 2026102503 | - | 149.960000 | -1.781500 | -1.930400 | 1.709200 | pass after explicit refinement |
+
+Final cumulative **matrix-composed** corrections and actual geometry errors:
+
+| Seed | Sign | Y [um] | Rx/Ry/Rz [mrad] | Center Y error [um] | Orientation error [mrad] | ACTS chi2/stored-NDF before -> final |
+|---|---|---:|---|---:|---:|---|
+| 2026102501 | + | 150.136134 | +1.797754/+2.372165/-2.422320 | +0.136134 | 0.149602 | 16.523508 -> 0.594524 |
+| 2026102501 | - | 149.987070 | -1.802387/-2.787245/+1.572531 | -0.012930 | 0.970934 | 16.590451 -> 0.594702 |
+| 2026102502 | + | 149.664388 | +1.801307/+2.254635/-1.724453 | -0.335612 | 0.813436 | 16.467526 -> 0.605707 |
+| 2026102502 | - | — | — | — | — | 16.619498 -> not reconstructed |
+| 2026102503 | + | 149.937720 | +1.780877/+1.892339/-3.441292 | -0.062280 | 1.120557 | 16.461419 -> 0.600650 |
+| 2026102503 | - | 149.953595 | -1.781412/-1.819033/+1.723960 | -0.046405 | 1.032618 | 16.600795 -> 0.606527 |
+
+The initial one-step post-update gate fails for seed 2501 positive, 2502 positive
+and 2503 negative; it passes for 2501 negative and 2503 positive. Seed2502 negative
+never reaches that stage. The five valid cases use the same explicitly approved
+one-extra-correction protocol. Their initial failures remain visible.
+The final post-update maxima are recorded per coordinate in the checkpoint;
+they are same-data consistency checks, not independent Truth-recovery evidence.
+
+There are 16 completed physical derivative gates (nominal for all six cases,
+first-corrected and refined poses for the five valid cases), totaling 786432
+two-coordinate derivative-vector checks. Maximum errors are 2.659e-8 mm/rad
+and 3.166e-10 mm/mm, against the unchanged 2e-5 gate. The numerical model SHA
+is unchanged. All six initial selected ranks are 4; diagonal-scaled conditions
+range 1.56642–1.59699. Diagnostic six-column ranks are 6, conditions 1.66660–1.73808,
+and maximum diagnostic Y/angular sigmas are 0.191865 um/0.466416 mrad.
+Full covariance, correlation, prefix scaling, slope/impact diagnostics and
+fixed-reference scope remain in each `solve/observability.json`.
+
+Across all 21 executed Pede stages (including the blocked case's initial fit),
+status is normal, rejected local fits are 0, and chi2/NDF spans 0.991021–1.011089.
+No error rescaling is recommended or applied. Initial-fit NDF is 6*4096-4=24572;
+ACTS stored NDF is 10 per track, so its displayed ratio is a different quantity.
+Input ROOT hashes are unchanged in all six cases. Actual CellID/VolumeID/
+GeometryIdentifier associations and local measurement/covariance equality are
+checked across all available reconstruction passes. L1 retains VolumeID
+272631839 and GeometryIdentifier 216173056991691039.
+
+### Physical blocker and minimal next decision
+
+Seed 2026102502, negative rotation, yields an initial estimate within the declared nominal-error engineering
+gates: `(Y,Rx,Ry,Rz)=(0.15002 mm,-1.8037,-3.0420,+3.0043 mrad)`.
+Its initial joint squared nominal-error distance is 3.40038, selected rank 4,
+condition 1.56645, Pede chi2/NDF 24483.8475462/24572=0.9964125 and zero rejected
+local fits. This is not a demonstrated rank or solver failure.
+
+However, actual reloaded DD4hep sensitive corners in the **module frame** have
+maximum absolute coordinates `(50.2397444,50.0901765,0.3273120) mm`. The unchanged
+module half-lengths are `(50.25,50.25,0.325) mm`: thickness containment fails
+by 2.311987 um. The injected Truth pose is valid, with maxima
+`(50.2396688,50.0899812,0.2749992) mm`, leaving 50.0008 um in that direction.
+The original sensor is a 100 x 0.05 x 100 mm box; the module is 100.5 x 100.5 x 0.65 mm.
+
+The independent all-eight-corner calculation is in
+`audit/failed_candidate_containment.json`. The constructor source
+`result/barrel_geometry_20261023_01/source/SiTrackerBarrel_geo.cpp:41` builds the
+module Box from its envelope dimensions; line55 builds the sensitive Box,
+lines58–64 apply its component transform, and line128 applies the fixed module
+mounting. `rotation.py::pose_checks` correctly refuses the candidate at its
+module-box assertion. Independent matrix checks find maximum DD4hep/ACTS
+serialization errors 2.65e-14/1.39e-14, with unchanged center contract and IDs
+(`audit/failed_candidate_pose_identity.json`). A successful converter reload
+alone does not certify daughter containment.
+
+The partial `correction/` is preserved without a completion marker. There is
+no corrected reconstruction, second correction, activation or substituted seed
+for this case. Do not clamp the fit, invent a prior, relax containment, enlarge
+the envelope or claim 6/6 success. The fixed tight computational module box
+does not cover this otherwise ordinary noisy estimate. This establishes a
+physical candidate-feasibility limitation for the declared fixture ensemble;
+it does not demonstrate incorrect derivatives or an unconstrained model.
+
+The smallest next design decision is to review, explicitly, whether the air
+module envelope should accommodate a prospectively specified admissible pose
+and uncertainty range, or whether a new, smaller physical fixture should be
+preregistered and all cohorts rerun. Either changes this milestone's preserved
+Geometry/fixture contract and is not implemented. Moving the entire module
+instead of the sensitive component would change correction semantics and
+requires a separate design/validation. An additional reconstruction of the
+invalid candidate is not an acceptable substitute.
+
+### Limited initial-fit statistics, including the stopped case
+
+Each row below has N=3 independent seeds. Bias is **initial fit minus injected
+parameter**, sample SD is across seeds, and Pull uses the original corresponding
+unscaled initial covariance. The Y row uses um; angular rows use mrad.
+
+| Sign | Parameter/unit | Mean bias | Sample SD | Mean nominal sigma | Pull mean | Pull sample SD |
+|---|---|---:|---:|---:|---:|---:|
+| + | Y [um] | -0.090000 | 0.236432 | 0.191624 | -0.470735 | 1.234875 |
+| + | Rx [mrad] | -0.007733 | 0.010868 | 0.019463 | -0.398235 | 0.560220 |
+| + | Ry [mrad] | -0.203667 | 0.260011 | 0.448392 | -0.458514 | 0.588859 |
+| + | Rz [mrad] | -0.024000 | 0.871953 | 0.390848 | -0.063067 | 2.234684 |
+| - | Y [um] | -0.010000 | 0.030000 | 0.191622 | -0.052090 | 0.156594 |
+| - | Rx [mrad] | +0.004367 | 0.012281 | 0.019463 | +0.225406 | 0.632493 |
+| - | Ry [mrad] | -0.112367 | 0.597217 | 0.448395 | -0.240152 | 1.337043 |
+| - | Rz [mrad] | -0.407000 | 0.792473 | 0.390842 | -1.040135 | 2.026845 |
+
+These three-seed results do not certify bias, unbiasedness or nominal-error
+coverage. Rz Pull sample SDs around 2 merit a separately designed uncertainty
+study; they do not justify rescaling the errors here. Comparing this new Ry
+mean with the previous three-axis mean cannot isolate a model effect: seeds
+and fitted scope differ. The earlier exact frozen-row diagnostic attributes
+that existing sample's Ry offset mainly to its realized pixel rounding, not
+to a demonstrated numerical defect. Population quantization bias remains an
+open statistical question. Finite differences and valid geometry composition
+are validated independently of any statistical uncertainty-model claim.
+
+ROOT plots: `audit/cohort_summary/output/cohorts.root` has 16 estimate/Pull
+objects for all initial fits, including the blocked fit. Each of the five
+completed cases has 9 chi2/residual histograms in `validation/rotation.root`
+(the first positive case uses `refined_validation/rotation.root`). Read these
+with ROOT/TBrowser. `audit/cohort_summary/output/report.json` contains the
+complete raw covariance, labels and units; `audit/final_checkpoint.json`
+records every input checksum, all actual completed derivative gates, selected
+and diagnostic information matrices, final poses, solver diagnostics and the
+explicit checkpoint failure. No cumulative-fit uncertainties are combined.
+
+All run commands are preserved under the six case directories' `driver/`;
+the first positive case has a separate `refinement_driver/`. The summary is
+independently reproducible with `cohort_summary.py --runs` listing those six
+directories and `--output-dir` pointing to a **new** result directory. Final
+post-failure safety/preservation checks passed in `audit/final_safety/`.
+
+### Source and commit status at this checkpoint
+
+The read-only investigation is committed locally as
+`f38b70428b41f52c24c50ab73c88067847fda70a`
+(`Diagnose native Ry offsets with read-only pixel attribution`). The feature
+and its documentation remain uncommitted because the requested six-fixture
+validation gate did not pass. Existing supported modes and their complete
+regressions remain successful. No push, merge or production activation occurs.
+
+The uncommitted files are the exact Mille whitelist, `rotation.py`, `closure.py`,
+`observability.py`, `cohort_summary.py`, the four-label configuration, three
+beam recipes, five focused new unit tests, and this report/User Guide/Code Map.
+No numerical fitter, NativeMilleModel, covariance, detector envelope, SO(3)
+primitive, Controller or existing scientific assertion is changed. Native
+Global X/Z fitting, full six-DOF/multi-layer inference, Geant4 migration and
+statistical coverage remain separately gated future work.
+
+## Unchanged-envelope four-parameter containment milestone
+
+This is a new experiment, not a relabeling of the original 5/6 result. Its audit
+root is `result/native_containment_20261024_01_audit/`. Before edits, all 13
+uncommitted files were copied byte-for-byte with SHA256 hashes under
+`working_tree_snapshot/`; index and unstaged patches were saved separately.
+`original_six_runs_manifest.json` pins all 2838 files from the previous six cases.
+Nothing is reset, stashed, deleted or overwritten.
+
+### Physical meaning and independently reproduced cause
+
+The installed constructor source copied in
+`result/barrel_geometry_20261023_01/source/SiTrackerBarrel_geo.cpp` defines
+`Material air = description.air()` and constructs the module as an Air Box
+(line41), the silicon sensitive Box (line55), the component placement
+(lines58–64), and the parent mounting (line128). The fixture generator
+`validation/telescope_geometry/prepare.py::prepare` explicitly chooses module
+thickness `sensor_thickness + 0.6 mm`. Each SiMAPS module contains exactly one
+100 x 0.05 x 100 mm silicon component, inside a 100.5 x 100.5 x 0.65 mm Air mother.
+There is no support, frame, cooling, cable or mechanical assembly in this XML.
+Thus the source establishes a **computational Air mother (Option B in the
+classification)**, not a measured mechanical thickness. It still defines a real
+DD4hep/Geant4 containment boundary: successful ACTS conversion alone does not
+validate a daughter outside that boundary.
+
+Module centers are 50 mm apart along native Global X, with one module per
+cylindrical layer. The layer mothers are Air Tubes, z half-length 51 mm. Their
+explicit inner/outer radii and the detector hierarchy are unchanged. For L1,
+inner/outer radii are 298.975/305.606747504 mm. Module world half-lengths are
+(0.325,50.25,50.25) mm; its sensitive half-lengths before the fixed mounting
+are (50,0.025,50) mm. All eight corners, not just the tracking surface, must fit.
+The canonical +Z geometry and the +X barrel fixture are distinct configurations.
+No mechanical allowed-motion specification is available; the actual box,
+cylinder and existing 10 mrad chart limits define this study's admissible poses.
+
+Let Q=Exp(w) and let R0 be the nominal silicon-to-world rotation. The exact
+world-X half-extent is `sum_j abs((Q R0)[0,j])*h_j`. To first order,
+
+```
+e_X = 0.025 + 50*(abs(Ry)+abs(Rz)) mm + O(|w|^2)
+```
+
+so the approximate thickness requirement is `abs(Ry)+abs(Rz)<6 mrad`.
+Global Rx mostly consumes tangential clearance; at Y=+0.150 mm the first-order
+requirement is `0.150+50*abs(Rx)<0.250 mm`. The bounds are coupled, not independent
+hard alignment constraints. Actual matrix/corner checks remain authoritative.
+The old candidate's |-3.0420|+|3.0043|=6.0463 mrad explains the overflow:
+exact half-extent 0.327311987 mm exceeds 0.325 mm by 0.002311987 mm. Truth's
+0.274999188 mm is contained. The nominal-error distance 3.40038 and normal Pede
+status do not imply geometric feasibility.
+
+### Options and chosen scope
+
+| Option | Scientific implication | Decision |
+|---|---|---|
+| A: unchanged mother, smaller prospective fixture | Same detector, material, segmentation, reconstruction and inference; explicitly different physical injection and fresh seeds | Chosen |
+| B: separately enlarged computational mother | Silicon and sensitive surface might remain unchanged, but Air occupancy, volume boundaries/hierarchy, Geant4 stepping and ACTS volume construction need independent checks; no demonstrated mechanical specification justifies treating it as harmless | Not implemented; never size it from the single 2.312 um excess |
+| C: constrain/clamp the fit | Hard pose constraints create boundary-dependent estimates and invalidate ordinary unconstrained inverse-Hessian uncertainty interpretation; priors change inference | Not implemented; no clipping, prior or rescaling |
+
+Changing module placement instead of the sensitive component would change the
+existing physical correction semantics and requires a separate study. Option A
+resolves the test-design problem without making any detector-design change.
+The original 5/6 experiment and its stopped candidate remain permanent evidence.
+
+### Prospective unchanged-Geometry test
+
+The new explicit modes are `l1_y_rx_ry_rz_contained` and
+`l1_y_rx_ry_rz_contained_negative`. They share the exact existing four-label
+configuration, fitter, covariance, whitening, local parameters, CKF cut 1000,
+electron hypothesis and Pede steering. Positive injection is
+(Y,Rx,Ry,Rz)=(+0.150 mm,+1.8,+1.0,-1.0 mrad); the negative fixture keeps Y and
+reverses the whole rotation vector. This is a single Exp(w), never an Euler sum.
+Other sensors and L1 X/Z remain fixed.
+
+Before new data/Pede, `geometry_only_preflight/` evaluates 528 joint-error
+points per sign using all six previous initial covariances. Directions lie on
+the joint 5-sigma ellipsoid, with a further 10% engineering design margin.
+This margin is **not** applied to any measurement uncertainty or fitted covariance.
+Exact corner calculations pass all 1056 sampled poses. The worst sampled pose
+for each module axis/sign is independently reloaded through actual DD4hep/ACTS,
+with pivot, rotation, CellID-derived identifiers, cylinder and box checks.
+This is sampled engineering evidence, not an exhaustive ellipsoid proof or
+statistical coverage. Every actual fitted candidate is checked again.
+The smallest sampled clearance is approximately 4.7 um tangentially and 36.9 um
+in thickness. No fit result selected the amplitudes.
+
+`prospective_plan.json` declares seeds 2026102601/02/03, 4096 tracks per signed
+fixture, all six cases retained without replacement, the unchanged original
+four-parameter gates, and at most one explicit additional correction. No
+Controller loop or Geometry activation is introduced. `contained_beam_seed*.json`
+changes only seed/description from the previous bounded uniform beam recipe.
+The original mode strings and their amplitudes remain unchanged.
+
+### Executed new experiment: six complete physical closures
+
+Seeds 2026102601,2026102602,2026102603 each supply 4096 rays and both rotation
+signs. These are three independent cohorts, not six independent ray samples.
+All initial fits are retained. The new experiment achieves numerical initial
+fit success 6/6, initial-candidate feasibility 6/6, every-update feasibility 12/12,
+and complete fresh-reconstruction closure 6/6. The **original** experiment still
+has numerical success 6/6, initial physical feasibility 5/6 and full closure 5/6.
+
+| Seed | Sign | Initial Y [um] | Initial Rx/Ry/Rz [mrad] | Final cumulative Y [um] | Final cumulative Rx/Ry/Rz [mrad] |
+|---|---|---:|---|---:|---|
+| 2026102601 | + | 149.890000 | +1.782300/+0.303000/-0.897490 | 149.888684 | +1.782358/+0.186807/-0.889733 |
+| 2026102601 | - | 149.880000 | -1.790400/-1.923700/+1.515300 | 149.876559 | -1.790610/-1.834275/+1.515126 |
+| 2026102602 | + | 150.070000 | +1.800900/+0.565770/-0.747600 | 150.071001 | +1.800526/+0.451590/-0.758804 |
+| 2026102602 | - | 150.200000 | -1.830400/-1.251000/+0.969980 | 150.203933 | -1.829636/-1.119659/+0.968267 |
+| 2026102603 | + | 150.210000 | +1.808700/+0.980180/-0.911580 | 150.206800 | +1.808931/+0.876510/-0.911315 |
+| 2026102603 | - | 150.120000 | -1.794300/-1.434500/+0.799270 | 150.124086 | -1.794560/-1.331696/+0.794542 |
+
+The positive target is (150 um,+1.8,+1.0,-1.0 mrad); the negative target
+is (150 um,-1.8,-1.0,+1.0 mrad). Final vectors are Log(Rfinal Rnominal^T), not
+sums of Euler coordinates or naïvely summed Pede vectors.
+
+| Seed | Sign | Final center Y error [um] | Orientation error [mrad] | ACTS chi2/stored-NDF before -> final | Initial/final Pede chi2/NDF |
+|---|---|---:|---:|---|---|
+| 2026102601 | + | -0.111316 | 0.820825 | 16.587242 -> 0.599812 | 0.999847/0.999835 |
+| 2026102601 | - | -0.123441 | 0.980539 | 16.489810 -> 0.598732 | 0.998143/0.998036 |
+| 2026102602 | + | +0.071001 | 0.599107 | 16.611793 -> 0.601481 | 1.002766/1.002617 |
+| 2026102602 | - | +0.203933 | 0.127293 | 16.579375 -> 0.594059 | 0.990252/0.990246 |
+| 2026102603 | + | +0.206800 | 0.152297 | 16.562774 -> 0.599992 | 1.000182/1.000136 |
+| 2026102603 | - | +0.124086 | 0.390211 | 16.615728 -> 0.595641 | 0.992991/0.992884 |
+
+Actual L1 X/Z centers remain fixed. VolumeID 272631839 and ACTS
+GeometryIdentifier 216173056991691039 remain unchanged. All five SiMAPS local
+measurements and calibrated covariance matrices match across reconstruction
+passes, as do their raw segmented payloads. The initial ROOT input is immutable
+within every case. Fresh EICrecon processes use each corrected XML through the
+same official geometry service and native tracking components. No candidate
+is activated as production Geometry.
+
+The original quarter-initial-sigma angular and 20 nm Y remaining-update gates
+are unchanged. Initial one-step post-updates fail for positive seed 2601,
+positive 2602 and negative 2602; the other three pass. All six follow the same
+prospectively fixed maximum-one-extra-correction protocol. Final maximum absolute
+post-updates are 0.035971 nm for Y and (0.0013824,1.1567,0.39766) urad for Rx/Ry/Rz.
+These demonstrate same-data consistency, **not** exact Truth recovery. Initial
+covariance/Pulls and final cumulative poses remain separate; correlated fit
+uncertainties are never added in quadrature.
+
+There are 18 completed actual DD4hep/ACTS physical derivative gates: nominal,
+first-corrected and refined for all six cases, totaling 884736 two-coordinate
+derivative-vector checks at the established three step sizes for each column.
+The maximum angular error is 2.645e-8 mm/rad; translation error 3.182e-10 mm/mm,
+both below the unchanged 2e-5 threshold. Pivot, matrix and identifier contracts
+pass every actual reload. The smallest independent module-frame corner
+clearance across the 12 actual proposed updates is 8.393428 um.
+
+All 24 official Pede stages terminate normally with zero rejected local fits.
+Pede chi2/NDF ranges 0.990246–1.002766. No error rescaling is recommended or
+applied. Initial Pede NDF is 24572=6*4096-4; ACTS stores 10 measurement dimensions
+per track, so its displayed ratio is not the statistical reduced chi2 for the
+four-local-parameter line. Official before/after `inspectMilleBinary` reads
+4096 records/40960 scalar equations in each binary and finds all four labels.
+
+### Formal covariance and limited statistics
+
+The initial positive seed 2601 covariance below uses coordinate order
+(Y[mm],Rx[rad],Ry[rad],Rz[rad]); entries carry the product of row/column units.
+All six full covariance/correlation matrices, individual nominal errors, prefix
+track-count scaling, slope/impact subsets, ranks and conditions are retained in
+each `solve/observability.json` and the cohort report. None is rescaled.
+
+| Coordinate | Y [mm] | Rx [rad] | Ry [rad] | Rz [rad] |
+|---|---:|---:|---:|---:|
+| Y [mm] | 3.674153978e-08 | -7.695681706e-11 | -1.995323155e-09 | -1.685203263e-08 |
+| Rx [rad] | -7.695681706e-11 | 3.763006989e-10 | -1.937056471e-10 | 3.950626000e-11 |
+| Ry [rad] | -1.995323155e-09 | -1.937056471e-10 | 1.947080909e-07 | 3.417055091e-09 |
+| Rz [rad] | -1.685203263e-08 | 3.950626000e-11 | 3.417055091e-09 | 1.546677052e-07 |
+
+The following statistics use **initial Pede fit minus injected physical
+parameter**, with the corresponding initial unscaled nominal sigma. Each row
+has N=3 independent seeds; paired signs share rays. Y uses um, angles mrad.
+
+| Sign | Parameter/unit | Mean bias | Across-seed sample SD | Mean nominal sigma | Pull mean | Pull sample SD |
+|---|---|---:|---:|---:|---:|---:|
+| + | Y [um] | +0.056667 | 0.160416 | 0.191629 | +0.295599 | 0.836634 |
+| + | Rx [mrad] | -0.002700 | 0.013563 | 0.019405 | -0.140255 | 0.697749 |
+| + | Ry [mrad] | -0.383683 | 0.341408 | 0.446889 | -0.867686 | 0.774212 |
+| + | Rz [mrad] | +0.147777 | 0.090880 | 0.392911 | +0.377819 | 0.236697 |
+| - | Y [um] | +0.066667 | 0.166533 | 0.191629 | +0.348152 | 0.869316 |
+| - | Rx [mrad] | -0.005033 | 0.022055 | 0.019405 | -0.263916 | 1.142701 |
+| - | Ry [mrad] | -0.536400 | 0.347734 | 0.446894 | -1.203993 | 0.793987 |
+| - | Rz [mrad] | +0.094850 | 0.373991 | 0.392915 | +0.242537 | 0.949063 |
+
+A negative Ry offset remains in these paired initial estimates. Three seeds
+cannot establish a calibrated bias correction, unbiasedness or uncertainty
+coverage. The original Rz Pull sample SDs 2.2347/2.0268 remain unchanged and
+visible in `original_summary_replay/`; the new smaller-fixture spreads do not
+invalidate that earlier finding or demonstrate improved calibration. Detector
+containment, actual derivatives and reconstruction closure are validated
+separately from the still-unvalidated statistical uncertainty model. No further
+statistical campaign or new detector degree of freedom is launched here.
+
+`cohort_summary/output/cohorts.root` contains 16 estimate/Pull ROOT objects.
+Each case has 9 ACTS chi2/residual histograms in `validation/rotation.root`,
+created and reopened successfully for ROOT/TBrowser inspection. The full
+initial estimates, covariances and warning/rejection diagnostics are in
+`cohort_summary/output/report.json`. `scientific_summary.json` records all raw
+input hashes, 12 actual candidate corner checks and 18 physical derivative
+gates. Its scientific six-case result is distinct from final regression status.
+
+### Final regression, preservation and source evidence
+
+All 12 established native modes were rerun with the fresh native build. All 72
+protected nominal/Truth/corrected XML and nominal/corrected/control Mille Binary
+artifacts are byte-identical to the preceding milestone. Scientific report JSON
+is identical, excluding only the regenerated whole-ROOT-file metadata checksum;
+channel-payload checksums remain identical. See `protected_72_identity.json`.
+The original six run directories retain all 2838 file hashes, and the original 13
+working-file snapshots retain their starting hashes (`final_preservation_identity.json`).
+The original statistical summary was rerun and compares equal in every field,
+including its failed fit and unchanged 5/6 status (`original_summary_replay/`).
+
+The fresh 18-command suite passed in
+`result/native_containment_regression_l1_l2_y_20261024_01/containment_complete_regressions/`:
+new standalone geometry/CKF builds, actual navigation/measurement checks,
+native/legacy Mille and mathematical equivalence, official Pede, all 74 unit tests
+(70 existing plus 4 new), safety and preservation. Final unit tests were also
+recorded independently in `final_unit_tests/`, and post-campaign safety and
+preservation in `final_safety/`. Historical 99-track regression passed in
+`result/native_containment_legacy_20261024_01/` using the unchanged existing
+legacy build, not a new legacy compilation: 99 tracks, L2 +198.75 um,
+Rec-Sim -199.5713755 -> -0.8213645 um, ACTS 45.59223485 -> 1.981039768.
+All nine upstream patches reproduce identically against the read-only pinned
+EICrecon checkout. No installed software is edited.
+
+The numerical/geometry/configuration source contract verifies 161 files unchanged
+from this phase's starting state, including its preserved uncommitted Mille
+whitelist (`protected_source_identity.json`). The NativeMilleModel SHA remains
+`1622cc80327fe08dd6c943bb57e537a8fea86a95233389065efa91739028843f`.
+No fitter, particle hypothesis, hit error, whitening, selected degree of freedom,
+Pede steering, SO(3) primitive, canonical Geometry or Controller is changed.
+
+The exploratory preflight's first invocation failed with `research_common`
+missing from its script import path. No geometry or fit output was created.
+The corrected invocation and maintained CLI passed with identical preflight
+numbers; the incident is retained in `technical_incidents.json`. Existing
+SQLite connection ResourceWarnings, CMake developer warnings and container
+`stty` messages remain in logs. No warning is suppressed and no scientific
+assertion is weakened. The expected original physical refusal remains distinct
+from these technical messages and from the six successful **new** cases.
+
+`final_checkpoint.json` records the completed milestone and all numerical,
+physical and regression rates. Research data, logs, builds and snapshots stay
+outside Git. The local feature commit includes the preserved four-parameter
+implementation and the new bounded-fixture/safety validation; diagnostic commit
+`f38b70428b41f52c24c50ab73c88067847fda70a` remains separate. No push, merge or
+production Geometry activation is performed.
+
+### Reproducible commands and retained limits
+
+Use fresh build/output paths for a repeat. These are the actual build arguments:
+
+```bash
+export TESTBENCH_CONTAINER=sweet_mahavira
+bash environment/run.sh cmake \
+  -S /work/localDetEICrecon/experimental/telescope \
+  -B /work/build/native_containment_20261024_01 \
+  -DCMAKE_BUILD_TYPE=Release -DTELESCOPE_BUILD_MILLE_PROBE=ON
+bash environment/run.sh cmake --build /work/build/native_containment_20261024_01 -j2
+```
+
+The User Guide gives independent preflight and permanent-refusal commands.
+A complete new six-case repetition uses the unchanged driver:
+
+```bash
+(
+for seed in 1 2 3; do
+  for sign in positive negative; do
+    mode=l1_y_rx_ry_rz_contained
+    if [[ "$sign" == negative ]]; then mode=l1_y_rx_ry_rz_contained_negative; fi
+    bash environment/run.sh python3 validation/telescope_closure/closure.py \
+      --build build/native_containment_20261024_01 \
+      --result "result/my_contained_seed${seed}_${sign}" \
+      --mode "$mode" --events 4096 \
+      --beam "validation/telescope_alignment/contained_beam_seed${seed}.json" \
+      --chi2-cut 1000 --refine-once --step all || exit 1
+  done
+done
+)
+```
+
+The actual paths are `result/native_containment_seed{1,2,3}_{positive,negative}_20261024_01/`.
+Their `driver/command.json`, exit codes and immutable markers record each
+executed invocation. Every stage is independently callable through `--step`.
+For a fresh consolidated suite, use a completed original two-Y run:
+
+```bash
+bash environment/run.sh python3 validation/telescope_closure/closure.py \
+  --build build/native_containment_20261024_01 \
+  --result result/native_containment_regression_l1_l2_y_20261024_01 \
+  --events 32 --chi2-cut 1000 --mode l1_l2_y \
+  --step regressions --validation-name MY_NEW_CHECK
+bash environment/run.sh python3 -m unittest discover -s validation -p 'test_*.py'
+bash environment/run.sh python3 validation/check_safety.py
+bash environment/run.sh python3 validation/verify_preservation.py
+bash environment/run.sh bash validation/run_regression.sh \
+  /work/result/my_containment_historical99 \
+  /work/build/native_three_rotation_legacy_20261024_01
+```
+
+All 12 individual native modes use the unchanged commands/event counts listed
+in the preceding milestone; substitute the new native build and fresh result
+names. The nine upstream patches are independently reproduced on the host:
+
+```bash
+python3 -B validation/telescope_factories/upstream_diff.py \
+  --source /Users/tkumaoka/eic/EICrecon --output result/NEW_upstream_diffs
+```
+
+Official decoder commands are recorded in `official_binary_nominal/` and
+`official_binary_refined/`; they use `environment(build)` to load the maintained
+Mille installation. The new cohort summary command is in
+`cohort_summary/command.json`; list all six actual run directories with
+`cohort_summary.py --runs ... --output-dir result/NEW_summary` to reproduce it.
+The preserved original dataset and checkpoint are prerequisites for the
+preflight/refusal regression; they are intentionally excluded from Git.
+
+This completes a **controlled unchanged-envelope four-parameter fixture**,
+not arbitrary pose support. Statistical coverage, the earlier negative Ry
+behavior and Rz Pull spread remain unresolved. More translations, full six-DOF,
+multiple free layers/gauge handling, native Controller integration and original
+Geant4/experimental-input migration remain separately gated. No additional
+physics campaign, constrained estimation or envelope redesign is implemented.
+
+The historical negative three-axis `ordered_vs_joint_distance_rad` diagnostic
+retains its fixed-positive ordered comparator for value stability. It is not
+cited as a like-signed order test. New contained fixtures compare their own
+signed vector with its corresponding ordered product; actual pivot, inverse,
+constructor, derivative and closure checks provide the physical validation.

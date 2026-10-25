@@ -212,3 +212,49 @@ target matrix before extracting the verified DD4hep component chart. It is
 restricted to this telescope mounting and bounded poses, not arbitrary Survey
 Geometry. See the [three-axis validation](TELESCOPE_ALIGNMENT_LEGACY_PARITY.md#three-axis-native-so3-milestone)
 for prospective gates, actual results, regressions and remaining legacy gaps.
+
+## Explicit L1 Y plus SO(3) validation
+
+This remains experimental: the six-case checkpoint is 5/6 complete closures, with
+one physically invalid fitted module candidate correctly refused. No native
+full-six-DOF or unconditional four-parameter support is claimed.
+
+The exact four-label configuration `l1_global_y_rx_ry_rz.json` enables Global Y
+(column 1, mm) alongside the existing rotation columns 3/4/5 (rad). Other physical
+parameters remain fixed. `rotation_labels` separates the angular coordinates
+from translation; `fixture_shifts` supplies the world displacement. The existing
+native matrix, transport, whitening, fitter and selector are unchanged.
+
+`rotation.refine` implements an explicitly requested, four-parameter-only second
+Geometry correction. It reads the completed first post-correction Pede result,
+updates the current center and left-multiplies its current orientation, and
+reloads the XML for actual surface checks. Exclusive immutable stages limit this
+to one additional correction. `closure.main --refine-once` connects its separate
+reconstruction/derivative/Pede stages. It does not extend the Controller or
+activate Geometry. `rotation.check` retains the initial covariance, scores the
+final pose and updates using unchanged gates, and records the initial one-step
+outcome independently. See the parity report for the scope amendment and limits.
+
+## Unchanged-envelope fixture and permanent physical refusal
+
+`rotation.is_four` recognizes two additional **fixture aliases**,
+`l1_y_rx_ry_rz_contained` and its negative form. They select the same four labels
+and native equations; only their physical injection is different. Original mode
+amplitudes and numerical baselines remain unchanged. New fixtures compare
+like-signed Euler products with their joint Exp(w); historical diagnostic values
+are retained. This changes no fit or SO(3) update primitive.
+
+`validation/telescope_closure/containment.py` is a validation utility, not an
+alignment constraint or tracking component. `corners_in_module` independently
+transforms all eight silicon corners into the parent frame. `preflight` uses
+prior joint information for a geometry-only design and actual constructor
+reloads. `expected_refusal` re-solves the preserved original Mille Binary,
+verifies the original fit byte-for-byte, reloads its candidate, and requires
+`pose_checks` to refuse it before any corrected tracking. It also verifies that
+the original failed fit remains in the initial statistical summary.
+The permanent classification is `EXPECTED_PHYSICAL_CONTAINMENT_REFUSAL`, with
+`physical_closure_passed=false`. Three new beam recipes provide independent
+seeds without changing the existing angular distribution. Four unit tests cover
+parent-frame invariance, first-order extent, joint-error sampling, and original
+fixture/label preservation. No runtime provider, navigator, fitter or solver is
+added; the numerical C++ tree is unchanged from the starting uncommitted feature.

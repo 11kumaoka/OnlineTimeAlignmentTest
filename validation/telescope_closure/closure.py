@@ -112,15 +112,15 @@ def geometry_step(args):
     if getattr(args,'mode','l1_l2_y')=='l1_l2_y':
         displaced_xml(nominal,p/'truth.xml',{1:.150,2:.200})
     else:
-        from validation.telescope_closure.rotation import injected_rotation,axis
-        shifts={1:.150,2:.200} if args.mode=='l1_y_rx_l2_y' else {}
+        from validation.telescope_closure.rotation import injected_rotation,axis,fixture_shifts
+        shifts=fixture_shifts(args.mode)
         angle=injected_rotation(args.mode)
         displaced_xml(nominal,p/'truth.xml',shifts,rotations={1:angle},rotation_axis=axis(args.mode))
         metadata={'mode':args.mode,'injected_global_y_mm':shifts,'injected_global_r'+axis(args.mode)+'_rad':{'1':angle}}
         if axis(args.mode)=='xyz':metadata.update(truth_definition='single Exp([Rx,Ry,Rz]) Rnominal',injected_rotation_vector_rad=angle)
         if axis(args.mode)=='yz':metadata.update(truth_definition='single Exp([0,Ry,Rz]) Rnominal',injected_rotation_vector_rad=[0.,*angle])
         write_json(p/'rotation_fixture.json',metadata)
-    done(p,nominal_sha256=digest(nominal),truth_sha256=digest(p/'truth.xml'),injected_global_y_mm=({'1':.150,'2':.200} if args.mode in ('l1_l2_y','l1_y_rx_l2_y') else {}))
+    done(p,nominal_sha256=digest(nominal),truth_sha256=digest(p/'truth.xml'),injected_global_y_mm=({'1':.150,'2':.200} if args.mode in ('l1_l2_y','l1_y_rx_l2_y') else ({'1':.150} if args.mode in ('l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative') else {})))
 
 
 def data_step(args):
@@ -140,7 +140,7 @@ def reconstruct(args,name,geometry,input_name,limit=None,cut=None):
     if getattr(args,'mode','l1_l2_y')!=expected_mode:raise ValueError('Mode must match immutable fixture metadata')
     if json.loads((args.result/'data/complete.json').read_text())['events']!=args.events:
         raise ValueError('Event count must match immutable input metadata')
-    if name in ('corrected','control') and (args.result/'nominal/complete.json').exists():
+    if name in ('corrected','refined','control') and (args.result/'nominal/complete.json').exists():
         initial=json.loads((args.result/'nominal/complete.json').read_text())['measurement_selector_chi2_cut']
         if (cut or 15.)!=initial:raise ValueError('Closure passes must use the same measurement-selection cut')
     config='l1_l2_global_y'
@@ -178,7 +178,7 @@ def solve(args,reconstruction,name):
     if rotation:
         from validation.telescope_closure.rotation import labels,physical_derivatives
         selected=labels(args.mode)
-        if name in ('solve','postsolve'):physical_derivatives(args,reconstruction)
+        if name in ('solve','postsolve','refinesolve'):physical_derivatives(args,reconstruction)
     require(args.result,reconstruction);p=stage(args.result,name)
     binary=args.result/reconstruction/'mille.dat'
     blocks=list(records(binary));assert len(blocks)==args.events and all(len(b)==10 for b in blocks)
@@ -186,9 +186,9 @@ def solve(args,reconstruction,name):
     dimension=len(selected)
     normal=np.zeros((dimension,dimension));rhs=np.zeros(dimension)
     for block in blocks:
-        a,b,_=profile(block,selected,require_global_rank=getattr(args,'mode','l1_l2_y') not in ('l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative'));normal+=a;rhs+=b
+        a,b,_=profile(block,selected,require_global_rank=getattr(args,'mode','l1_l2_y') not in ('l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative'));normal+=a;rhs+=b
     assert np.linalg.matrix_rank(normal)==dimension
-    if getattr(args,'mode','l1_l2_y') in ('l1_ry','l1_ry_negative','l1_rz','l1_rz_negative','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative'):
+    if getattr(args,'mode','l1_l2_y') in ('l1_ry','l1_ry_negative','l1_rz','l1_rz_negative','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative'):
         # Refuse to run Pede before the actual native design resolves this tilt.
         # Include transverse translations and other rotations as diagnostic nuisance
         # columns; none of these additional columns is enabled in the Mille fit.
@@ -196,10 +196,17 @@ def solve(args,reconstruction,name):
         design=analyze(args.result/reconstruction/'mille.json')
         last=design['prefix_designs'][str(args.events)]
         assert last['rank']==5 and last['diagonal_scaled_condition']<100
-        from validation.telescope_closure.rotation import axis,is_coupled,is_three
+        from validation.telescope_closure.rotation import axis,is_coupled,is_three,is_four
         index=3 if axis(args.mode)=='y' else 4
         write_json(p/'observability.json',design)
-        if is_three(args.mode):
+        if is_four(args.mode):
+            selected_design=last['selected_Y_Rx_Ry_Rz']
+            assert selected_design['rank']==4 and selected_design['diagonal_scaled_condition']<100
+            assert selected_design['sigma'][0]<.001 and max(selected_design['sigma'][1:])<.0005
+            full=design['all_translation_diagnostic']
+            assert full['rank']==6 and full['diagonal_scaled_condition']<100
+            assert full['sigma'][1]<.001 and max(full['sigma'][3:])<.0005
+        elif is_three(args.mode):
             assert max(last['sigma'][2:5])<.0005,'Three-axis rotation unresolved before Pede'
             assert max(design['all_translation_diagnostic']['sigma'][3:6])<.0005
             assert last['selected_Rx_Ry_Rz']['rank']==3 and last['selected_Rx_Ry_Rz']['diagonal_scaled_condition']<100
@@ -523,13 +530,17 @@ def main():
     parser.add_argument('--result',type=Path,required=True)
     parser.add_argument('--build',type=Path,required=True)
     parser.add_argument('--validation-name',default='validation',help='New validation/regression output stage name; existing reports remain immutable')
-    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_ry_negative','l1_rz_negative','l1_rz','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_l2_y'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
+    parser.add_argument('--mode',choices=['l1_l2_y','l1_rx','l1_rx_negative','l1_ry','l1_ry_negative','l1_rz_negative','l1_rz','l1_ry_rz','l1_ry_rz_negative','l1_rx_ry_rz','l1_rx_ry_rz_negative','l1_y_rx_ry_rz','l1_y_rx_ry_rz_negative','l1_y_rx_ry_rz_contained','l1_y_rx_ry_rz_contained_negative','l1_y_rx_l2_y'],default='l1_l2_y',help='Explicit native physical parameter scope; original two-Y default unchanged')
+    parser.add_argument('--refine-once',action='store_true',help='Explicit four-parameter-only second Geometry correction; at most one, same data and unchanged gates')
     parser.add_argument('--beam',type=Path,help='Optional bounded angular study recipe; never changes the baseline cohort')
     parser.add_argument('--events',type=int,default=32)
     parser.add_argument('--chi2-cut',type=float,default=None,help='Explicit alignment capture window; same setting in all closure passes')
-    parser.add_argument('--step',choices=['geometry','data','coupled_pose','pilot','nominal','solve','correct','corrected','postsolve','control','controlsolve','check','regressions','all'],required=True)
+    parser.add_argument('--step',choices=['geometry','data','coupled_pose','pilot','nominal','solve','correct','corrected','postsolve','refine','refined','refinesolve','control','controlsolve','check','regressions','all'],required=True)
     args=parser.parse_args()
     if args.mode!='l1_l2_y' and args.step=='regressions':parser.error('Consolidated regression uses the original l1_l2_y baseline')
+    if args.refine_once:
+        from validation.telescope_closure.rotation import is_four
+        if not is_four(args.mode):parser.error('Refinement is restricted to explicit L1 Y plus rotations')
     args.result=args.result.resolve();args.build=args.build.resolve()
     if not args.validation_name.isidentifier():parser.error('Validation stage name must be an identifier')
     if args.beam:args.beam=args.beam.resolve()
@@ -537,6 +548,7 @@ def main():
     args.result.mkdir(parents=True,exist_ok=True)
     os.chdir(REPO)
     steps=['geometry','data','nominal','solve','correct','corrected','postsolve','control','controlsolve','check'] if args.step=='all' else [args.step]
+    if args.step=='all' and args.refine_once:steps[steps.index('control'):steps.index('control')]=['refine','refined','refinesolve']
     for step in steps:
         if step=='geometry':geometry_step(args)
         elif step=='data':data_step(args)
@@ -551,6 +563,15 @@ def main():
         elif step=='corrected':
             require(args.result,'correction');reconstruct(args,'corrected',args.result/'correction/corrected.xml','shifted',cut=args.chi2_cut)
         elif step=='postsolve':solve(args,'corrected','postsolve')
+        elif step=='refine':
+            from validation.telescope_closure.rotation import refine
+            refine(args)
+        elif step=='refined':
+            if not args.refine_once:raise ValueError('Explicit refinement opt-in required')
+            require(args.result,'refinement');reconstruct(args,'refined',args.result/'refinement/refined.xml','shifted',cut=args.chi2_cut)
+        elif step=='refinesolve':
+            if not args.refine_once:raise ValueError('Explicit refinement opt-in required')
+            solve(args,'refined','refinesolve')
         elif step=='control':reconstruct(args,'control',args.result/'geometry/fixtures/nominal.xml','control',cut=args.chi2_cut)
         elif step=='controlsolve':solve(args,'control','controlsolve')
         elif step=='check':check(args)
